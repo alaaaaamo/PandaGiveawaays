@@ -989,6 +989,78 @@ def add_spins_to_user():
         print(f"Error in add_spins_to_user: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# ═══════════════════════════════════════════════════════════════
+# 👥 GET ALL USERS (Admin)
+# ═══════════════════════════════════════════════════════════════
+
+@app.route('/api/users', methods=['GET'])
+def get_all_users():
+    """الحصول على جميع المستخدمين للأدمن"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                user_id as id,
+                username,
+                full_name as name,
+                balance,
+                available_spins as spins,
+                total_referrals as referrals,
+                created_at as joined
+            FROM users
+            ORDER BY created_at DESC
+            LIMIT 100
+        """)
+        
+        users = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        return jsonify({'success': True, 'data': users})
+        
+    except Exception as e:
+        print(f"Error in get_all_users: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ═══════════════════════════════════════════════════════════════
+# 💸 GET ALL WITHDRAWALS (Admin)
+# ═══════════════════════════════════════════════════════════════
+
+@app.route('/api/withdrawals', methods=['GET'])
+def get_all_withdrawals():
+    """الحصول على جميع طلبات السحب للأدمن"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                w.id,
+                w.user_id,
+                u.full_name as user_name,
+                w.amount,
+                w.method,
+                w.wallet_address as address,
+                w.vodafone_number as number,
+                w.status,
+                w.created_at as date,
+                w.rejection_reason
+            FROM withdrawals w
+            LEFT JOIN users u ON w.user_id = u.user_id
+            ORDER BY w.created_at DESC
+            LIMIT 100
+        """)
+        
+        withdrawals = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        return jsonify({'success': True, 'data': withdrawals})
+        
+    except Exception as e:
+        print(f"Error in get_all_withdrawals: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/health')
 def health():
     """Health check لـ Render"""
