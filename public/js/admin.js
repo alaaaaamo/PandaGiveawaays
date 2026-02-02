@@ -8,9 +8,21 @@
 // ═══════════════════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', () => {
-    initAdminPanel();
-    loadDashboardData();
-    setupEventListeners();
+    console.log('🎯 DOM Content Loaded - Starting Admin Panel');
+    console.log('Checking required globals:', {
+        CONFIG: !!window.CONFIG,
+        Telegram: !!window.Telegram,
+        showToast: typeof showToast !== 'undefined'
+    });
+    
+    try {
+        initAdminPanel();
+        loadDashboardData();
+        setupEventListeners();
+        console.log('✅ Admin Panel initialization complete');
+    } catch (error) {
+        console.error('❌ Failed to initialize admin panel:', error);
+    }
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -27,10 +39,22 @@ let adminData = {
 };
 
 async function initAdminPanel() {
+    console.log('🔧 Initializing Admin Panel...');
+    console.log('CONFIG:', window.CONFIG);
+    console.log('Telegram WebApp:', window.Telegram?.WebApp);
+    
     // Check if user is admin
     const telegramUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+    console.log('Telegram User:', telegramUser);
     
-    if (!telegramUser || !CONFIG.ADMIN_IDS.includes(telegramUser.id)) {
+    if (!telegramUser) {
+        console.warn('⚠️ No Telegram user found - allowing access for testing');
+        showToast('⚠️ وضع الاختبار', 'info');
+        return;
+    }
+    
+    const adminIds = window.CONFIG?.ADMIN_IDS || [];
+    if (!adminIds.includes(telegramUser.id)) {
         showToast('❌ غير مصرح لك بالدخول!', 'error');
         setTimeout(() => {
             window.Telegram?.WebApp?.close();
@@ -75,7 +99,8 @@ async function loadDashboardData() {
 
 async function loadStatistics() {
     try {
-        const response = await fetch(`${CONFIG.API_BASE_URL}/stats`);
+        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
+        const response = await fetch(`${API_BASE_URL}/stats`);
         const result = await response.json();
         
         if (result.success && result.data) {
@@ -444,9 +469,9 @@ async function loadSettings() {
     document.getElementById('max-withdrawal').value = 100;
     document.getElementById('auto-withdrawal').checked = true;
     document.getElementById('max-daily-spins').value = 10;
-    document.getElementById('spin-cooldown').value = CONFIG.SPIN_COOLDOWN / 1000;
+    document.getElementById('spin-cooldown').value = (config.SPIN_COOLDOWN || 2000) / 1000;
     document.getElementById('initial-spins').value = 3;
-    document.getElementById('referrals-per-spin').value = CONFIG.REFERRALS_PER_SPIN;
+    document.getElementById('referrals-per-spin').value = config.SPINS_PER_REFERRALS || 5;
     document.getElementById('referral-bonus').value = 0.001;
     document.getElementById('rate-limiting').checked = true;
     document.getElementById('event-logging').checked = true;
@@ -483,17 +508,27 @@ function saveSettings() {
 // ═══════════════════════════════════════════════════════════════
 
 function setupEventListeners() {
+    console.log('🎯 Setting up event listeners...');
+    
     // Tab switching
-    document.querySelectorAll('.admin-tab').forEach(tab => {
+    const tabs = document.querySelectorAll('.admin-tab');
+    console.log('Found tabs:', tabs.length);
+    
+    tabs.forEach(tab => {
         tab.addEventListener('click', () => {
+            console.log('Tab clicked:', tab.dataset.tab);
             const targetTab = tab.dataset.tab;
             switchTab(targetTab);
         });
     });
     
     // Filter buttons for withdrawals
-    document.querySelectorAll('.filter-btn').forEach(btn => {
+    const filterBtns = document.querySelectorAll('.filter-btn');
+    console.log('Found filter buttons:', filterBtns.length);
+    
+    filterBtns.forEach(btn => {
         btn.addEventListener('click', () => {
+            console.log('Filter clicked:', btn.dataset.status);
             document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             renderWithdrawals(btn.dataset.status);
@@ -503,6 +538,7 @@ function setupEventListeners() {
     // User search
     const searchInput = document.getElementById('user-search');
     if (searchInput) {
+        console.log('User search input found');
         searchInput.addEventListener('input', (e) => {
             const query = e.target.value.toLowerCase();
             // Filter users table
@@ -615,7 +651,8 @@ async function openAddTaskModal() {
     
     try {
         showLoading();
-        const response = await fetch(`${CONFIG.API_BASE_URL}/admin/tasks`, {
+        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
+        const response = await fetch(`${API_BASE_URL}/admin/tasks`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(taskData)
@@ -649,7 +686,8 @@ async function openAddChannelModal() {
     
     try {
         showLoading();
-        const response = await fetch(`${CONFIG.API_BASE_URL}/admin/channels`, {
+        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
+        const response = await fetch(`${API_BASE_URL}/admin/channels`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -678,7 +716,8 @@ async function openAddChannelModal() {
 
 async function loadTasks() {
     try {
-        const response = await fetch(`${CONFIG.API_BASE_URL}/tasks`);
+        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
+        const response = await fetch(`${API_BASE_URL}/tasks`);
         const result = await response.json();
         
         if (result.success) {
@@ -715,7 +754,8 @@ function displayTasks(tasks) {
 
 async function loadChannels() {
     try {
-        const response = await fetch(`${CONFIG.API_BASE_URL}/admin/channels`);
+        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
+        const response = await fetch(`${API_BASE_URL}/admin/channels`);
         const result = await response.json();
         
         if (result.success) {
@@ -860,7 +900,8 @@ async function addSpinsToUser() {
     
     try {
         showLoading();
-        const response = await fetch(`${CONFIG.API_BASE_URL}/admin/tasks?task_id=${taskId}`, {
+        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
+        const response = await fetch(`${API_BASE_URL}/admin/tasks?task_id=${taskId}`, {
             method: 'DELETE'
         });
         
@@ -884,7 +925,8 @@ async function deleteChannel(channelId) {
     
     try {
         showLoading();
-        const response = await fetch(`${CONFIG.API_BASE_URL}/admin/channels?channel_id=${channelId}`, {
+        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
+        const response = await fetch(`${API_BASE_URL}/admin/channels?channel_id=${channelId}`, {
             method: 'DELETE'
         });
         

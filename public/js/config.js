@@ -423,4 +423,10 @@ window.isValidVodafoneNumber = isValidVodafoneNumber;
 window.sanitizeInput = sanitizeInput;
 window.hashData = hashData;
 
-console.log('🐼 Panda Giveaways Config Loaded');
+console.log('✅ Panda Giveaways Config Loaded Successfully');
+console.log('📊 CONFIG:', {
+    API_BASE_URL: CONFIG.API_BASE_URL,
+    ADMIN_IDS: CONFIG.ADMIN_IDS,
+    MIN_WITHDRAWAL_AMOUNT: CONFIG.MIN_WITHDRAWAL_AMOUNT,
+    REQUIRED_CHANNELS: CONFIG.REQUIRED_CHANNELS
+});
