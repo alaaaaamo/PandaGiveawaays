@@ -1,140 +1,163 @@
-// ═══════════════════════════════════════════════════════════════
-// 📢 CHANNELS VERIFICATION SYSTEM
-// ═══════════════════════════════════════════════════════════════
+// =====================================
+// 🔒 Mandatory Channels Verification System
+// =====================================
 
+// Check if user subscribed to required channels
 async function checkRequiredChannels() {
+    console.log('🔍 Checking required channels...');
+    
     try {
-        // Get required channels from backend
-        const response = await fetch(`${CONFIG.API_BASE_URL}/admin/channels`);
+        // Check if user already verified today
+        const lastCheck = localStorage.getItem('channelsChecked');
+        if (lastCheck) {
+            const lastCheckTime = new Date(lastCheck);
+            const now = new Date();
+            const hoursSinceCheck = (now - lastCheckTime) / (1000 * 60 * 60);
+            
+            // Check once per day (24 hours)
+            if (hoursSinceCheck < 24) {
+                console.log('✅ Channels already verified today');
+                return true;
+            }
+        }
+
+        // Fetch required channels from API
+        console.log('📡 Fetching required channels from API...');
+        const response = await fetch('/api/admin/channels');
         const result = await response.json();
         
+        console.log('📊 API Response:', result);
+        
         if (!result.success || !result.data || result.data.length === 0) {
-            // No required channels, proceed normally
-            console.log('📢 No required channels configured');
+            console.log('ℹ️ No required channels found');
+            localStorage.setItem('channelsChecked', new Date().toISOString());
             return true;
         }
+
+        console.log(`📢 Found ${result.data.length} required channels`);
         
-        const channels = result.data;
-        console.log('📢 Found required channels:', channels.length);
-        
-        // Check if user has verified channels before (using localStorage)
-        const userId = TelegramApp.getUserId() || 'guest';
-        const verifiedKey = `channels_verified_${userId}`;
-        const lastVerified = localStorage.getItem(verifiedKey) || '0';
-        const now = Date.now();
-        
-        // Check every 24 hours
-        if (now - parseInt(lastVerified) < 24 * 60 * 60 * 1000) {
-            console.log('📢 User already verified within 24 hours');
-            return true;
-        }
-        
-        // Show channels modal (non-blocking)
-        console.log('📢 Showing channels verification modal');
-        showChannelsModal(channels);
-        
-        return true;
-        
+        // Show channels modal
+        showChannelsModal(result.data);
+        return false;
+
     } catch (error) {
-        console.error('Error checking channels:', error);
-        // Don't block user if there's an error
+        console.error('❌ Error checking channels:', error);
+        // On error, allow user to continue
         return true;
     }
 }
 
-async function showChannelsModal(channels) {
-    try {
-        const modal = document.getElementById('channels-modal');
-        const channelsList = document.getElementById('channels-list');
-        const verifyBtn = document.getElementById('verify-channels-btn');
-        
-        if (!modal || !channelsList || !verifyBtn) {
-            console.error('📢 Channel modal elements not found');
-            return;
-        }
-        
-        // Store subscription status for each channel
-        const channelStatus = {};
-        channels.forEach(channel => {
-            channelStatus[channel.channel_id] = false;
-        });
-        
-        // Build channels list
-        const renderChannels = () => {
-            channelsList.innerHTML = '';
-            channels.forEach(channel => {
-                const isSubscribed = channelStatus[channel.channel_id];
-                const channelItem = document.createElement('div');
-                channelItem.className = 'channel-item';
-                channelItem.dataset.channelId = channel.channel_id;
-                channelItem.innerHTML = `
-                    <div class="channel-info">
-                        <svg class="channel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-                        </svg>
-                        <div>
-                            <div class="channel-name">${channel.channel_name}</div>
-                            <div class="channel-id">${channel.channel_id}</div>
+// Show channels verification modal
+function showChannelsModal(channels) {
+    console.log('📱 Showing channels modal with', channels.length, 'channels');
+    
+    // Track which channels user opened
+    const channelStatus = {};
+    channels.forEach(channel => {
+        channelStatus[channel.channel_id] = false;
+    });
+
+    const modalHTML = `
+        <div class="modal-overlay active" id="channelsModal">
+            <div class="modal-content">
+                <h2>🔒 الانضمام للقنوات الإجبارية</h2>
+                <p>يرجى الانضمام إلى القنوات التالية للمتابعة:</p>
+                
+                <div class="channels-list">
+                    ${channels.map(channel => `
+                        <div class="channel-item" data-channel-id="${channel.channel_id}">
+                            <div class="channel-info">
+                                <h3>${channel.channel_name}</h3>
+                                <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">${channel.channel_id}</p>
+                            </div>
+                            <div class="channel-actions">
+                                <a href="${channel.channel_url}" 
+                                   target="_blank" 
+                                   class="channel-link"
+                                   onclick="markChannelAsOpened('${channel.channel_id}')">
+                                    📢 فتح القناة
+                                </a>
+                                <span class="channel-status not-subscribed" id="status-${channel.channel_id}">
+                                    ❌
+                                </span>
+                            </div>
                         </div>
-                    </div>
-                    <div class="channel-actions">
-                        <a href="${channel.channel_url}" target="_blank" class="channel-join-btn" onclick="markChannelAsOpened('${channel.channel_id}')">
-                            📢 ${channel.channel_name}
-                        </a>
-                        <span class="channel-status ${isSubscribed ? 'subscribed' : 'not-subscribed'}">
-                            ${isSubscribed ? '✅' : '❌'}
-                        </span>
-                    </div>
-                `;
-                channelsList.appendChild(channelItem);
-            });
-        };
-        
-        // Mark channel as opened when user clicks the link
-        window.markChannelAsOpened = (channelId) => {
-            TelegramApp.hapticFeedback('light');
-            setTimeout(() => {
-                channelStatus[channelId] = true;
-                renderChannels();
-            }, 1000);
-        };
-        
-        renderChannels();
-        
-        // Show modal
-        modal.style.display = 'flex';
-        
-        // Handle verify button
-        verifyBtn.onclick = async () => {
-            TelegramApp.hapticFeedback('medium');
-            verifyBtn.disabled = true;
-            verifyBtn.textContent = '⏳ جاري التحقق...';
-            
-            // Check if all channels are marked as visited
-            const allSubscribed = Object.values(channelStatus).every(status => status === true);
-            
-            if (!allSubscribed) {
-                verifyBtn.disabled = false;
-                verifyBtn.textContent = '✅ تحقق من الاشتراك';
-                showToast('⚠️ يرجى الاشتراك في جميع القنوات أولاً', 'error');
-                TelegramApp.hapticFeedback('error');
-                return;
-            }
-            
-            // Simulate verification delay
-            await new Promise(r => setTimeout(r, 1500));
-            
-            // Mark as verified
-            const userId = TelegramApp.getUserId() || 'guest';
-            const verifiedKey = `channels_verified_${userId}`;
-            localStorage.setItem(verifiedKey, Date.now().toString());
-            
-            // Close modal
-            modal.style.display = 'none';
-            showToast('✅ تم التحقق من الاشتراك بنجاح!', 'success');
-            TelegramApp.hapticFeedback('success');
-        };
-    } catch (error) {
-        console.error('📢 Error showing channels modal:', error);
+                    `).join('')}
+                </div>
+                
+                <button class="verify-btn" onclick="verifySubscriptions()">
+                    ✅ تحقق من الاشتراك
+                </button>
+            </div>
+        </div>
+    `;
+
+    // Add modal to body
+    const existingModal = document.getElementById('channelsModal');
+    if (existingModal) {
+        existingModal.remove();
     }
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    // Store channel status globally
+    window.channelStatus = channelStatus;
+    console.log('✅ Modal displayed successfully');
 }
+
+// Mark channel as opened when user clicks the link
+window.markChannelAsOpened = function(channelId) {
+    console.log('📢 Marking channel as opened:', channelId);
+    
+    if (window.channelStatus) {
+        // Wait 1 second to simulate user opening the channel
+        setTimeout(() => {
+            window.channelStatus[channelId] = true;
+            const statusElement = document.getElementById(`status-${channelId}`);
+            if (statusElement) {
+                statusElement.classList.remove('not-subscribed');
+                statusElement.classList.add('subscribed');
+                statusElement.textContent = '✅';
+                console.log('✅ Channel marked as subscribed:', channelId);
+            }
+        }, 1000);
+    }
+};
+
+// Verify all channels subscriptions
+window.verifySubscriptions = function() {
+    console.log('🔍 Verifying subscriptions...');
+    console.log('Channel Status:', window.channelStatus);
+    
+    if (!window.channelStatus) {
+        console.error('❌ Channel status not found');
+        return;
+    }
+
+    // Check if user opened all channels
+    const allChannelsOpened = Object.values(window.channelStatus).every(status => status === true);
+
+    if (!allChannelsOpened) {
+        console.log('⚠️ Not all channels opened yet');
+        TelegramApp.showAlert('⚠️ يرجى فتح جميع القنوات أولاً!');
+        return;
+    }
+
+    console.log('✅ All channels opened, marking as verified');
+    
+    // Mark as verified
+    localStorage.setItem('channelsChecked', new Date().toISOString());
+    
+    // Close modal
+    const modal = document.getElementById('channelsModal');
+    if (modal) {
+        modal.classList.remove('active');
+        setTimeout(() => modal.remove(), 300);
+    }
+
+    // Reload to show main content
+    TelegramApp.showAlert('✅ تم التحقق بنجاح! مرحباً بك 🎉');
+    setTimeout(() => {
+        console.log('🔄 Reloading page...');
+        window.location.reload();
+    }, 1000);
+};

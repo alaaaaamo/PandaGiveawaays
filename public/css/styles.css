@@ -1292,6 +1292,98 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--accent-hover);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   🔒 MODAL OVERLAY
+   ═══════════════════════════════════════════════════════════════ */
+
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-md);
+    animation: fadeIn 0.3s ease;
+}
+
+.modal-overlay.active {
+    display: flex;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.modal-content {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    max-width: 500px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-lg);
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.modal-content h2 {
+    color: var(--text-primary);
+    font-size: 24px;
+    margin-bottom: var(--spacing-sm);
+    text-align: center;
+}
+
+.modal-content > p {
+    color: var(--text-secondary);
+    text-align: center;
+    margin-bottom: var(--spacing-lg);
+}
+
+.verify-btn {
+    width: 100%;
+    background: var(--success-color);
+    color: white;
+    border: none;
+    padding: var(--spacing-md);
+    border-radius: var(--radius-md);
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: var(--spacing-lg);
+}
+
+.verify-btn:hover {
+    background: #33a047;
+    transform: scale(1.02);
+}
+
+.verify-btn:active {
+    transform: scale(0.98);
+}
+
 /* ═══════════════════════════════════════════════════════════════
    📢 CHANNELS MODAL
    ═══════════════════════════════════════════════════════════════ */
@@ -1356,6 +1448,25 @@ body {
     justify-content: space-between;
     gap: var(--spacing-sm);
     margin-top: var(--spacing-sm);
+}
+
+.channel-link {
+    background: var(--accent-color);
+    color: white;
+    padding: 10px 16px;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    font-size: 14px;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    flex: 1;
+    text-align: center;
+    display: inline-block;
+}
+
+.channel-link:hover {
+    background: var(--accent-hover);
+    transform: scale(1.02);
 }
 
 .channel-join-btn {
