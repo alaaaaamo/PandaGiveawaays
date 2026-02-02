@@ -3,6 +3,13 @@
  * Admin Dashboard Management
  */
 
+console.log('📄 admin.js loaded successfully');
+
+// Test: إضافة click listener للـ body للتأكد من الأحداث بتشتغل
+document.addEventListener('click', (e) => {
+    console.log('🖱️ Global click detected:', e.target.tagName, e.target.className);
+}, true);
+
 // ═══════════════════════════════════════════════════════════════
 // 🔧 INITIALIZATION
 // ═══════════════════════════════════════════════════════════════
@@ -519,14 +526,26 @@ function setupEventListeners() {
     // Tab switching
     const tabs = document.querySelectorAll('.admin-tab');
     console.log('Found tabs:', tabs.length);
+    console.log('Tabs list:', Array.from(tabs).map(t => ({
+        text: t.textContent.trim(),
+        dataset: t.dataset.tab,
+        classList: Array.from(t.classList)
+    })));
     
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            console.log('Tab clicked:', tab.dataset.tab);
+    if (tabs.length === 0) {
+        console.error('❌ NO TABS FOUND! Check if .admin-tab elements exist in HTML');
+    }
+    
+    tabs.forEach((tab, index) => {
+        console.log(`Adding click listener to tab ${index}:`, tab.dataset.tab);
+        tab.addEventListener('click', (e) => {
+            console.log('🖱️ Tab clicked:', tab.dataset.tab, e);
             const targetTab = tab.dataset.tab;
             switchTab(targetTab);
         });
     });
+    
+    console.log('✅ Event listeners setup complete');
     
     // Filter buttons for withdrawals
     const filterBtns = document.querySelectorAll('.filter-btn');
