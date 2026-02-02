@@ -987,32 +987,6 @@ def add_spins_to_user():
         print(f"Error in add_spins_to_user: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-if __name__ == '__main__':
-                VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
-            """, (task_type, task_name, task_description, channel_id, link_url, reward_amount, admin_id, now))
-            
-            conn.commit()
-            conn.close()
-            
-            return jsonify({'success': True, 'message': 'Task created successfully'})
-        
-        elif request.method == 'DELETE':
-            task_id = request.args.get('task_id')
-            if not task_id:
-                return jsonify({'success': False, 'error': 'Task ID required'}), 400
-            
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("UPDATE tasks SET is_active = 0 WHERE id = ?", (task_id,))
-            conn.commit()
-            conn.close()
-            
-            return jsonify({'success': True, 'message': 'Task deleted'})
-            
-    except Exception as e:
-        print(f"Error in manage_tasks: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
 @app.route('/health')
 def health():
     """Health check لـ Render"""
