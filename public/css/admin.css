@@ -93,6 +93,27 @@
     transform: scale(1.05);
 }
 
+.add-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: 12px 24px;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: linear-gradient(135deg, var(--accent-color), var(--accent-hover));
+    color: #000;
+    box-shadow: 0 4px 12px rgba(255, 208, 0, 0.3);
+}
+
+.add-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 208, 0, 0.5);
+}
+
 /* ═══════════════════════════════════════════════════════════════
    📊 STATISTICS SECTION
    ═══════════════════════════════════════════════════════════════ */

@@ -18,11 +18,12 @@ const CONFIG = {
         { name: 'حظ أوفر', amount: 0, probability: 50.5, color: '#808080' }
     ],
     
-    // Referral & Tasks
-    SPINS_PER_REFERRALS: 5,
-    TASKS_FOR_TICKET: 5,
-    REFERRALS_FOR_TICKET: 2,
-    MIN_WITHDRAWAL_AMOUNT: 0.1,  // 10 سنت TON
+    // Referral & Tasks (تذاكر بدلاً من عملات)
+    SPINS_PER_REFERRALS: 5,        // عدد الإحالات للحصول على لفة
+    TASKS_FOR_TICKET: 5,           // عدد المهام للحصول على تذكرة
+    REFERRALS_FOR_TICKET: 2,       // عدد الإحالات للحصول على تذكرة
+    TICKETS_FOR_SPIN: 1,           // عدد التذاكر للحصول على لفة
+    MIN_WITHDRAWAL_AMOUNT: 0.1,    // 0.1 TON لكل طرق السحب
     
     // Required Channels
     REQUIRED_CHANNELS: [

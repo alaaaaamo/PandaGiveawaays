@@ -896,7 +896,8 @@ async function addSpinsToUser() {
     try {
         showLoading(true);
         
-        const response = await fetch('/api/admin/add-spins', {
+        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
+        const response = await fetch(`${API_BASE_URL}/admin/add-spins`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -904,7 +905,7 @@ async function addSpinsToUser() {
             body: JSON.stringify({
                 username: username,
                 spins_count: spinsAmount,
-                admin_id: TelegramApp.getUserId() || 1797127532
+                admin_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 1797127532
             })
         });
         

@@ -96,7 +96,7 @@ WHEEL_PRIZES = [
 
 # 💰 إعدادات الإحالات والمهام
 SPINS_PER_REFERRALS = int(os.getenv("SPINS_PER_REFERRALS", "5"))
-MIN_WITHDRAWAL_AMOUNT = float(os.getenv("MIN_WITHDRAWAL_AMOUNT", "0.1"))
+MIN_WITHDRAWAL_AMOUNT = 0.1  # 0.1 TON لكل طرق السحب
 
 # 💳 إعدادات محفظة TON (للسحوبات الأوتوماتيكية)
 TON_WALLET_ADDRESS = os.getenv("TON_WALLET_ADDRESS", "")
@@ -168,6 +168,7 @@ class User:
     balance: float = 0.0
     total_spins: int = 0
     available_spins: int = 0
+    tickets: int = 0  # التذاكر من المهام والإحالات
     total_referrals: int = 0
     referrer_id: Optional[int] = None
     created_at: str = None
@@ -213,6 +214,7 @@ class DatabaseManager:
                 balance REAL DEFAULT 0.0,
                 total_spins INTEGER DEFAULT 0,
                 available_spins INTEGER DEFAULT 0,
+                tickets INTEGER DEFAULT 0,
                 total_referrals INTEGER DEFAULT 0,
                 valid_referrals INTEGER DEFAULT 0,
                 referrer_id INTEGER,
@@ -227,6 +229,13 @@ class DatabaseManager:
                 FOREIGN KEY (referrer_id) REFERENCES users(user_id)
             )
         """)
+        
+        # إضافة عمود tickets للمستخدمين القدامى
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN tickets INTEGER DEFAULT 0")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # العمود موجود بالفعل
         
         # جدول الإحالات
         cursor.execute("""
