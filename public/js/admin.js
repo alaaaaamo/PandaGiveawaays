@@ -60,21 +60,39 @@ async function initAdminPanel() {
     const telegramUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
     console.log('Telegram User:', telegramUser);
     
+    // إذا مفيش user من Telegram - ارفض الدخول تماماً
     if (!telegramUser) {
-        console.warn('⚠️ No Telegram user found - allowing access for testing');
-        showToast('⚠️ وضع الاختبار - يمكنك التصفح', 'info');
-        // Don't return - allow testing mode
-        return; // Continue to allow UI to work
+        document.body.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #0d1117; color: #fff; text-align: center; padding: 20px; font-family: Arial;">
+                <div>
+                    <h1 style="font-size: 48px; margin-bottom: 20px;">🚫</h1>
+                    <h2 style="color: #ff4444; margin-bottom: 10px;">غير مسموح بالدخول!</h2>
+                    <p style="color: #888; font-size: 18px;">هذه الصفحة تعمل فقط من خلال Telegram Mini App</p>
+                    <p style="color: #666; font-size: 14px; margin-top: 20px;">Access Denied: This page only works through Telegram Bot</p>
+                </div>
+            </div>
+        `;
+        throw new Error('Not authorized - Not from Telegram');
     }
     
-    const adminIds = window.CONFIG?.ADMIN_IDS || [];
+    // التحقق من أن المستخدم أدمن
+    const adminIds = window.CONFIG?.ADMIN_IDS || [1797127532, 6603009212];
     if (!adminIds.includes(telegramUser.id)) {
-        showToast('❌ غير مصرح لك بالدخول!', 'error');
-        // Don't close immediately - let them see the message
-        console.error('User not authorized:', telegramUser.id);
-        return;
+        document.body.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #0d1117; color: #fff; text-align: center; padding: 20px; font-family: Arial;">
+                <div>
+                    <h1 style="font-size: 48px; margin-bottom: 20px;">⛔</h1>
+                    <h2 style="color: #ff4444; margin-bottom: 10px;">غير مصرح لك!</h2>
+                    <p style="color: #888; font-size: 18px;">هذه الصفحة للمسؤولين فقط</p>
+                    <p style="color: #666; font-size: 14px; margin-top: 20px;">Your ID: ${telegramUser.id}</p>
+                    <p style="color: #666; font-size: 14px;">Access Denied: Admin only</p>
+                </div>
+            </div>
+        `;
+        throw new Error('Not authorized - Not admin');
     }
 
+    console.log('✅ Admin authorized:', telegramUser.id);
     showToast('✅ مرحباً في لوحة التحكم!', 'success');
 }
 

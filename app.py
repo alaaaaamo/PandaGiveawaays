@@ -36,14 +36,17 @@ def start_telegram_bot():
     except Exception as e:
         print(f"❌ Failed to start bot: {e}")
 
-# تشغيل البوت في thread منفصل عند بدء التشغيل (للتطوير المحلي فقط)
+# تشغيل البوت في thread منفصل عند بدء التشغيل
 if not os.environ.get('RENDER'):
     # محلياً فقط، شغل البوت في الخلفية
     bot_thread = threading.Thread(target=start_telegram_bot, daemon=True)
     bot_thread.start()
     print("🎉 Bot thread started locally")
 else:
-    print("ℹ️ Running on Render - Bot will be started by start_render.sh")
+    # على Render، شغل البوت في الخلفية كمان
+    bot_thread = threading.Thread(target=start_telegram_bot, daemon=True)
+    bot_thread.start()
+    print("🚀 Bot thread started on Render")
 
 # ═══════════════════════════════════════════════════════════════
 # 🗄️ DATABASE MANAGER
@@ -341,7 +344,32 @@ def index():
 
 @app.route('/admin')
 def admin():
-    """صفحة الأدمن"""
+    """صفحة الأدمن - محمية للأدمن فقط"""
+    # الحصول على user_id من query params
+    user_id = request.args.get('user_id')
+    
+    # قائمة الأدمن
+    ADMIN_IDS = [1797127532, 6603009212]
+    
+    # التحقق من أن الطلب من Telegram
+    if not user_id:
+        return jsonify({
+            'error': 'غير مسموح! هدا الصفحة تعمل فقط من خلال Telegram Bot',
+            'message': 'Access Denied: This page only works through Telegram Mini App'
+        }), 403
+    
+    # التحقق من أن المستخدم أدمن
+    try:
+        user_id_int = int(user_id)
+        if user_id_int not in ADMIN_IDS:
+            return jsonify({
+                'error': 'غير مسموح! هده الصفحة للمسؤولين فقط',
+                'message': 'Access Denied: Admin only',
+                'your_id': user_id_int
+            }), 403
+    except ValueError:
+        return jsonify({'error': 'Invalid user ID'}), 400
+    
     return send_from_directory('public', 'admin.html')
 
 @app.route('/<path:path>')
