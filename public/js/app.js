@@ -24,6 +24,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // تحميل بيانات المستخدم
         await loadUserData();
         
+        // التحقق من القنوات الإجبارية
+        const channelsVerified = await checkRequiredChannels();
+        
         // تهيئة UI
         initUI();
         
@@ -335,16 +338,43 @@ function displayReferralsList(referrals) {
         const item = document.createElement('div');
         item.className = 'referral-item';
         
-        const info = document.createElement('div');
-        info.className = 'referral-info';
+        // Avatar with first letter
+        const avatar = document.createElement('div');
+        avatar.className = 'referral-avatar';
+        const displayName = ref.full_name || ref.username || 'User';
+        avatar.textContent = displayName.charAt(0).toUpperCase();
         
+        // Details container
+        const details = document.createElement('div');
+        details.className = 'referral-details';
+        
+        // Name
         const name = document.createElement('div');
         name.className = 'referral-name';
-        name.textContent = ref.full_name + (ref.username ? ` (@${ref.username})` : '');
+        name.textContent = displayName;
         
-        const date = document.createElement('div');
-        date.className = 'referral-date';
-        date.textContent = formatDate(ref.created_at);
+        // Username and date
+        const username = document.createElement('div');
+        username.className = 'referral-username';
+        username.textContent = `${ref.username ? '@' + ref.username : 'منذ'} ${formatDate(ref.created_at)}`;
+        
+        details.appendChild(name);
+        details.appendChild(username);
+        
+        // Status badge
+        const status = document.createElement('div');
+        status.className = 'referral-status';
+        status.innerHTML = ref.is_valid ? 
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> نشط' :
+            '⏳ معلق';
+        
+        item.appendChild(avatar);
+        item.appendChild(details);
+        item.appendChild(status);
+        
+        listContent.appendChild(item);
+    });
+}
         
         info.appendChild(name);
         info.appendChild(date);

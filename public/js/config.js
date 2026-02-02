@@ -7,6 +7,9 @@ const CONFIG = {
     API_BASE_URL: 'https://pandagiveawaays.onrender.com/api',
     BOT_USERNAME: 'PandaGiveawaysBot',
     
+    // Admin IDs
+    ADMIN_IDS: [1797127532, 6603009212],
+    
     // Wheel Configuration
     WHEEL_PRIZES: [
         { name: '0.1 TON', amount: 0.1, probability: 5, color: '#ffa500' },
@@ -22,7 +25,13 @@ const CONFIG = {
     SPINS_PER_REFERRALS: 5,
     TASKS_FOR_TICKET: 5,
     REFERRALS_FOR_TICKET: 2,
-    MIN_WITHDRAWAL_AMOUNT: 1.0,
+    MIN_WITHDRAWAL_AMOUNT: 0.10,
+    
+    // Required Channels - قنوات إجبارية
+    REQUIRED_CHANNELS: [
+        { id: '@PandaAdds', name: 'Panda Adds', url: 'https://t.me/PandaAdds' },
+        { id: '@CRYPTO_FLASSH', name: 'Crypto Flash', url: 'https://t.me/CRYPTO_FLASSH' }
+    ],
     
     // Security
     MAX_SPINS_PER_DAY: 100,  // حد أقصى للفات اليومية

@@ -149,6 +149,33 @@ def init_database():
         )
     """)
     
+    # جدول القنوات الإجبارية
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS required_channels (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            channel_id TEXT NOT NULL UNIQUE,
+            channel_name TEXT NOT NULL,
+            channel_url TEXT NOT NULL,
+            is_active INTEGER DEFAULT 1,
+            added_by INTEGER NOT NULL,
+            added_at TEXT NOT NULL
+        )
+    """)
+    
+    # إضافة القنوات الإجبارية الافتراضية إذا لم تكن موجودة
+    cursor.execute("SELECT COUNT(*) as count FROM required_channels")
+    if cursor.fetchone()['count'] == 0:
+        now = datetime.now().isoformat()
+        default_channels = [
+            ('@PandaAdds', 'Panda Adds', 'https://t.me/PandaAdds', 1797127532),
+            ('@CRYPTO_FLASSH', 'Crypto Flash', 'https://t.me/CRYPTO_FLASSH', 1797127532)
+        ]
+        for channel_id, name, url, admin_id in default_channels:
+            cursor.execute("""
+                INSERT INTO required_channels (channel_id, channel_name, channel_url, is_active, added_by, added_at)
+                VALUES (?, ?, ?, 1, ?, ?)
+            """, (channel_id, name, url, admin_id, now))
+    
     conn.commit()
     conn.close()
     print("✅ Database initialized")
@@ -581,6 +608,190 @@ def register_referral():
             
     except Exception as e:
         print(f"Error in register_referral: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/task/complete', methods=['POST'])
+def complete_task():
+    """إكمال مهمة"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        task_id = data.get('task_id')
+        
+        if not user_id or not task_id:
+            return jsonify({'success': False, 'error': 'Missing parameters'}), 400
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+        
+        try:
+            # التحقق من أن المهمة موجودة ونشطة
+            cursor.execute("SELECT * FROM tasks WHERE id = ? AND is_active = 1", (task_id,))
+            task = cursor.fetchone()
+            
+            if not task:
+                conn.close()
+                return jsonify({'success': False, 'error': 'Task not found'}), 404
+            
+            # تسجيل إنجاز المهمة
+            cursor.execute("""
+                INSERT INTO user_tasks (user_id, task_id, completed_at, verified)
+                VALUES (?, ?, ?, 1)
+            """, (user_id, task_id, now))
+            
+            # إضافة المكافأة للرصيد
+            cursor.execute("""
+                UPDATE users 
+                SET balance = balance + ?
+                WHERE user_id = ?
+            """, (task['reward_amount'], user_id))
+            
+            # التحقق من عدد المهام المكتملة
+            cursor.execute("""
+                SELECT COUNT(*) as count FROM user_tasks WHERE user_id = ?
+            """, (user_id,))
+            tasks_count = cursor.fetchone()['count']
+            
+            # كل 5 مهمات = لفة إضافية
+            if tasks_count % 5 == 0:
+                cursor.execute("""
+                    UPDATE users 
+                    SET available_spins = available_spins + 1
+                    WHERE user_id = ?
+                """, (user_id,))
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({
+                'success': True,
+                'message': 'Task completed successfully',
+                'reward': task['reward_amount']
+            })
+            
+        except sqlite3.IntegrityError:
+            conn.close()
+            return jsonify({'success': False, 'error': 'Task already completed'}), 400
+            
+    except Exception as e:
+        print(f"Error in complete_task: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/channels', methods=['GET', 'POST', 'DELETE'])
+def manage_channels():
+    """إدارة القنوات الإجبارية"""
+    try:
+        if request.method == 'GET':
+            # Get all required channels
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM required_channels 
+                WHERE is_active = 1 
+                ORDER BY added_at DESC
+            """)
+            channels = [dict(row) for row in cursor.fetchall()]
+            conn.close()
+            return jsonify({'success': True, 'data': channels})
+        
+        elif request.method == 'POST':
+            # Add new channel
+            data = request.get_json()
+            channel_id = data.get('channel_id')
+            channel_name = data.get('channel_name')
+            channel_url = data.get('channel_url')
+            admin_id = data.get('admin_id')
+            
+            if not all([channel_id, channel_name, channel_url, admin_id]):
+                return jsonify({'success': False, 'error': 'Missing parameters'}), 400
+            
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            now = datetime.now().isoformat()
+            
+            cursor.execute("""
+                INSERT INTO required_channels (channel_id, channel_name, channel_url, added_by, added_at, is_active)
+                VALUES (?, ?, ?, ?, ?, 1)
+            """, (channel_id, channel_name, channel_url, admin_id, now))
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True, 'message': 'Channel added successfully'})
+        
+        elif request.method == 'DELETE':
+            # Delete channel
+            channel_id = request.args.get('channel_id')
+            if not channel_id:
+                return jsonify({'success': False, 'error': 'Channel ID required'}), 400
+            
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE required_channels 
+                SET is_active = 0 
+                WHERE channel_id = ?
+            """, (channel_id,))
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True, 'message': 'Channel removed'})
+            
+    except Exception as e:
+        print(f"Error in manage_channels: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/admin/tasks', methods=['POST', 'DELETE'])
+def manage_tasks():
+    """إدارة المهام"""
+    try:
+        if request.method == 'POST':
+            data = request.get_json()
+            task_type = data.get('task_type')  # 'channel', 'link'
+            task_name = data.get('task_name')
+            task_description = data.get('task_description')
+            reward_amount = data.get('reward_amount', 0)
+            admin_id = data.get('admin_id')
+            
+            # For channel tasks
+            channel_id = data.get('channel_id')
+            # For link tasks
+            link_url = data.get('link_url')
+            duration = data.get('duration', 10)  # seconds
+            
+            if not all([task_type, task_name, admin_id]):
+                return jsonify({'success': False, 'error': 'Missing parameters'}), 400
+            
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            now = datetime.now().isoformat()
+            
+            cursor.execute("""
+                INSERT INTO tasks (task_type, task_name, task_description, channel_id, link_url, reward_amount, is_active, added_by, added_at)
+                VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+            """, (task_type, task_name, task_description, channel_id, link_url, reward_amount, admin_id, now))
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True, 'message': 'Task created successfully'})
+        
+        elif request.method == 'DELETE':
+            task_id = request.args.get('task_id')
+            if not task_id:
+                return jsonify({'success': False, 'error': 'Task ID required'}), 400
+            
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("UPDATE tasks SET is_active = 0 WHERE id = ?", (task_id,))
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True, 'message': 'Task deleted'})
+            
+    except Exception as e:
+        print(f"Error in manage_tasks: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/health')

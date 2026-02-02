@@ -526,16 +526,215 @@ function showToast(message, type = 'info') {
 // 📤 EXPORT TO BACKEND
 // ═══════════════════════════════════════════════════════════════
 
-function openAddTaskModal() {
-    showToast('قريباً: إضافة مهمة جديدة', 'info');
+async function openAddTaskModal() {
+    const taskType = prompt('نوع المهمة (channel/link):');
+    if (!taskType || !['channel', 'link'].includes(taskType)) return;
+    
+    const taskName = prompt('اسم المهمة:');
+    if (!taskName) return;
+    
+    const taskDescription = prompt('وصف المهمة:');
+    const reward = parseFloat(prompt('المكافأة (TON):') || '0.01');
+    
+    let taskData = {
+        task_type: taskType,
+        task_name: taskName,
+        task_description: taskDescription,
+        reward_amount: reward,
+        admin_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 1797127532
+    };
+    
+    if (taskType === 'channel') {
+        const channelId = prompt('معرف القناة (مثال: @ChannelName):');
+        if (!channelId) return;
+        taskData.channel_id = channelId;
+    } else {
+        const linkUrl = prompt('رابط المهمة:');
+        if (!linkUrl) return;
+        taskData.link_url = linkUrl;
+        taskData.duration = parseInt(prompt('المدة بالثواني:') || '10');
+    }
+    
+    try {
+        showLoading();
+        const response = await fetch(`${CONFIG.API_BASE_URL}/admin/tasks`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(taskData)
+        });
+        
+        const result = await response.json();
+        hideLoading();
+        
+        if (result.success) {
+            showToast('✅ تم إضافة المهمة بنجاح!', 'success');
+            loadTasks();
+        } else {
+            showToast('❌ فشل إضافة المهمة', 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        showToast('❌ خطأ في الاتصال', 'error');
+        console.error(error);
+    }
 }
 
-function openAddChannelModal() {
-    showToast('قريباً: إضافة قناة جديدة', 'info');
+async function openAddChannelModal() {
+    const channelId = prompt('معرف القناة (مثال: @ChannelName):');
+    if (!channelId) return;
+    
+    const channelName = prompt('اسم القناة:');
+    if (!channelName) return;
+    
+    const channelUrl = prompt('رابط القناة (https://t.me/...):');
+    if (!channelUrl) return;
+    
+    try {
+        showLoading();
+        const response = await fetch(`${CONFIG.API_BASE_URL}/admin/channels`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                channel_id: channelId,
+                channel_name: channelName,
+                channel_url: channelUrl,
+                admin_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 1797127532
+            })
+        });
+        
+        const result = await response.json();
+        hideLoading();
+        
+        if (result.success) {
+            showToast('✅ تم إضافة القناة بنجاح!', 'success');
+            loadChannels();
+        } else {
+            showToast('❌ فشل إضافة القناة', 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        showToast('❌ خطأ في الاتصال', 'error');
+        console.error(error);
+    }
 }
 
-function viewUser(userId) {
-    showToast(`عرض تفاصيل المستخدم: ${userId}`, 'info');
+async function loadTasks() {
+    try {
+        const response = await fetch(`${CONFIG.API_BASE_URL}/tasks`);
+        const result = await response.json();
+        
+        if (result.success) {
+            displayTasks(result.data);
+        }
+    } catch (error) {
+        console.error('Error loading tasks:', error);
+    }
+}
+
+function displayTasks(tasks) {
+    const grid = document.getElementById('tasks-grid');
+    if (!grid) return;
+    
+    grid.innerHTML = tasks.length === 0 ? 
+        '<p style="text-align:center;padding:40px;color:var(--text-secondary)">لا توجد مهام</p>' :
+        tasks.map(task => `
+            <div class="task-card">
+                <div class="task-header">
+                    <span class="task-type-badge">${task.task_type === 'channel' ? '📢 قناة' : '🔗 رابط'}</span>
+                    <button onclick="deleteTask(${task.id})" class="delete-btn">🗑️</button>
+                </div>
+                <h3>${task.task_name}</h3>
+                <p>${task.task_description || ''}</p>
+                <div class="task-footer">
+                    <span class="task-reward">💰 ${task.reward_amount} TON</span>
+                    <span class="task-status ${task.is_active ? 'active' : 'inactive'}">
+                        ${task.is_active ? '✅ نشط' : '❌ معطل'}
+                    </span>
+                </div>
+            </div>
+        `).join('');
+}
+
+async function loadChannels() {
+    try {
+        const response = await fetch(`${CONFIG.API_BASE_URL}/admin/channels`);
+        const result = await response.json();
+        
+        if (result.success) {
+            displayChannels(result.data);
+        }
+    } catch (error) {
+        console.error('Error loading channels:', error);
+    }
+}
+
+function displayChannels(channels) {
+    const grid = document.getElementById('channels-grid');
+    if (!grid) return;
+    
+    grid.innerHTML = channels.length === 0 ?
+        '<p style="text-align:center;padding:40px;color:var(--text-secondary)">لا توجد قنوات</p>' :
+        channels.map(channel => `
+            <div class="channel-card">
+                <div class="channel-header">
+                    <span class="channel-icon">📢</span>
+                    <button onclick="deleteChannel('${channel.channel_id}')" class="delete-btn">🗑️</button>
+                </div>
+                <h3>${channel.channel_name}</h3>
+                <p class="channel-id">${channel.channel_id}</p>
+                <a href="${channel.channel_url}" target="_blank" class="channel-link">
+                    افتح القناة
+                </a>
+            </div>
+        `).join('');
+}
+
+async function deleteTask(taskId) {
+    if (!confirm('هل تريد حذف هذه المهمة؟')) return;
+    
+    try {
+        showLoading();
+        const response = await fetch(`${CONFIG.API_BASE_URL}/admin/tasks?task_id=${taskId}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        hideLoading();
+        
+        if (result.success) {
+            showToast('✅ تم حذف المهمة', 'success');
+            loadTasks();
+        } else {
+            showToast('❌ فشل الحذف', 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        showToast('❌ خطأ في الاتصال', 'error');
+    }
+}
+
+async function deleteChannel(channelId) {
+    if (!confirm('هل تريد حذف هذه القناة؟')) return;
+    
+    try {
+        showLoading();
+        const response = await fetch(`${CONFIG.API_BASE_URL}/admin/channels?channel_id=${channelId}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        hideLoading();
+        
+        if (result.success) {
+            showToast('✅ تم حذف القناة', 'success');
+            loadChannels();
+        } else {
+            showToast('❌ فشل الحذف', 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        showToast('❌ خطأ في الاتصال', 'error');
+    }
 }
 
 function editUser(userId) {

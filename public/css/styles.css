@@ -1292,3 +1292,254 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--accent-hover);
 }
+/* ═══════════════════════════════════════════════════════════════
+   📢 CHANNELS MODAL
+   ═══════════════════════════════════════════════════════════════ */
+
+.channels-modal {
+    max-width: 450px;
+    width: 95%;
+}
+
+.channels-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.channel-item {
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.3s ease;
+}
+
+.channel-item:hover {
+    border-color: var(--accent-color);
+    transform: translateX(-4px);
+}
+
+.channel-info {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+}
+
+.channel-icon {
+    width: 40px;
+    height: 40px;
+    color: var(--accent-color);
+}
+
+.channel-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 16px;
+}
+
+.channel-id {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.channel-join-btn {
+    background: var(--accent-color);
+    color: white;
+    padding: 8px 16px;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    font-size: 14px;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.channel-join-btn:hover {
+    background: var(--accent-hover);
+    transform: scale(1.05);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   🎯 IMPROVED REFERRALS DESIGN
+   ═══════════════════════════════════════════════════════════════ */
+
+.referral-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+}
+
+.stat-box {
+    background: var(--bg-card);
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.stat-box::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--accent-color), var(--success-color));
+}
+
+.stat-box svg {
+    width: 48px;
+    height: 48px;
+    margin: 0 auto var(--spacing-sm);
+    display: block;
+    color: var(--accent-color);
+}
+
+.stat-value {
+    font-size: 28px;
+    font-weight: bold;
+    color: var(--text-primary);
+    display: block;
+    margin-bottom: var(--spacing-xs);
+}
+
+.stat-label {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.referral-item {
+    background: var(--bg-card);
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-sm);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    transition: all 0.3s ease;
+}
+
+.referral-item:hover {
+    border-color: var(--accent-color);
+    transform: translateX(-4px);
+}
+
+.referral-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-color), var(--success-color));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: bold;
+    color: white;
+    flex-shrink: 0;
+}
+
+.referral-details {
+    flex: 1;
+}
+
+.referral-name {
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.referral-username {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.referral-status {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: var(--success-color);
+    color: white;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   🎰 IMPROVED WHEEL DESIGN - Fix Spin Button Position
+   ═══════════════════════════════════════════════════════════════ */
+
+.wheel-container {
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+    margin: 0 auto var(--spacing-xl);
+}
+
+.wheel-wrapper {
+    position: relative;
+    width: 100%;
+    padding-bottom: 100%;
+}
+
+#wheel-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+#spin-button {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-color), #ff6b35);
+    border: 4px solid white;
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(255, 165, 0, 0.4);
+    z-index: 10;
+}
+
+#spin-button:hover:not(:disabled) {
+    transform: translate(-50%, -50%) scale(1.1);
+    box-shadow: 0 6px 20px rgba(255, 165, 0, 0.6);
+}
+
+#spin-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+#spin-button.spinning {
+    animation: spinButtonPulse 1s infinite;
+}
+
+@keyframes spinButtonPulse {
+    0%, 100% {
+        transform: translate(-50%, -50%) scale(1);
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.05);
+    }
+}
