@@ -37,14 +37,13 @@ def start_telegram_bot():
         print(f"❌ Failed to start bot: {e}")
 
 # تشغيل البوت في thread منفصل عند بدء التشغيل
-# NOTE: Bot disabled here because it runs via start_render.sh separately
-# This prevents the "Conflict: terminated by other getUpdates request" error
-if False:  # Disabled to prevent bot conflict
-    if os.environ.get('RENDER'):
-        # على Render، شغل البوت في الخلفية
-        bot_thread = threading.Thread(target=start_telegram_bot, daemon=True)
-        bot_thread.start()
-        print("🎉 Bot thread started on Render")
+# On Render, the bot is started via start_render.sh to avoid conflicts
+# This code is kept for local development only
+if not os.environ.get('RENDER'):
+    # Local development - start bot in background thread
+    bot_thread = threading.Thread(target=start_telegram_bot, daemon=True)
+    bot_thread.start()
+    print("🎉 Bot thread started locally")
 
 # ═══════════════════════════════════════════════════════════════
 # 🗄️ DATABASE MANAGER
