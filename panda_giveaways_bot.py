@@ -109,7 +109,11 @@ SECRET_KEY = os.getenv("SECRET_KEY", secrets.token_hex(32))
 
 # 📊 إعدادات قاعدة البيانات
 DATABASE_URL = os.getenv("DATABASE_URL", "")  # PostgreSQL
-DATABASE_PATH = os.getenv("DATABASE_PATH", "panda_giveaways.db")  # SQLite احتياطي
+# Use absolute path on Render for shared database
+if os.getenv("RENDER"):
+    DATABASE_PATH = os.getenv("DATABASE_PATH", "/opt/render/project/src/panda_giveaways.db")
+else:
+    DATABASE_PATH = os.getenv("DATABASE_PATH", "panda_giveaways.db")
 
 # 🌐 API Configuration
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:5000/api")

@@ -49,7 +49,13 @@ if not os.environ.get('RENDER'):
 # 🗄️ DATABASE MANAGER
 # ═══════════════════════════════════════════════════════════════
 
-DATABASE_PATH = os.getenv('DATABASE_PATH', 'panda_giveaways.db')
+# Get database path - use absolute path on Render
+if os.environ.get('RENDER'):
+    DATABASE_PATH = os.getenv('DATABASE_PATH', '/opt/render/project/src/panda_giveaways.db')
+else:
+    DATABASE_PATH = os.getenv('DATABASE_PATH', 'panda_giveaways.db')
+
+logger.info(f"📊 Using database: {DATABASE_PATH}")
 
 def init_database():
     """إنشاء قاعدة البيانات إذا لم تكن موجودة"""
