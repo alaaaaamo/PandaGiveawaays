@@ -7,12 +7,39 @@ import os
 import sys
 import sqlite3
 from datetime import datetime
+import threading
+import subprocess
 
 # إضافة المسار الحالي لـ Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 app = Flask(__name__, static_folder='public', static_url_path='')
 CORS(app)  # السماح بـ CORS
+
+# ═══════════════════════════════════════════════════════════════
+# 🤖 BOT STARTUP IN BACKGROUND
+# ═══════════════════════════════════════════════════════════════
+
+def start_telegram_bot():
+    """تشغيل البوت في thread منفصل"""
+    try:
+        print("🤖 Starting Telegram Bot in background...")
+        # تشغيل البوت كـ subprocess
+        subprocess.Popen(
+            [sys.executable, "panda_giveaways_bot.py"],
+            stdout=sys.stdout,
+            stderr=sys.stderr
+        )
+        print("✅ Bot process started")
+    except Exception as e:
+        print(f"❌ Failed to start bot: {e}")
+
+# تشغيل البوت في thread منفصل عند بدء التشغيل
+if os.environ.get('RENDER'):
+    # على Render، شغل البوت في الخلفية
+    bot_thread = threading.Thread(target=start_telegram_bot, daemon=True)
+    bot_thread.start()
+    print("🎉 Bot thread started on Render")
 
 # ═══════════════════════════════════════════════════════════════
 # 🗄️ DATABASE MANAGER
