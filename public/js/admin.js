@@ -471,13 +471,13 @@ async function loadChannels() {
 
 async function loadSettings() {
     // Load current settings
-    document.getElementById('min-withdrawal').value = CONFIG.MIN_WITHDRAWAL_AMOUNT;
+    document.getElementById('min-withdrawal').value = window.CONFIG?.MIN_WITHDRAWAL_AMOUNT || 0.1;
     document.getElementById('max-withdrawal').value = 100;
     document.getElementById('auto-withdrawal').checked = true;
     document.getElementById('max-daily-spins').value = 10;
-    document.getElementById('spin-cooldown').value = (config.SPIN_COOLDOWN || 2000) / 1000;
+    document.getElementById('spin-cooldown').value = (window.CONFIG?.SPIN_COOLDOWN || 2000) / 1000;
     document.getElementById('initial-spins').value = 3;
-    document.getElementById('referrals-per-spin').value = config.SPINS_PER_REFERRALS || 5;
+    document.getElementById('referrals-per-spin').value = window.CONFIG?.SPINS_PER_REFERRALS || 5;
     document.getElementById('referral-bonus').value = 0.001;
     document.getElementById('rate-limiting').checked = true;
     document.getElementById('event-logging').checked = true;
