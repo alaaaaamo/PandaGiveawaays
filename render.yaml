@@ -4,7 +4,7 @@ services:
     name: panda-giveaways
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python app.py
+    startCommand: bash start_render.sh
     envVars:
       - key: PYTHON_VERSION
         value: 3.11

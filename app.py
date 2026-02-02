@@ -26,24 +26,24 @@ def start_telegram_bot():
     """تشغيل البوت في thread منفصل"""
     try:
         print("🤖 Starting Telegram Bot in background...")
-        # Import and run bot directly instead of subprocess
-        import panda_giveaways_bot
-        panda_giveaways_bot.main()
-        print("✅ Bot started successfully")
+        # تشغيل البوت كـ subprocess
+        subprocess.Popen(
+            [sys.executable, "panda_giveaways_bot.py"],
+            stdout=sys.stdout,
+            stderr=sys.stderr
+        )
+        print("✅ Bot process started")
     except Exception as e:
         print(f"❌ Failed to start bot: {e}")
-        import traceback
-        traceback.print_exc()
 
-# تشغيل البوت في thread منفصل عند بدء التشغيل
-if os.environ.get('RENDER'):
-    # على Render، شغل البوت في الخلفية
+# تشغيل البوت في thread منفصل عند بدء التشغيل (للتطوير المحلي فقط)
+if not os.environ.get('RENDER'):
+    # محلياً فقط، شغل البوت في الخلفية
     bot_thread = threading.Thread(target=start_telegram_bot, daemon=True)
     bot_thread.start()
-    print("🎉 Bot thread started on Render")
+    print("🎉 Bot thread started locally")
 else:
-    # محلياً فقط
-    print("ℹ️ Running locally - Bot not started from Flask")
+    print("ℹ️ Running on Render - Bot will be started by start_render.sh")
 
 # ═══════════════════════════════════════════════════════════════
 # 🗄️ DATABASE MANAGER
