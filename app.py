@@ -163,8 +163,9 @@ def init_database():
     """)
     
     # إضافة القنوات الإجبارية الافتراضية إذا لم تكن موجودة
-    cursor.execute("SELECT COUNT(*) as count FROM required_channels")
-    if cursor.fetchone()['count'] == 0:
+    cursor.execute("SELECT COUNT(*) FROM required_channels")
+    count = cursor.fetchone()[0]  # الوصول بالـ index وليس بالـ key
+    if count == 0:
         now = datetime.now().isoformat()
         default_channels = [
             ('@PandaAdds', 'Panda Adds', 'https://t.me/PandaAdds', 1797127532),
