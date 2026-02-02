@@ -309,18 +309,7 @@ const TelegramApp = {
     
     // الحصول على صورة البروفايل
     getPhotoUrl() {
-        // Try to get photo from Telegram Web App user object
-        if (this.webApp?.initDataUnsafe?.user?.photo_url) {
-            return this.webApp.initDataUnsafe.user.photo_url;
-        }
-        // Fallback to user object
-        if (this.user?.photo_url) {
-            return this.user.photo_url;
-        }
-        // Generate avatar with user initials
-        const name = this.getFullName();
-        const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
-        return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=100&background=ffa500&color=fff&bold=true&format=svg`;
+        return this.user?.photo_url || 'https://via.placeholder.com/100';
     },
     
     // إغلاق التطبيق

@@ -1,16 +1,22 @@
 services:
-  # Flask Web Service + Bot (combined)
+  # Flask Web Service لـ Mini App
   - type: web
-    name: panda-giveaways
+    name: panda-giveaways-web
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: bash start_render.sh
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
     envVars:
       - key: PYTHON_VERSION
         value: 3.11
       - key: DATABASE_PATH
-        value: /opt/render/project/src/panda_giveaways.db
-    disk:
-      name: panda-db
-      mountPath: /opt/render/project/src
-      sizeGB: 1
+        value: panda_giveaways.db
+  
+  # Background Worker للبوت
+  - type: worker
+    name: panda-giveaways-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python panda_giveaways_bot.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11

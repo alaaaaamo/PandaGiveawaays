@@ -300,21 +300,12 @@ async function deletePrize(prizeId) {
 // ═══════════════════════════════════════════════════════════════
 
 async function loadUsers() {
-    try {
-        const response = await fetch(`${CONFIG.API_BASE_URL}/users`);
-        const result = await response.json();
-        
-        if (result.success && result.data) {
-            adminData.users = result.data;
-            console.log(`✅ Loaded ${adminData.users.length} users`);
-        } else {
-            console.error('Failed to load users:', result.error);
-            adminData.users = [];
-        }
-    } catch (error) {
-        console.error('Error loading users:', error);
-        adminData.users = [];
-    }
+    // Mock users data
+    adminData.users = [
+        { id: 123456, name: 'أحمد محمد', username: '@ahmed123', balance: 5.42, spins: 3, referrals: 12, joined: '2026-01-15' },
+        { id: 234567, name: 'محمد علي', username: '@mohamed', balance: 2.18, spins: 1, referrals: 5, joined: '2026-01-20' },
+        { id: 345678, name: 'فاطمة أحمد', username: '@fatima', balance: 8.95, spins: 5, referrals: 25, joined: '2026-01-10' }
+    ];
     
     renderUsersTable();
 }
@@ -345,21 +336,11 @@ function renderUsersTable() {
 // ═══════════════════════════════════════════════════════════════
 
 async function loadWithdrawals() {
-    try {
-        const response = await fetch(`${CONFIG.API_BASE_URL}/withdrawals`);
-        const result = await response.json();
-        
-        if (result.success && result.data) {
-            adminData.withdrawals = result.data;
-            console.log(`✅ Loaded ${adminData.withdrawals.length} withdrawals`);
-        } else {
-            console.error('Failed to load withdrawals:', result.error);
-            adminData.withdrawals = [];
-        }
-    } catch (error) {
-        console.error('Error loading withdrawals:', error);
-        adminData.withdrawals = [];
-    }
+    // Mock withdrawals data
+    adminData.withdrawals = [
+        { id: 1, user_id: 123456, user_name: 'أحمد محمد', amount: 5.0, method: 'TON', address: 'UQxx...xxxx', status: 'pending', date: '2026-02-02 10:30' },
+        { id: 2, user_id: 234567, user_name: 'محمد علي', amount: 2.0, method: 'Vodafone', number: '01012345678', status: 'pending', date: '2026-02-02 09:15' }
+    ];
     
     renderWithdrawals('pending');
 }
@@ -450,23 +431,17 @@ async function loadChannels() {
 // ═══════════════════════════════════════════════════════════════
 
 async function loadSettings() {
-    // Load settings from config
-    try {
-        document.getElementById('min-withdrawal').value = CONFIG.MIN_WITHDRAWAL_AMOUNT || 0.10;
-        document.getElementById('max-withdrawal').value = 100;
-        document.getElementById('auto-withdrawal').checked = true;
-        document.getElementById('max-daily-spins').value = CONFIG.MAX_SPINS_PER_DAY || 10;
-        document.getElementById('spin-cooldown').value = (CONFIG.SPIN_COOLDOWN || 2000) / 1000;
-        document.getElementById('initial-spins').value = 3;
-        document.getElementById('referrals-per-spin').value = CONFIG.SPINS_PER_REFERRALS || 5;
-        document.getElementById('referral-bonus').value = 0.001;
-        document.getElementById('rate-limiting').checked = true;
-        document.getElementById('event-logging').checked = true;
-        
-        console.log('✅ Settings loaded from config');
-    } catch (error) {
-        console.error('Error loading settings:', error);
-    }
+    // Load current settings
+    document.getElementById('min-withdrawal').value = CONFIG.MIN_WITHDRAWAL_AMOUNT;
+    document.getElementById('max-withdrawal').value = 100;
+    document.getElementById('auto-withdrawal').checked = true;
+    document.getElementById('max-daily-spins').value = 10;
+    document.getElementById('spin-cooldown').value = CONFIG.SPIN_COOLDOWN / 1000;
+    document.getElementById('initial-spins').value = 3;
+    document.getElementById('referrals-per-spin').value = CONFIG.REFERRALS_PER_SPIN;
+    document.getElementById('referral-bonus').value = 0.001;
+    document.getElementById('rate-limiting').checked = true;
+    document.getElementById('event-logging').checked = true;
 }
 
 function saveSettings() {
