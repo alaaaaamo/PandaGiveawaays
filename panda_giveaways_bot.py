@@ -1877,7 +1877,7 @@ async def send_payment_proof_to_channel(context: ContextTypes.DEFAULT_TYPE,
     """نشر إثبات الدفع في قناة الإثباتات"""
     if not PAYMENT_PROOF_CHANNEL:
         logger.warning("⚠️ PAYMENT_PROOF_CHANNEL not configured")
-        return
+        return False
     
     try:
         # رابط المستخدم
@@ -1920,10 +1920,19 @@ async def send_payment_proof_to_channel(context: ContextTypes.DEFAULT_TYPE,
             disable_web_page_preview=False
         )
         
-        logger.info(f"✅ Payment proof sent to channel for withdrawal #{withdrawal_id}")
+        logger.info(f"✅ Payment proof sent to channel {PAYMENT_PROOF_CHANNEL} for withdrawal #{withdrawal_id}")
+        return True
         
+    except Forbidden as e:
+        logger.error(f"❌ Bot is not admin or can't post in channel {PAYMENT_PROOF_CHANNEL}: {e}")
+        return False
+    except BadRequest as e:
+        logger.error(f"❌ Bad request when posting to channel {PAYMENT_PROOF_CHANNEL}: {e}")
+        logger.error(f"   Hint: Make sure PAYMENT_PROOF_CHANNEL is set to @channelname (not URL) and bot is admin")
+        return False
     except Exception as e:
         logger.error(f"❌ Failed to send payment proof to channel: {e}")
+        return False
 
 async def approve_withdrawal_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """الموافقة على طلب سحب"""
