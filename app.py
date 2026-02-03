@@ -1021,20 +1021,18 @@ def request_withdrawal():
         # إذا كان السحب التلقائي مفعّل ونوع السحب TON
         if auto_withdrawal_enabled and withdrawal_type.upper() == 'TON' and wallet_address:
             print(f"🚀 Auto-withdrawal is enabled! Processing withdrawal #{withdrawal_id} automatically...")
-            try:
-                # استدعاء endpoint البوت لمعالجة السحب التلقائي
-                import requests
-                bot_api_url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
-                
-                # إرسال أمر خاص للبوت لمعالجة السحب تلقائياً
-                requests.post(bot_api_url, json={
-                    'chat_id': ADMIN_IDS[0],  # إرسال للأدمن الأول
-                    'text': f'🤖 AUTO_PROCESS_WITHDRAWAL_{withdrawal_id}'
-                }, timeout=5)
-                
-                print(f"✅ Auto-withdrawal request sent for withdrawal #{withdrawal_id}")
-            except Exception as auto_error:
-                print(f"⚠️ Auto-withdrawal trigger failed: {auto_error}")
+            
+            # تحديث حالة السحب لـ "processing" لإخبار البوت بمعالجتها
+            cursor_update = conn_check.cursor()
+            cursor_update.execute("""
+                UPDATE withdrawals 
+                SET status = 'processing', updated_at = CURRENT_TIMESTAMP 
+                WHERE id = ?
+            """, (withdrawal_id,))
+            conn_check.commit()
+            cursor_update.close()
+            
+            print(f"✅ Withdrawal #{withdrawal_id} marked as 'processing' for auto-processing")
         
         # إرسال إشعار للأدمن في البوت (إلا إذا كان السحب تلقائي)
         try:

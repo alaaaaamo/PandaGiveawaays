@@ -715,14 +715,14 @@ class DatabaseManager:
                 SELECT w.*, u.username, u.full_name
                 FROM withdrawals w
                 JOIN users u ON w.user_id = u.user_id
-                WHERE w.id = ? AND w.status = 'pending'
+                WHERE w.id = ? AND w.status IN ('pending', 'processing')
             """, (withdrawal_id,))
             
             withdrawal = cursor.fetchone()
             conn.close()
             
             if not withdrawal:
-                logger.error(f"❌ Withdrawal {withdrawal_id} not found or not pending")
+                logger.error(f"❌ Withdrawal {withdrawal_id} not found or not in processable state")
                 return False
             
             withdrawal_dict = dict(withdrawal)
@@ -3231,6 +3231,94 @@ def run_flask_server():
         logger.error(f"Failed to start Flask server: {e}")
 
 # ═══════════════════════════════════════════════════════════════
+# 🤖 AUTO WITHDRAWAL HANDLER
+# ═══════════════════════════════════════════════════════════════
+
+async def handle_auto_withdrawal_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """معالجة طلبات السحب التلقائي من API"""
+    if update.message and update.message.text:
+        text = update.message.text
+        
+        # التحقق من أن المستخدم أدمن
+        if not is_admin(update.message.from_user.id):
+            return
+        
+        # التحقق من صيغة الرسالة
+        if text.startswith('🤖 AUTO_PROCESS_WITHDRAWAL_'):
+            try:
+                withdrawal_id = int(text.split('_')[-1])
+                logger.info(f"🤖 Processing auto-withdrawal request for #{withdrawal_id}")
+                
+                # حذف الرسالة فوراً لتجنب الازدواجية
+                try:
+                    await update.message.delete()
+                except Exception as del_err:
+                    logger.warning(f"Could not delete trigger message: {del_err}")
+                
+                # معالجة السحب تلقائياً
+                success = await db.process_auto_withdrawal(withdrawal_id, context)
+                
+                if success:
+                    logger.info(f"✅ Auto-withdrawal #{withdrawal_id} processed successfully")
+                    # إرسال تأكيد للأدمن
+                    await context.bot.send_message(
+                        chat_id=update.message.from_user.id,
+                        text=f"✅ تم معالجة السحب #{withdrawal_id} تلقائياً بنجاح"
+                    )
+                else:
+                    logger.error(f"❌ Auto-withdrawal #{withdrawal_id} failed")
+                    # إرسال رسالة خطأ
+                    await context.bot.send_message(
+                        chat_id=update.message.from_user.id,
+                        text=f"❌ فشلت معالجة السحب #{withdrawal_id} تلقائياً"
+                    )
+                    
+            except Exception as e:
+                logger.error(f"❌ Error processing auto-withdrawal: {e}")
+                import traceback
+                traceback.print_exc()
+
+async def check_pending_auto_withdrawals(context: ContextTypes.DEFAULT_TYPE):
+    """فحص دوري للسحوبات في حالة processing"""
+    try:
+        if not db.is_auto_withdrawal_enabled():
+            return
+        
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        # البحث عن السحوبات في حالة "processing"
+        cursor.execute("""
+            SELECT id FROM withdrawals 
+            WHERE status = 'processing' AND withdrawal_type = 'ton'
+            ORDER BY created_at ASC
+            LIMIT 5
+        """)
+        
+        processing_withdrawals = cursor.fetchall()
+        conn.close()
+        
+        if processing_withdrawals:
+            logger.info(f"🔄 Found {len(processing_withdrawals)} withdrawals to auto-process")
+            
+            for row in processing_withdrawals:
+                withdrawal_id = row['id']
+                logger.info(f"🚀 Auto-processing withdrawal #{withdrawal_id}")
+                
+                success = await db.process_auto_withdrawal(withdrawal_id, context)
+                
+                if success:
+                    logger.info(f"✅ Auto-withdrawal #{withdrawal_id} completed")
+                else:
+                    logger.warning(f"⚠️ Auto-withdrawal #{withdrawal_id} failed")
+                    
+                # تأخير قصير بين المعاملات
+                await asyncio.sleep(2)
+    
+    except Exception as e:
+        logger.error(f"❌ Error in check_pending_auto_withdrawals: {e}")
+
+# ═══════════════════════════════════════════════════════════════
 # 🚀 MAIN FUNCTION
 # ═══════════════════════════════════════════════════════════════
 
@@ -3291,50 +3379,7 @@ def main():
     )
     application.add_handler(add_channel_handler)
     
-    # معالج الرسائل النصية للسحب التلقائي من API (يجب أن يكون قبل broadcast handler)
-    async def handle_auto_withdrawal_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """معالجة طلبات السحب التلقائي من API"""
-        if update.message and update.message.text:
-            text = update.message.text
-            
-            # التحقق من أن المستخدم أدمن
-            if not is_admin(update.message.from_user.id):
-                return
-            
-            # التحقق من صيغة الرسالة
-            if text.startswith('🤖 AUTO_PROCESS_WITHDRAWAL_'):
-                try:
-                    withdrawal_id = int(text.split('_')[-1])
-                    logger.info(f"🤖 Processing auto-withdrawal request for #{withdrawal_id}")
-                    
-                    # حذف الرسالة فوراً لتجنب الازدواجية
-                    try:
-                        await update.message.delete()
-                    except:
-                        pass
-                    
-                    # معالجة السحب تلقائياً
-                    success = await db.process_auto_withdrawal(withdrawal_id, context)
-                    
-                    if success:
-                        logger.info(f"✅ Auto-withdrawal #{withdrawal_id} processed successfully")
-                        # إرسال تأكيد للأدمن
-                        await context.bot.send_message(
-                            chat_id=update.message.from_user.id,
-                            text=f"✅ تم معالجة السحب #{withdrawal_id} تلقائياً بنجاح"
-                        )
-                    else:
-                        logger.error(f"❌ Auto-withdrawal #{withdrawal_id} failed")
-                        # إرسال رسالة خطأ
-                        await context.bot.send_message(
-                            chat_id=update.message.from_user.id,
-                            text=f"❌ فشلت معالجة السحب #{withdrawal_id} تلقائياً"
-                        )
-                        
-                except Exception as e:
-                    logger.error(f"❌ Error processing auto-withdrawal: {e}")
-    
-    # إضافة handler للسحب التلقائي
+    # إضافة handler للسحب التلقائي (قبل broadcast handler)
     application.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND & filters.Regex(r'^🤖 AUTO_PROCESS_WITHDRAWAL_\d+$'),
         handle_auto_withdrawal_trigger
@@ -3363,6 +3408,11 @@ def main():
     application.add_handler(CallbackQueryHandler(cancel_broadcast_run, pattern="^cancel_broadcast_run$"))
     application.add_handler(CallbackQueryHandler(pause_broadcast_run, pattern="^pause_broadcast_run$"))
     application.add_handler(CallbackQueryHandler(resume_broadcast_run, pattern="^resume_broadcast_run$"))
+    
+    # إضافة Job للفحص الدوري للسحوبات التلقائية
+    job_queue = application.job_queue
+    job_queue.run_repeating(check_pending_auto_withdrawals, interval=30, first=10)
+    logger.info("✅ Auto-withdrawal checker scheduled (every 30 seconds)")
     
     # تشغيل البوت
     logger.info("✅ Bot is running!")
