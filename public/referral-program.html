@@ -239,23 +239,22 @@
                     let html = '';
                     referralsData.data.forEach(referral => {
                         console.log('Referral item:', referral);
-                        // استخدام البيانات الحقيقية مع معالجة أفضل
-                        let displayUsername = referral.username || `user${referral.referred_id}`;
-                        let displayName = referral.full_name || referral.username || `User ${referral.referred_id}`;
                         
-                        // إذا كان username يبدأ بـ user_ (مستخدم بدون username في تيليجرام)
-                        // نعرض الاسم الكامل أو User ID
-                        if (displayUsername.startsWith('user_')) {
-                            displayUsername = displayName; // نعرض الاسم بدلاً من user_id
-                            if (displayName.startsWith('user_')) {
-                                displayName = `مستخدم ${referral.referred_id}`;
-                            }
-                        } else {
-                            // إذا عنده username حقيقي، نضيف @
-                            displayUsername = '@' + displayUsername;
-                        }
+                        // استخدام نفس المنطق من الكود القديم
+                        const fullName = referral.full_name || `User ${referral.referred_id}`;
+                        const displayName = fullName + (referral.username ? ` (@${referral.username})` : '');
+                        const username = referral.username || fullName;
+                        const avatarUrl = 'img/default-avatar.svg';
                         
-                        html += `<div class="referral-record-row"><div><a href="#">${displayUsername}</a></div><div>${displayName}</div></div>`;
+                        html += `
+                            <div class="referral-record-row">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <img src="${avatarUrl}" alt="Avatar" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">
+                                    <span>${username}</span>
+                                </div>
+                                <div>${displayName}</div>
+                            </div>
+                        `;
                     });
                     $('#referrals-list-container').html(html);
                 } else {
