@@ -100,10 +100,11 @@ const TasksModule = {
         
         return `
             <div class="task-card ${task.is_pinned ? 'pinned' : ''} ${isCompleted ? 'completed' : ''}" data-task-id="${task.id}">
-                ${task.is_pinned ? '<div class="pin-badge">📌</div>' : ''}
-                
                 <div class="task-header">
-                    <div class="task-icon">${taskIcon}</div>
+                    <div class="task-icon-wrapper">
+                        ${task.is_pinned ? '<span class="pin-badge-inline">📌</span>' : ''}
+                        <div class="task-icon">${taskIcon}</div>
+                    </div>
                     <div class="task-info">
                         <div class="task-title">
                             ${task.task_name}
@@ -111,11 +112,6 @@ const TasksModule = {
                         </div>
                         <div class="task-description">${description}</div>
                     </div>
-                </div>
-                
-                <div class="task-reward">
-                    <span>🎯</span>
-                    <span>${progress}/5 للحصول على دورة</span>
                 </div>
                 
                 <div class="task-actions">
@@ -215,6 +211,13 @@ const TasksModule = {
         const total = this.tasks.length;
         const completed = this.completedTasks.length;
         const percentage = total > 0 ? (completed / total) * 100 : 0;
+        
+        // حساب المتبقي للفة القادمة (كل 5 مهمات = لفة)
+        const remaining = 5 - (completed % 5);
+        const remainingEl = document.getElementById('tasks-remaining');
+        if (remainingEl) {
+            remainingEl.textContent = remaining;
+        }
         
         totalEl.textContent = total;
         completedEl.textContent = completed;
