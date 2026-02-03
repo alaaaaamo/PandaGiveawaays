@@ -48,8 +48,6 @@ ADMIN_IDS = [1797127532, 6603009212]
 def send_withdrawal_notification_to_admin(user_id, username, full_name, amount, withdrawal_type, wallet_address, phone_number, withdrawal_id):
     """إرسال إشعار للأدمن في البوت عند طلب سحب"""
     try:
-        from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
-        
         # إنشاء رسالة مختلفة حسب نوع السحب
         if withdrawal_type.upper() == 'VODAFONE' or withdrawal_type.upper() == 'VODAFONE_CASH':
             egp_amount = calculate_egp_amount(amount)
@@ -88,28 +86,35 @@ def send_withdrawal_notification_to_admin(user_id, username, full_name, amount, 
 🔢 <b>رقم الطلب:</b> #{withdrawal_id}
             """
         
-        # أزرار القبول والرفض
-        keyboard = InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton("✅ قبول", callback_data=f"approve_withdrawal_{withdrawal_id}"),
-                InlineKeyboardButton("❌ رفض", callback_data=f"reject_withdrawal_{withdrawal_id}")
-            ]
-        ])
+        # إنشاء أزرار inline keyboard
+        keyboard = {
+            "inline_keyboard": [[
+                {"text": "✅ قبول", "callback_data": f"approve_withdrawal_{withdrawal_id}"},
+                {"text": "❌ رفض", "callback_data": f"reject_withdrawal_{withdrawal_id}"}
+            ]]
+        }
         
-        # إرسال الرسالة لكل أدمن
-        bot = Bot(token=BOT_TOKEN)
+        # إرسال الرسالة لكل أدمن باستخدام HTTP API
         for admin_id in ADMIN_IDS:
             try:
-                bot.send_message(
-                    chat_id=admin_id,
-                    text=message,
-                    parse_mode='HTML',
-                    reply_markup=keyboard
-                )
+                url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+                payload = {
+                    "chat_id": admin_id,
+                    "text": message,
+                    "parse_mode": "HTML",
+                    "reply_markup": keyboard
+                }
+                response = requests.post(url, json=payload, timeout=10)
+                
+                if response.status_code == 200:
+                    print(f"✅ Notification sent to admin {admin_id}")
+                else:
+                    print(f"⚠️ Failed to send to admin {admin_id}: {response.text}")
+                    
             except Exception as e:
-                print(f"Failed to send to admin {admin_id}: {e}")
+                print(f"❌ Failed to send to admin {admin_id}: {e}")
         
-        print(f"✅ Withdrawal notification sent to admins")
+        print(f"✅ Withdrawal notification processing complete")
         
     except Exception as e:
         print(f"❌ Error sending withdrawal notification: {e}")
