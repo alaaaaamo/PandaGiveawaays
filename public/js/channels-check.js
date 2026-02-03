@@ -133,7 +133,7 @@ const ChannelsCheck = {
             }
             
             if (typeof showToast !== 'undefined') {
-                showToast('✅ تم التحقق من الاشتراك بنجاح!', 'success');
+                showToast('<img src="/img/payment-success.svg" style="width: 16px; height: 16px; vertical-align: middle;"> تم التحقق من الاشتراك بنجاح!', 'success');
             }
             
             // تسجيل الإحالة المعلقة بعد التحقق من القنوات
@@ -150,7 +150,7 @@ const ChannelsCheck = {
             btn.innerHTML = originalText;
             
             if (typeof showToast !== 'undefined') {
-                showToast('❌ يجب الاشتراك في جميع القنوات أولاً', 'error');
+                showToast('<img src="/img/payment-failure.svg" style="width: 16px; height: 16px; vertical-align: middle;"> يجب الاشتراك في جميع القنوات أولاً', 'error');
             }
         }
     },

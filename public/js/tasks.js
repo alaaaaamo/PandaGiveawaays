@@ -116,13 +116,13 @@ const TasksModule = {
                 
                 <div class="task-actions">
                     ${isCompleted ? 
-                        '<button class="task-btn task-btn-completed" disabled><img src="/img/checksup.png" alt="✓" style="width: 14px; height: 14px; vertical-align: middle; margin-left: 2px;"> مكتمل</button>' :
+                        '<button class="task-btn task-btn-completed" disabled><img src="/img/payment-success.svg" alt="✓" style="width: 14px; height: 14px; vertical-align: middle; margin-left: 2px;"> مكتمل</button>' :
                         `
                         <button class="task-btn task-btn-subscribe" onclick="TasksModule.openTaskLink('${task.task_link}', ${task.id})">
                             <img src="/img/links.png" alt="اشتراك" style="width: 16px; height: 16px; vertical-align: middle; margin-left: 4px;"> اشتراك
                         </button>
                         <button class="task-btn task-btn-verify" onclick="TasksModule.verifyTask(${task.id})">
-                            <img src="/img/checksup.png" alt="تحقق" style="width: 16px; height: 16px; vertical-align: middle; margin-left: 4px;"> تحقق
+                            <img src="/img/payment-success.svg" alt="تحقق" style="width: 16px; height: 16px; vertical-align: middle; margin-left: 4px;"> تحقق
                         </button>
                         `
                     }
@@ -177,7 +177,7 @@ const TasksModule = {
             
             if (data.success) {
                 // Task completed successfully
-                showToast(data.message || `✅ تم إكمال المهمة! +${data.reward_spins} دورة`, 'success');
+                showToast(data.message || `<img src="/img/payment-success.svg" style="width: 16px; height: 16px; vertical-align: middle;"> تم إكمال المهمة! +${data.reward_spins} دورة`, 'success');
                 
                 // Reload tasks and user data
                 await this.loadCompletedTasks();
@@ -189,13 +189,13 @@ const TasksModule = {
                     await loadUserData();
                 }
             } else {
-                showToast(data.message || '❌ لم يتم التحقق. تأكد من اشتراكك!', 'error');
+                showToast(data.message || '<img src="/img/payment-failure.svg" style="width: 16px; height: 16px; vertical-align: middle;"> لم يتم التحقق. تأكد من اشتراكك!', 'error');
                 btn.disabled = false;
                 btn.innerHTML = originalText;
             }
         } catch (error) {
             console.error('Error verifying task:', error);
-            showToast('❌ حدث خطأ في التحقق', 'error');
+            showToast('<img src="/img/payment-failure.svg" style="width: 16px; height: 16px; vertical-align: middle;"> حدث خطأ في التحقق', 'error');
             btn.disabled = false;
             btn.innerHTML = originalText;
         }

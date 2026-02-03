@@ -109,7 +109,7 @@ function showChannelsModal(channels) {
                 </div>
                 
                 <button class="verify-btn" onclick="verifySubscriptions()">
-                    ✅ تحقق من الاشتراك
+                    <img src="/img/payment-success.svg" style="width: 16px; height: 16px; vertical-align: middle;"> تحقق من الاشتراك
                 </button>
             </div>
         </div>
@@ -139,7 +139,7 @@ window.markChannelAsOpened = function(channelId) {
             if (statusElement) {
                 statusElement.classList.remove('not-subscribed');
                 statusElement.classList.add('subscribed');
-                statusElement.textContent = '✅';
+                statusElement.innerHTML = '<img src="/img/payment-success.svg" style="width: 16px; height: 16px;">';
                 console.log('✅ Channel marked as subscribed:', channelId);
             }
         }, 1000);
@@ -178,7 +178,7 @@ window.verifySubscriptions = function() {
     }
 
     // Reload to show main content
-    showToast('✅ تم التحقق بنجاح! مرحباً بك 🎉', 'success');
+    showToast('<img src="/img/payment-success.svg" style="width: 16px; height: 16px; vertical-align: middle;"> تم التحقق بنجاح! مرحباً بك 🎉', 'success');
     setTimeout(() => {
         console.log('🔄 Reloading page...');
         window.location.reload();

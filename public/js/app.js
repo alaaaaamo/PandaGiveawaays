@@ -503,7 +503,7 @@ function displayReferralsList(referrals) {
         
         const status = document.createElement('div');
         status.className = 'referral-status';
-        status.textContent = ref.is_valid ? '✅' : '⏳';
+        status.innerHTML = ref.is_valid ? '<img src="/img/payment-success.svg" style="width: 16px; height: 16px;">' : '⏳';
         
         item.appendChild(info);
         item.appendChild(status);
@@ -526,7 +526,7 @@ function copyReferralLink() {
         
         // Show success state
         copyBtn.classList.remove('loading');
-        copyBtn.querySelector('.btn-icon').textContent = '✅';
+        copyBtn.querySelector('.btn-icon').innerHTML = '<img src="/img/payment-success.svg" style="width: 16px; height: 16px;">';
         copyBtn.querySelector('.btn-text').textContent = 'تم النسخ!';
         
         showToast('تم نسخ الرابط! 📋', 'success');
@@ -668,11 +668,11 @@ async function completeTask(taskId) {
         const response = await API.completeTask(TelegramApp.getUserId(), taskId);
         
         if (response.success) {
-            showToast('✅ تم إكمال المهمة!', 'success');
+            showToast('<img src="/img/payment-success.svg" style="width: 16px; height: 16px; vertical-align: middle;"> تم إكمال المهمة!', 'success');
             TelegramApp.hapticFeedback('success');
             await loadTasks();
         } else {
-            showToast('❌ فشل إكمال المهمة', 'error');
+            showToast('<img src="/img/payment-failure.svg" style="width: 16px; height: 16px; vertical-align: middle;"> فشل إكمال المهمة', 'error');
         }
     } catch (error) {
         console.error('Error completing task:', error);
@@ -781,7 +781,7 @@ async function processWithdrawal(data) {
         const response = await API.requestWithdrawal(TelegramApp.getUserId(), data);
         
         if (response.success) {
-            showToast('✅ تم إرسال طلب السحب بنجاح!', 'success');
+            showToast('<img src="/img/payment-success.svg" style="width: 16px; height: 16px; vertical-align: middle;"> تم إرسال طلب السحب بنجاح!', 'success');
             TelegramApp.hapticFeedback('success');
             
             // Update balance
