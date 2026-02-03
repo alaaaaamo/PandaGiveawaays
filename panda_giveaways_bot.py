@@ -714,7 +714,7 @@ class DatabaseManager:
         
         cursor.execute("""
             UPDATE withdrawals 
-            SET status = 'approved', processed_at = ?, processed_by = ?, tx_hash = ?
+            SET status = 'completed', processed_at = ?, processed_by = ?, tx_hash = ?
             WHERE id = ?
         """, (now, admin_id, tx_hash, withdrawal_id))
         
@@ -1035,33 +1035,87 @@ class TONWalletManager:
             self.wallet_obj = None
     
     async def send_ton(self, to_address: str, amount: float, memo: Optional[str] = None) -> Optional[str]:
-        """إرسال TON"""
+        """إرسال TON - نفس آلية waseet.py"""
         if not self.wallet_obj:
-            logger.error("❌ Wallet not initialized")
+            logger.error("❌ Wallet not initialized - Cannot send TON")
+            logger.error("❌ Manual transfer required")
             return None
         
         try:
             logger.info(f"💸 Sending {amount} TON to {to_address}...")
+            logger.info("🚀 Initiating REAL TON transfer...")
             
-            # الحصول على seqno
-            url = f"{self.api_endpoint}getWalletInformation"
-            params = {'address': self.wallet_address}
-            response = requests.get(url, params=params, headers=self.api_headers, timeout=15)
+            # الحصول على seqno من API مع retry
+            seqno = None
+            max_seqno_retries = 3
             
-            if response.status_code != 200:
-                logger.error(f"❌ Failed to get wallet info: {response.status_code}")
-                return None
+            for seqno_attempt in range(max_seqno_retries):
+                try:
+                    url = f"{self.api_endpoint}getWalletInformation"
+                    params = {'address': self.wallet_address}
+                    
+                    logger.info(f"🔍 Fetching seqno (attempt {seqno_attempt + 1}/{max_seqno_retries})...")
+                    
+                    response = requests.get(url, params=params, headers=self.api_headers, timeout=15)
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        logger.info(f"📊 API Response: {str(data)[:400]}...")
+                        
+                        if data.get('ok') and 'result' in data:
+                            result = data['result']
+                            seqno = result.get('seqno')
+                            
+                            if seqno is not None:
+                                logger.info(f"✅ Got seqno: {seqno}")
+                                break
+                            else:
+                                # محاولة من wallet_id
+                                wallet_id = result.get('wallet_id')
+                                if wallet_id is not None:
+                                    logger.info(f"⚠️ Using wallet_id as seqno: {wallet_id}")
+                                    seqno = 0  # للمحفظة الجديدة
+                                    break
+                                logger.warning(f"⚠️ Could not find seqno in response")
+                        else:
+                            error_msg = data.get('error', 'Unknown error')
+                            logger.warning(f"⚠️ API failed: {error_msg}")
+                            
+                            # إذا فشل، المحفظة غير مهيأة
+                            if 'not found' in error_msg.lower() or 'contract is not initialized' in error_msg.lower():
+                                logger.info("⚠️ Wallet not initialized - using seqno=0")
+                                seqno = 0
+                                break
+                    else:
+                        logger.error(f"❌ HTTP {response.status_code}: {response.text[:200]}")
+                    
+                    if seqno_attempt < max_seqno_retries - 1:
+                        wait_time = (seqno_attempt + 1) * 2
+                        logger.info(f"⏳ Waiting {wait_time}s before retry...")
+                        await asyncio.sleep(wait_time)
+                        
+                except Exception as e:
+                    logger.error(f"❌ Error getting seqno: {e}")
+                    if seqno_attempt < max_seqno_retries - 1:
+                        await asyncio.sleep(2)
             
-            data = response.json()
-            if not data.get('ok'):
-                logger.error(f"❌ API error: {data.get('error')}")
-                return None
+            # إذا فشل الحصول على seqno بعد كل المحاولات
+            if seqno is None:
+                logger.error("❌ Failed to get seqno after all retries")
+                logger.error("⚠️ Cannot proceed without valid seqno - wallet might be uninitialized")
+                raise Exception("Failed to get wallet seqno. Please ensure wallet is initialized and has sufficient balance.")
             
-            seqno = data.get('result', {}).get('seqno', 0)
-            logger.info(f"📝 Seqno: {seqno}")
+            logger.info(f"📝 Creating transfer message...")
+            logger.info(f"   From: {self.wallet_address}")
+            logger.info(f"   To: {to_address}")
+            logger.info(f"   Amount: {amount} TON")
+            logger.info(f"   Memo: {memo}")
+            logger.info(f"   Seqno: {seqno}")
             
-            # إنشاء وإرسال المعاملة
+            # تحويل المبلغ إلى nanoTON
             amount_nano = to_nano(amount, 'ton')
+            
+            # إنشاء الـ query للتحويل
             query = self.wallet_obj.create_transfer_message(
                 to_addr=to_address,
                 amount=amount_nano,
@@ -1069,28 +1123,81 @@ class TONWalletManager:
                 payload=memo
             )
             
+            # إرسال المعاملة
             boc = bytes_to_b64str(query['message'].to_boc(False))
+            
             send_url = f"{self.api_endpoint}sendBoc"
             send_params = {'boc': boc}
             
-            send_response = requests.post(send_url, json=send_params, headers=self.api_headers, timeout=10)
+            # محاولة الإرسال مع retry في حالة 429
+            max_retries = 3
+            for attempt in range(max_retries):
+                send_response = requests.post(send_url, json=send_params, headers=self.api_headers, timeout=10)
+                
+                if send_response.status_code == 429:
+                    if attempt < max_retries - 1:
+                        wait_time = (attempt + 1) * 2  # 2, 4, 6 seconds
+                        logger.warning(f"⚠️ Rate limited (429), waiting {wait_time}s before retry...")
+                        await asyncio.sleep(wait_time)
+                        continue
+                    else:
+                        logger.error("❌ Failed after retries due to rate limiting")
+                        return None
+                
+                break  # نجحت العملية
             
             if send_response.status_code == 200:
                 result = send_response.json()
+                
                 if result.get('ok'):
-                    # الحصول على hash
-                    tx_hash = result.get('result', {}).get('hash', 'pending')
-                    logger.info(f"✅ TON sent successfully! TX: {tx_hash}")
-                    return tx_hash
+                    # محاولة الحصول على TX hash من الـ response
+                    result_data = result.get('result', {})
+                    tx_hash = result_data.get('hash')
+                    
+                    # إذا لم يكن موجود في result، نحاول من مكان آخر
+                    if not tx_hash:
+                        tx_hash = result_data.get('message_hash') or result_data.get('@extra')
+                    
+                    # إذا لم نحصل على hash حقيقي، نولد واحد من BOC
+                    if not tx_hash or tx_hash == 'transaction_sent':
+                        try:
+                            cell_hash = query['message'].hash
+                            tx_hash = bytes_to_b64str(cell_hash)
+                            logger.warning(f"⚠️ No hash in response, generated from BOC cell: {tx_hash[:16]}...")
+                        except Exception as hash_error:
+                            # fallback: استخدام sha256
+                            import base64
+                            hash_bytes = hashlib.sha256(boc.encode()).digest()
+                            tx_hash = base64.b64encode(hash_bytes).decode().replace('+', '-').replace('/', '_').rstrip('=')
+                            logger.warning(f"⚠️ Using fallback hash generation: {tx_hash[:16]}...")
+                    
+                    logger.info(f"✅ REAL Transfer successful!")
+                    logger.info(f"   🔗 TX Hash: {tx_hash[:32] if isinstance(tx_hash, str) else tx_hash}...")
+                    logger.info(f"   💰 Amount: {amount} TON")
+                    logger.info(f"   📤 To: {to_address}")
+                    
+                    return str(tx_hash)
                 else:
-                    logger.error(f"❌ Send failed: {result.get('error')}")
+                    logger.error(f"❌ Send failed: {result.get('error', 'Unknown')}")
                     return None
             else:
-                logger.error(f"❌ HTTP {send_response.status_code}")
+                logger.error(f"❌ HTTP Error {send_response.status_code}")
+                if send_response.status_code == 429:
+                    logger.error("Rate limit exceeded. Please add API key or wait.")
+                elif send_response.status_code == 500:
+                    logger.error("❌ Server error (500) from TON API")
+                    try:
+                        error_data = send_response.json()
+                        logger.error(f"Error details: {error_data}")
+                    except:
+                        logger.error(f"Response text: {send_response.text[:200]}")
                 return None
                 
         except Exception as e:
             logger.error(f"❌ Error sending TON: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            logger.warning("⚠️ Transfer failed, please check wallet and network")
             return None
     
     async def get_balance(self) -> float:
@@ -1718,7 +1825,7 @@ async def approve_withdrawal_callback(update: Update, context: ContextTypes.DEFA
             )
             
             if tx_hash:
-                db.complete_withdrawal(withdrawal_id, tx_hash)
+                db.approve_withdrawal(withdrawal_id, user_id, tx_hash)
                 success_msg = f"""
 ✅ <b>تم السحب بنجاح!</b>
 
