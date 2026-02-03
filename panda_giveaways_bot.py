@@ -1060,12 +1060,22 @@ class TONWalletManager:
             # الحصول على العنوان الحقيقي من الـ mnemonic
             generated_address = wallet.address.to_string(True, True, True)
             
+            # محاولة التحويل بين UQ و EQ (bounceable/non-bounceable)
+            # كلاهما نفس المحفظة، فقط format مختلف
+            configured_normalized = self.wallet_address.replace('UQ', 'EQ') if self.wallet_address.startswith('UQ') else self.wallet_address
+            generated_normalized = generated_address.replace('UQ', 'EQ') if generated_address.startswith('UQ') else generated_address
+            
             logger.info(f"✅ TON Wallet initialized successfully (using {version_used})")
             logger.info(f"📍 Generated Address (from mnemonic): {generated_address}")
             logger.info(f"📍 Configured Address (TON_WALLET_ADDRESS): {self.wallet_address}")
             
-            # التحقق من التطابق
-            if generated_address != self.wallet_address:
+            # التحقق من التطابق (بعد تطبيع الـ format)
+            if configured_normalized == generated_normalized:
+                logger.info("✅ Address verification: PERFECT MATCH! 🎉")
+                logger.info("✅ Automatic withdrawals are ENABLED")
+                # استخدام العنوان المولّد للتأكد من الصحة
+                self.wallet_address = generated_address
+            else:
                 logger.error("=" * 80)
                 logger.error("⚠️⚠️⚠️ CRITICAL WARNING ⚠️⚠️⚠️")
                 logger.error("=" * 80)
@@ -1088,9 +1098,6 @@ class TONWalletManager:
                 # استخدام العنوان الصحيح من الـ mnemonic
                 self.wallet_address = generated_address
                 logger.warning(f"⚠️ Using generated address: {generated_address}")
-            else:
-                logger.info("✅ Address verification: PERFECT MATCH! 🎉")
-                logger.info("✅ Automatic withdrawals are ENABLED")
                 
         except Exception as e:
             logger.error(f"❌ Failed to initialize TON wallet: {e}")
