@@ -185,35 +185,44 @@
             const referralLink = `https://t.me/${botUsername}?startapp=ref_${userId}`;
             $('#user-referral-link').val(referralLink);
             
-            // Load referral stats from API
-            fetch(`/api/referrals/stats/${userId}`)
-                .then(response => {
-                    if (!response.ok) throw new Error('API Error');
-                    return response.json();
-                })
-                .then(data => {
-                    $('#total-referrals').text(data.totalReferrals || 0);
-                    $('#available-spins').text(data.availableSpins || 0);
-                    $('#next-spin-in').text(data.remainingForNextSpin || 5);
+            // Load user data and referral stats from API
+            Promise.all([
+                fetch(`/api/user/${userId}`).then(res => res.json()),
+                fetch(`/api/user/${userId}/referrals`).then(res => res.json())
+            ])
+            .then(([userData, referralsData]) => {
+                // Update stats from user data
+                if (userData.success && userData.data) {
+                    const user = userData.data;
+                    $('#available-spins').text(user.available_spins || 0);
                     
-                    // Load referrals list
-                    if (data.referrals && data.referrals.length > 0) {
-                        let html = '';
-                        data.referrals.forEach(referral => {
-                            const refUsername = referral.username || 'مستخدم';
-                            const date = new Date(referral.date).toLocaleDateString('ar-EG');
-                            html += `<div class="referral-record-row"><div><a href="#">@${refUsername}</a></div><div>${date}</div></div>`;
-                        });
-                        $('#referrals-list-container').html(html);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading data:', error);
-                    // Show default values on error
-                    $('#total-referrals').text('0');
-                    $('#available-spins').text('0');
-                    $('#next-spin-in').text('5');
-                });
+                    // Calculate referrals count and remaining for next spin
+                    const referralCount = user.referral_count || 0;
+                    const spinsFromReferrals = Math.floor(referralCount / 5);
+                    const remainingForNext = 5 - (referralCount % 5);
+                    
+                    $('#total-referrals').text(referralCount);
+                    $('#next-spin-in').text(remainingForNext);
+                }
+                
+                // Load referrals list
+                if (referralsData.success && referralsData.data && referralsData.data.length > 0) {
+                    let html = '';
+                    referralsData.data.forEach(referral => {
+                        const refUsername = referral.username || 'مستخدم';
+                        const date = new Date(referral.joined_date).toLocaleDateString('ar-EG');
+                        html += `<div class="referral-record-row"><div><a href="#">@${refUsername}</a></div><div>${date}</div></div>`;
+                    });
+                    $('#referrals-list-container').html(html);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading data:', error);
+                // Show default values on error
+                $('#total-referrals').text('0');
+                $('#available-spins').text('0');
+                $('#next-spin-in').text('5');
+            });
         });
 
         function logoutUser() {
