@@ -6,25 +6,25 @@
     gap: 10px;
 }
 
-/* Page Title */
-.page-title-wrapper {
+/* Page Title Header - Outside Box */
+.page-title-header {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    padding: 15px 0 10px 0;
-    margin-bottom: 10px;
+    gap: 12px;
+    padding: 20px 20px 15px 20px;
+    background: transparent;
 }
 
 .page-title-icon {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     filter: brightness(0) saturate(100%) invert(85%) sepia(47%) saturate(1067%) hue-rotate(359deg) brightness(103%) contrast(101%);
 }
 
 .page-title {
     margin: 0;
-    font-size: 20px;
+    font-size: 24px;
     font-weight: 700;
     color: #ffd436;
     text-align: center;
@@ -299,32 +299,29 @@ body.fr .withdraw-tooltip::before {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 10px;
+    padding: 4px 10px;
     background: rgba(255, 255, 255, 0.05);
     border-radius: 8px;
-    margin-bottom: 5px;
+    margin-bottom: 4px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     text-decoration: none;
     color: inherit;
+    cursor: pointer;
 }
 
-.referral-item:hover {
+.referral-item:hover,
+.referral-item:active,
+.referral-item:focus {
     background: rgba(255, 255, 255, 0.05);
     text-decoration: none;
-}
-
-.referral-item:active {
-    background: rgba(255, 255, 255, 0.05);
-    transform: none;
-}
-
-.referral-item:focus {
     outline: none;
+    transform: none;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .referral-avatar {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
@@ -335,34 +332,34 @@ body.fr .withdraw-tooltip::before {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
     min-width: 0;
 }
 
 .referral-name {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     color: #ffffff;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    line-height: 1.3;
-}
-
-.referral-username {
-    font-size: 12px;
-    color: #8b95a1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     line-height: 1.2;
 }
 
+.referral-username {
+    font-size: 11px;
+    color: #8b95a1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.1;
+}
+
 .referral-number {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 700;
     color: #ffd436;
-    min-width: 30px;
+    min-width: 28px;
     text-align: center;
     flex-shrink: 0;
 }
@@ -392,25 +389,25 @@ body.fr .withdraw-tooltip::before {
     }
     
     .referral-item {
-        padding: 5px 8px;
+        padding: 4px 8px;
         gap: 6px;
     }
     
     .referral-avatar {
-        width: 32px;
-        height: 32px;
+        width: 28px;
+        height: 28px;
     }
     
     .referral-name {
-        font-size: 13px;
+        font-size: 12px;
     }
     
     .referral-username {
-        font-size: 11px;
+        font-size: 10px;
     }
     
     .referral-number {
-        font-size: 14px;
-        min-width: 28px;
+        font-size: 13px;
+        min-width: 26px;
     }
 }
