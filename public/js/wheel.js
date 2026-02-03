@@ -160,11 +160,21 @@ class WheelOfFortune {
             // حساب زاوية الدوران للجائزة
             const prizeIndex = this.prizes.findIndex(p => p.name === prize.name);
             const anglePerSegment = (2 * Math.PI) / this.prizes.length;
-            const targetAngle = (prizeIndex * anglePerSegment) + (anglePerSegment / 2);
+            
+            // الزاوية الحالية المطبعة
+            const currentRotation = this.rotation % (2 * Math.PI);
+            
+            // الزاوية المستهدفة (عكس اتجاه عقارب الساعة لأن العجلة تدور عكسياً)
+            // المؤشر في الأعلى، لذلك نحتاج لحساب الزاوية من الأعلى
+            const targetAngle = (2 * Math.PI) - (prizeIndex * anglePerSegment) - (anglePerSegment / 2);
+            
+            // حساب أقصر مسافة للوصول للهدف
+            let angleDiff = targetAngle - currentRotation;
+            if (angleDiff < 0) angleDiff += 2 * Math.PI;
             
             // عدد الدورات الإضافية (5-7 دورات)
             const extraRotations = 5 + Math.random() * 2;
-            const totalRotation = (extraRotations * 2 * Math.PI) + (2 * Math.PI - targetAngle);
+            const totalRotation = (extraRotations * 2 * Math.PI) + angleDiff;
             
             // تدوير العجلة
             await this.animateSpin(totalRotation);

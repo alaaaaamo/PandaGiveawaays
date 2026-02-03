@@ -835,6 +835,74 @@ def get_user_withdrawals(user_id):
         print(f"Error in get_user_withdrawals: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/withdrawal/request', methods=['POST'])
+def request_withdrawal():
+    """طلب سحب جديد"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        amount = float(data.get('amount', 0))
+        withdrawal_type = data.get('type')  # 'ton' or 'usdt'
+        wallet_address = data.get('wallet_address', '')
+        
+        if not user_id or amount <= 0:
+            return jsonify({'success': False, 'error': 'بيانات غير صالحة'}), 400
+        
+        # التحقق من الحد الأدنى للسحب
+        min_withdrawal = 0.1
+        if amount < min_withdrawal:
+            return jsonify({
+                'success': False,
+                'error': f'الحد الأدنى للسحب {min_withdrawal} TON'
+            }), 400
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # التحقق من رصيد المستخدم
+        cursor.execute('SELECT balance FROM users WHERE user_id = ?', (user_id,))
+        user = cursor.fetchone()
+        
+        if not user or user['balance'] < amount:
+            conn.close()
+            return jsonify({'success': False, 'error': 'رصيد غير كافٍ'}), 400
+        
+        # إنشاء طلب السحب
+        cursor.execute("""
+            INSERT INTO withdrawals (user_id, amount, withdrawal_type, wallet_address, status)
+            VALUES (?, ?, ?, ?, 'pending')
+        """, (user_id, amount, withdrawal_type, wallet_address))
+        
+        # خصم المبلغ من رصيد المستخدم
+        cursor.execute("""
+            UPDATE users 
+            SET balance = balance - ?,
+                last_withdrawal_time = CURRENT_TIMESTAMP
+            WHERE user_id = ?
+        """, (amount, user_id))
+        
+        conn.commit()
+        
+        # الحصول على الرصيد الجديد
+        cursor.execute('SELECT balance FROM users WHERE user_id = ?', (user_id,))
+        new_balance = cursor.fetchone()['balance']
+        
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'تم إرسال طلب السحب بنجاح',
+            'data': {
+                'new_balance': new_balance
+            }
+        })
+        
+    except Exception as e:
+        print(f"Error in request_withdrawal: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/referral/register', methods=['POST'])
 def register_referral():
     """تسجيل إحالة جديدة"""
