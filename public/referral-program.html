@@ -82,8 +82,8 @@
 
                         <div class="referral-wrapper">
                             <div class="referral-record-row thead">
-                                <div>الشخص المُحال</div>
-                                <div>تاريخ القبول</div>
+                                <div>اليوزر</div>
+                                <div>الاسم</div>
                             </div>
                             <hr>
                             <div id="referrals-list-container">
@@ -191,15 +191,17 @@
                 fetch(`/api/user/${userId}/referrals`).then(res => res.json())
             ])
             .then(([userData, referralsData]) => {
+                console.log('User Data:', userData);
+                console.log('Referrals Data:', referralsData);
+                
                 // Update stats from user data
                 if (userData.success && userData.data) {
                     const user = userData.data;
                     $('#available-spins').text(user.available_spins || 0);
                     
-                    // Calculate referrals count and remaining for next spin
-                    const referralCount = user.referral_count || 0;
-                    const spinsFromReferrals = Math.floor(referralCount / 5);
-                    const remainingForNext = 5 - (referralCount % 5);
+                    // Use total_referrals from API response (not referral_count)
+                    const referralCount = user.total_referrals || 0;
+                    const remainingForNext = referralCount === 0 ? 5 : (5 - (referralCount % 5));
                     
                     $('#total-referrals').text(referralCount);
                     $('#next-spin-in').text(remainingForNext);
@@ -209,11 +211,14 @@
                 if (referralsData.success && referralsData.data && referralsData.data.length > 0) {
                     let html = '';
                     referralsData.data.forEach(referral => {
-                        const refUsername = referral.username || 'مستخدم';
-                        const date = new Date(referral.joined_date).toLocaleDateString('ar-EG');
-                        html += `<div class="referral-record-row"><div><a href="#">@${refUsername}</a></div><div>${date}</div></div>`;
+                        console.log('Referral item:', referral);
+                        const refUsername = referral.username || 'مجهول';
+                        const refFullName = referral.full_name || 'مستخدم';
+                        html += `<div class="referral-record-row"><div><a href="#">@${refUsername}</a></div><div>${refFullName}</div></div>`;
                     });
                     $('#referrals-list-container').html(html);
+                } else {
+                    console.log('No referrals found or empty data');
                 }
             })
             .catch(error => {

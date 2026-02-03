@@ -26,9 +26,9 @@
             </div>
         </div>
         <div class="user-balance">
-            <span class="balance-label">💰 الرصيد</span>
+            <span class="balance-label"><img src="img/Ton.png" alt="TON" class="ton-icon"> الرصيد</span>
             <span class="balance-amount" id="user-balance">0.0000</span>
-            <span class="balance-currency">TON</span>
+            <!-- <span class="balance-currency"><img src="img/Ton.png" alt="TON" class="ton-icon"></span> -->
         </div>
     </header>
 
@@ -62,7 +62,7 @@
                     loop autoplay>
                 </lottie-player>
                 <h2 id="result-text">🎉 تهانينا!</h2>
-                <p id="result-amount">ربحت 0.1 TON</p>
+                <p id="result-amount">ربحت 0.1 <img src="img/Ton.png" alt="TON" class="ton-icon"></p>
             </div>
 
             <!-- آخر الأرباح -->
@@ -104,9 +104,9 @@
 
             <div class="balance-display">
                 <div class="balance-card">
-                    <span class="balance-label">💰 رصيدك الحالي</span>
+                    <span class="balance-label"><img src="img/Ton.png" alt="TON" class="ton-icon"> رصيدك الحالي</span>
                     <span class="balance-value" id="withdraw-balance">0.0000</span>
-                    <span class="balance-currency">TON</span>
+                    <!-- <span class="balance-currency"><img src="img/Ton.png" alt="TON" class="ton-icon"></span> -->
                 </div>
             </div>
 
@@ -116,7 +116,7 @@
                 
                 <div class="method-tabs">
                     <button class="method-tab active" data-method="ton">
-                        <span class="tab-icon">💎</span>
+                        <span class="tab-icon"><img src="img/Ton.png" alt="TON" class="ton-icon-tab"></span>
                         <span>TON Wallet</span>
                     </button>
                     <button class="method-tab" data-method="vodafone">
@@ -128,16 +128,16 @@
                 <!-- نموذج السحب TON -->
                 <div id="withdraw-form-ton" class="withdraw-form active">
                     <div class="form-group">
-                        <label>🔐 عنوان محفظة TON</label>
+                        <label><img src="img/Ton.png" alt="TON" class="ton-icon"> عنوان محفظة TON</label>
                         <input type="text" id="ton-wallet-input" placeholder="UQxxxxxxxxxxxxxxxx">
                     </div>
                     <div class="form-group">
-                        <label>💰 المبلغ (TON)</label>
+                        <label><img src="img/Ton.png" alt="TON" class="ton-icon"> المبلغ (TON)</label>
                         <div class="amount-input-group">
-                            <input type="number" id="ton-amount-input" placeholder="0.00" step="0.01" min="1">
+                            <input type="number" id="ton-amount-input" placeholder="0.00" step="0.01" min="0.1">
                             <button id="max-btn-ton" class="max-btn">MAX</button>
                         </div>
-                        <span class="min-withdraw-note">الحد الأدنى: 1.0 TON</span>
+                        <span class="min-withdraw-note">الحد الأدنى: 0.1 <img src="img/Ton.png" alt="TON" class="ton-icon-small"></span>
                     </div>
                     <button id="withdraw-btn-ton" class="withdraw-btn">💸 طلب السحب</button>
                 </div>
@@ -149,12 +149,12 @@
                         <input type="tel" id="vodafone-number-input" placeholder="01xxxxxxxxx">
                     </div>
                     <div class="form-group">
-                        <label>💰 المبلغ (TON)</label>
+                        <label><img src="img/Ton.png" alt="TON" class="ton-icon"> المبلغ (TON)</label>
                         <div class="amount-input-group">
-                            <input type="number" id="vodafone-amount-input" placeholder="0.00" step="0.01" min="1">
+                            <input type="number" id="vodafone-amount-input" placeholder="0.00" step="0.01" min="0.1">
                             <button id="max-btn-vodafone" class="max-btn">MAX</button>
                         </div>
-                        <span class="min-withdraw-note">الحد الأدنى: 0.1 TON</span>
+                        <span class="min-withdraw-note">الحد الأدنى: 0.1 <img src="img/Ton.png" alt="TON" class="ton-icon-small"></span>
                     </div>
                     <button id="withdraw-btn-vodafone" class="withdraw-btn">💸 طلب السحب</button>
                 </div>
