@@ -15,9 +15,10 @@
 .icon-referral:before {
     width: 24px;
     height: 24px;
-    background-image: url(/img/referral_program.svg);
+    background-image: url(../img/referral_program.svg);
     margin: 13px 15px;
     position: absolute;
+    left: 0;
     pointer-events: none;
     content: '';
     display: inline-block;
@@ -34,10 +35,11 @@
     color: #d2d2d2;
     border: none;
     border-radius: 0.5em;
-    text-align: left;
+    text-align: right;
+    direction: rtl;
     outline: none;
     height: 50px;
-    padding: 12px 42px 12px 48px;
+    padding: 12px 50px 12px 50px;
     font-size: 16px;
     -webkit-appearance: none;
     appearance: none;
@@ -131,6 +133,7 @@
     align-items: center;
     justify-content: space-around;
     height: 30px;
+    direction: rtl;
 }
 .thead {
     color: #8b949e;

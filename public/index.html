@@ -74,76 +74,7 @@
             </div>
         </section>
 
-        <!-- 👥 صفحة الإحالات -->
-        <section id="page-referrals" class="page">
-            <!-- Loading Animation for Referrals Page -->
-            <div id="referrals-loading" class="page-loading">
-                <lottie-player src="./img/loginSticker.json" 
-                    background="transparent" speed="1" style="width: 200px; height: 200px; margin: 0 auto;" 
-                    loop autoplay>
-                </lottie-player>
-                <p>جاري تحميل بيانات الإحالات...</p>
-            </div>
-
-            <div id="referrals-content" class="referrals-content">
-                <div class="page-header">
-                    <h2>👥 الإحالات</h2>
-                </div>
-
-                <div class="referral-stats">
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <img src="./img/profile/referral_program.svg" alt="Referrals" style="width: 40px; height: 40px;">
-                        </div>
-                        <div class="stat-info">
-                            <span class="stat-value" id="total-referrals">0</span>
-                            <span class="stat-label">إجمالي الإحالات</span>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">🎰</div>
-                        <div class="stat-info">
-                            <span class="stat-value" id="earned-spins">0</span>
-                            <span class="stat-label">اللفات المكتسبة</span>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">⏳</div>
-                        <div class="stat-info">
-                            <span class="stat-value" id="next-spin-in">5</span>
-                            <span class="stat-label">متبقي للفة القادمة</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- رابط الإحالة -->
-                <div class="referral-link-box">
-                    <h3>🔗 رابط الإحالة الخاص بك</h3>
-                    <div class="link-input-group">
-                        <img src="./img/referral_program.svg" alt="Link" class="link-icon">
-                        <input type="text" id="referral-link" readonly>
-                        <button id="copy-link-btn" class="copy-btn modern-btn">
-                            <span class="btn-icon">📋</span>
-                            <span class="btn-text">نسخ</span>
-                        </button>
-                    </div>
-                    <button id="share-link-btn" class="share-btn modern-btn">
-                        <span class="btn-icon">📤</span>
-                        <span class="btn-text">مشاركة الرابط</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- قائمة المدعوين -->
-            <div class="referrals-list">
-                <h3>📋 قائمة المدعوين</h3>
-                <div id="referrals-list-content" class="list-content">
-                    <!-- سيتم ملؤها ديناميكياً -->
-                </div>
-            </div>
-        </section>
-
-        <!-- 📝 صفحة المهام -->
+        <!--  صفحة المهام -->
         <section id="page-tasks" class="page">
             <div class="page-header">
                 <h2>📝 المهام</h2>
@@ -246,8 +177,12 @@
             <span class="nav-icon">🎰</span>
             <span class="nav-label">العجلة</span>
         </button>
-        <button class="nav-item" data-page="referrals">
-            <span class="nav-icon">👥</span>
+        <button class="nav-item" onclick="window.location.href='referral-program.html'">
+            <span class="nav-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+                </svg>
+            </span>
             <span class="nav-label">الإحالات</span>
         </button>
         <button class="nav-item" data-page="tasks">
