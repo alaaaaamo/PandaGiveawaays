@@ -617,7 +617,7 @@ function displayTasks(tasks, completedTaskIds) {
         const button = document.createElement('button');
         button.className = 'task-action';
         if (isCompleted) {
-            button.innerHTML = '<img src="/img/checksup.png" alt="✓" style="width: 14px; height: 14px; vertical-align: middle; margin-left: 2px;"> مكتمل';
+            button.innerHTML = '<img src="/img/payment-success.svg" alt="✓" style="width: 14px; height: 14px; vertical-align: middle; margin-left: 2px;"> مكتمل';
         } else {
             button.textContent = '▶️ ابدأ';
         }
@@ -865,7 +865,7 @@ function displayWithdrawals(withdrawals) {
         if (w.status === 'pending') {
             status.textContent = '⏳ معلق';
         } else if (w.status === 'completed') {
-            status.innerHTML = '<img src="/img/checksup.png" alt="✓" style="width: 14px; height: 14px; vertical-align: middle; margin-left: 2px;"> مكتمل';
+            status.innerHTML = '<img src="/img/payment-success.svg" alt="✓" style="width: 14px; height: 14px; vertical-align: middle; margin-left: 2px;"> مكتمل';
         } else {
             status.textContent = '❌ مرفوض';
         }
