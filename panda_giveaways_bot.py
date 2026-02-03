@@ -2443,9 +2443,6 @@ async def cancel_add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE)
 # 🚀 MAIN FUNCTION
 # ═══════════════════════════════════════════════════════════════
 
-# متغير عام للبوت
-bot_instance = None
-
 # ═══════════════════════════════════════════════════════════════
 # 🌐 FLASK SERVER FOR VERIFICATION
 # ═══════════════════════════════════════════════════════════════
@@ -2455,11 +2452,6 @@ verification_app = Flask(__name__)
 @verification_app.route('/verify-subscription', methods=['POST'])
 def verify_subscription():
     """التحقق من اشتراك المستخدم في القناة"""
-    global bot_instance
-    
-    if not bot_instance:
-        return jsonify({'success': False, 'is_subscribed': False, 'error': 'Bot not initialized'}), 500
-    
     try:
         data = request.get_json()
         user_id = data.get('user_id')
@@ -2472,26 +2464,33 @@ def verify_subscription():
         if channel_username.startswith('@'):
             channel_username = channel_username[1:]
         
-        # التحقق من الاشتراك
+        # استخدام Telegram Bot API مباشرة
         try:
-            import asyncio
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            import requests as req
+            api_url = f'https://api.telegram.org/bot{BOT_TOKEN}/getChatMember'
+            response = req.post(api_url, json={
+                'chat_id': f'@{channel_username}',
+                'user_id': user_id
+            }, timeout=10)
             
-            member = loop.run_until_complete(
-                bot_instance.bot.get_chat_member(chat_id=f'@{channel_username}', user_id=user_id)
-            )
+            result = response.json()
             
-            loop.close()
-            
-            # التحقق من حالة العضوية
-            is_subscribed = member.status in ['member', 'administrator', 'creator']
-            
-            return jsonify({
-                'success': True,
-                'is_subscribed': is_subscribed,
-                'status': member.status
-            })
+            if result.get('ok'):
+                member = result.get('result', {})
+                status = member.get('status', 'left')
+                is_subscribed = status in ['member', 'administrator', 'creator']
+                
+                return jsonify({
+                    'success': True,
+                    'is_subscribed': is_subscribed,
+                    'status': status
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'is_subscribed': False,
+                    'error': result.get('description', 'Unknown error')
+                }), 500
             
         except Exception as e:
             logger.error(f"Error checking subscription: {e}")
@@ -2508,11 +2507,6 @@ def verify_subscription():
 @verification_app.route('/check-bot-admin', methods=['POST'])
 def check_bot_admin():
     """التحقق من أن البوت مشرف في القناة"""
-    global bot_instance
-    
-    if not bot_instance:
-        return jsonify({'success': False, 'is_admin': False, 'error': 'Bot not initialized'}), 500
-    
     try:
         data = request.get_json()
         channel_username = data.get('channel_username')
@@ -2524,27 +2518,49 @@ def check_bot_admin():
         if channel_username.startswith('@'):
             channel_username = channel_username[1:]
         
-        # التحقق من أن البوت مشرف
+        # استخدام Telegram Bot API مباشرة
         try:
-            import asyncio
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            import requests as req
             
-            # الحصول على معلومات البوت في القناة
-            bot_member = loop.run_until_complete(
-                bot_instance.bot.get_chat_member(chat_id=f'@{channel_username}', user_id=bot_instance.bot.id)
-            )
+            # الحصول على bot_id أولاً
+            me_url = f'https://api.telegram.org/bot{BOT_TOKEN}/getMe'
+            me_response = req.get(me_url, timeout=10)
+            me_result = me_response.json()
             
-            loop.close()
+            if not me_result.get('ok'):
+                return jsonify({
+                    'success': False,
+                    'is_admin': False,
+                    'error': 'Failed to get bot info'
+                }), 500
             
-            # التحقق من أن البوت مشرف أو صاحب القناة
-            is_admin = bot_member.status in ['administrator', 'creator']
+            bot_id = me_result['result']['id']
             
-            return jsonify({
-                'success': True,
-                'is_admin': is_admin,
-                'status': bot_member.status
-            })
+            # التحقق من أن البوت مشرف
+            api_url = f'https://api.telegram.org/bot{BOT_TOKEN}/getChatMember'
+            response = req.post(api_url, json={
+                'chat_id': f'@{channel_username}',
+                'user_id': bot_id
+            }, timeout=10)
+            
+            result = response.json()
+            
+            if result.get('ok'):
+                member = result.get('result', {})
+                status = member.get('status', 'left')
+                is_admin = status in ['administrator', 'creator']
+                
+                return jsonify({
+                    'success': True,
+                    'is_admin': is_admin,
+                    'status': status
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'is_admin': False,
+                    'error': result.get('description', 'Unknown error')
+                }), 500
             
         except Exception as e:
             logger.error(f"Error checking bot admin: {e}")
@@ -2572,7 +2588,6 @@ def run_flask_server():
 
 def main():
     """تشغيل البوت"""
-    global bot_instance
     
     # التحقق من التوكن
     if BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
@@ -2584,14 +2599,13 @@ def main():
     logger.info(f"🌐 Mini App URL: {MINI_APP_URL}")
     logger.info(f"👥 Admins: {ADMIN_IDS}")
     
-    # إنشاء التطبيق
-    application = Application.builder().token(BOT_TOKEN).build()
-    bot_instance = application
-    
     # تشغيل Flask server في thread منفصل
     flask_thread = threading.Thread(target=run_flask_server, daemon=True)
     flask_thread.start()
     logger.info("✅ Flask verification server started on port 8081")
+    
+    # إنشاء التطبيق
+    application = Application.builder().token(BOT_TOKEN).build()
     
     # إضافة المعالجات
     application.add_handler(CommandHandler("start", start_command))
