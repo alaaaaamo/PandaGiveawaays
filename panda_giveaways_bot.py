@@ -2574,6 +2574,75 @@ def check_bot_admin():
         logger.error(f"Error in check_bot_admin: {e}")
         return jsonify({'success': False, 'is_admin': False, 'error': str(e)}), 500
 
+@verification_app.route('/send-welcome', methods=['POST'])
+def send_welcome_message():
+    """إرسال رسالة ترحيبية للمستخدم عند فتح المينى آب"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        username = data.get('username', '')
+        full_name = data.get('full_name', 'مستخدم')
+        
+        if not user_id:
+            return jsonify({'success': False, 'error': 'Missing user_id'}), 400
+        
+        # استخدام Telegram Bot API مباشرة
+        try:
+            import requests as req
+            
+            welcome_text = f"""
+🎉 <b>مرحباً بك في Panda Giveaways!</b>
+
+<b>{full_name}</b>، سعداء بانضمامك! 🎁
+
+💰 استمتع بالأرباح اليومية
+🎰 العب عجلة الحظ
+👥 ادعُ أصدقاءك واربح المزيد
+💎 اسحب أرباحك مباشرة
+
+🚀 <b>ابدأ الآن وحقق أرباحك!</b>
+"""
+            
+            api_url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
+            response = req.post(api_url, json={
+                'chat_id': user_id,
+                'text': welcome_text,
+                'parse_mode': 'HTML'
+            }, timeout=10)
+            
+            result = response.json()
+            
+            if result.get('ok'):
+                logger.info(f"✅ Welcome message sent to user {user_id}")
+                
+                # تسجيل المستخدم في قاعدة البيانات
+                if username:
+                    db.create_or_update_user(user_id, username, full_name, None)
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Welcome message sent'
+                })
+            else:
+                error_desc = result.get('description', 'Unknown error')
+                logger.warning(f"⚠️ Failed to send welcome to {user_id}: {error_desc}")
+                return jsonify({
+                    'success': False,
+                    'error': error_desc,
+                    'need_start': 'bot was blocked' in error_desc.lower() or 'user is deactivated' in error_desc.lower()
+                })
+            
+        except Exception as e:
+            logger.error(f"Error sending welcome message: {e}")
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error in send_welcome_message: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 def run_flask_server():
     """تشغيل Flask server في thread منفصل"""
     try:

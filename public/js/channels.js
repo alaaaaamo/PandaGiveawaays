@@ -161,7 +161,7 @@ window.verifySubscriptions = function() {
 
     if (!allChannelsOpened) {
         console.log('⚠️ Not all channels opened yet');
-        TelegramApp.showAlert('⚠️ يرجى فتح جميع القنوات أولاً!');
+        showToast('⚠️ يرجى فتح جميع القنوات أولاً!', 'warning');
         return;
     }
 
@@ -178,7 +178,7 @@ window.verifySubscriptions = function() {
     }
 
     // Reload to show main content
-    TelegramApp.showAlert('✅ تم التحقق بنجاح! مرحباً بك 🎉');
+    showToast('✅ تم التحقق بنجاح! مرحباً بك 🎉', 'success');
     setTimeout(() => {
         console.log('🔄 Reloading page...');
         window.location.reload();

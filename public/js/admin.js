@@ -593,11 +593,137 @@ function renderAdminTasks() {
 }
 
 /**
- * تعديل مهمة (قريباً)
+ * تعديل مهمة موجودة
  */
 function editTask(taskId) {
-    showToast('⚠️ قريباً: تعديل المهمة', 'warning');
-    console.log('Edit task:', taskId);
+    console.log('✏️ Editing task:', taskId);
+    
+    // البحث عن المهمة
+    const task = adminData.tasks.find(t => t.id === taskId);
+    if (!task) {
+        showToast('❌ لم يتم العثور على المهمة', 'error');
+        return;
+    }
+    
+    // فتح المودال
+    const modal = document.getElementById('add-task-modal');
+    if (!modal) {
+        showToast('❌ خطأ: لم يتم العثور على النموذج', 'error');
+        return;
+    }
+    
+    // ملء البيانات الحالية
+    document.getElementById('task-name').value = task.task_name || '';
+    document.getElementById('task-link').value = task.task_link || '';
+    document.getElementById('task-description').value = task.task_description || '';
+    document.getElementById('task-pinned').checked = task.is_pinned || false;
+    document.getElementById('task-active').checked = task.is_active !== false;
+    
+    // تعيين النوع
+    selectTaskType(task.task_type || 'channel');
+    
+    // ملء اسم القناة إذا كان النوع قناة
+    if (task.task_type === 'channel' && task.channel_username) {
+        document.getElementById('channel-username').value = task.channel_username;
+    }
+    
+    // تغيير عنوان المودال وزر الحفظ
+    const modalTitle = modal.querySelector('.modal-header h2');
+    if (modalTitle) {
+        modalTitle.textContent = '✏️ تعديل مهمة';
+    }
+    
+    const saveBtn = modal.querySelector('.btn-primary');
+    if (saveBtn) {
+        saveBtn.textContent = '💾 حفظ التعديلات';
+        saveBtn.onclick = () => updateTask(taskId);
+    }
+    
+    // عرض المودال
+    modal.style.display = 'flex';
+    console.log('✅ Edit modal opened for task:', taskId);
+}
+
+/**
+ * تحديث مهمة موجودة
+ */
+async function updateTask(taskId) {
+    console.log('💾 Updating task:', taskId);
+    
+    try {
+        const taskName = document.getElementById('task-name').value.trim();
+        const taskLink = document.getElementById('task-link').value.trim();
+        const taskDescription = document.getElementById('task-description').value.trim();
+        const isPinned = document.getElementById('task-pinned').checked;
+        const isActive = document.getElementById('task-active').checked;
+        const taskType = document.querySelector('input[name="task-type"]:checked')?.value || 'channel';
+        const channelUsername = document.getElementById('channel-username').value.trim();
+        
+        // التحقق من البيانات المطلوبة
+        if (!taskName) {
+            showToast('⚠️ الرجاء إدخال اسم المهمة', 'warning');
+            return;
+        }
+        
+        if (!taskLink) {
+            showToast('⚠️ الرجاء إدخال رابط المهمة', 'warning');
+            return;
+        }
+        
+        if (taskType === 'channel' && !channelUsername) {
+            showToast('⚠️ الرجاء إدخال معرف القناة', 'warning');
+            return;
+        }
+        
+        // بيانات المهمة المحدثة
+        const taskData = {
+            task_id: taskId,
+            task_name: taskName,
+            task_link: taskLink,
+            task_description: taskDescription,
+            task_type: taskType,
+            is_pinned: isPinned,
+            is_active: isActive,
+            admin_id: 1797127532
+        };
+        
+        if (taskType === 'channel') {
+            taskData.channel_username = channelUsername.startsWith('@') ? channelUsername : '@' + channelUsername;
+        }
+        
+        console.log('📤 Sending update:', taskData);
+        
+        // إرسال البيانات إلى API
+        showLoading();
+        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
+        const response = await fetch(`${API_BASE_URL}/admin/tasks`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(taskData)
+        });
+        
+        const result = await response.json();
+        hideLoading();
+        
+        console.log('📥 Server response:', result);
+        
+        if (result.success) {
+            showToast('✅ تم تحديث المهمة بنجاح!', 'success');
+            closeAddTaskModal();
+            loadTasks(); // إعادة تحميل القائمة
+        } else {
+            const errorMsg = result.message || 'فشل تحديث المهمة';
+            showToast(`❌ ${errorMsg}`, 'error');
+            console.error('❌ Task update failed:', result);
+        }
+        
+    } catch (error) {
+        hideLoading();
+        console.error('❌ Error updating task:', error);
+        showToast('❌ خطأ في الاتصال بالسيرفر', 'error');
+    }
 }
 
 /**
@@ -632,10 +758,218 @@ async function deleteTask(taskId) {
 }
 
 async function loadChannels() {
-    adminData.channels = [
-        { id: 1, name: 'قناة الأخبار', username: '@pandanews', chat_id: -1001234567890, mandatory: true },
-        { id: 2, name: 'مجموعة الدعم', username: '@pandasupport', chat_id: -1009876543210, mandatory: false }
-    ];
+    console.log('📥 Loading channels from API...');
+    try {
+        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
+        const response = await fetch(`${API_BASE_URL}/admin/channels`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('✅ Channels loaded:', data);
+        
+        if (data.success && data.channels) {
+            adminData.channels = data.channels;
+            renderAdminChannels();
+        } else {
+            console.error('❌ Failed to load channels:', data.message);
+            showToast('فشل تحميل القنوات', 'error');
+        }
+    } catch (error) {
+        console.error('❌ Error loading channels:', error);
+        showToast('خطأ في تحميل القنوات', 'error');
+        adminData.channels = [];
+        renderAdminChannels();
+    }
+}
+
+/**
+ * عرض القنوات في صفحة الإدمن
+ */
+function renderAdminChannels() {
+    const channelsGrid = document.getElementById('channels-grid');
+    if (!channelsGrid) {
+        console.error('❌ Channels grid not found');
+        return;
+    }
+    
+    if (!adminData.channels || adminData.channels.length === 0) {
+        channelsGrid.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #8b95a1;">
+                <p style="font-size: 48px; margin-bottom: 16px;">📢</p>
+                <p style="font-size: 18px;">لا توجد قنوات حالياً</p>
+                <p style="font-size: 14px; margin-top: 8px;">ابدأ بإضافة قناة إجبارية</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    
+    adminData.channels.forEach(channel => {
+        const statusBadge = channel.is_active 
+            ? '<span class="task-status active">نشط</span>' 
+            : '<span class="task-status">غير نشط</span>';
+        
+        html += `
+            <div class="admin-task-card">
+                <div class="task-header">
+                    <h3>📢 ${channel.channel_name}</h3>
+                    ${statusBadge}
+                </div>
+                
+                <div class="task-details">
+                    <div><strong>المعرف:</strong> ${channel.channel_id}</div>
+                    <div><strong>الرابط:</strong> <a href="${channel.channel_url}" target="_blank" class="channel-link">${channel.channel_url}</a></div>
+                    <div><strong>تاريخ الإضافة:</strong> ${new Date(channel.added_at).toLocaleDateString('ar-EG')}</div>
+                </div>
+                
+                <div class="task-footer">
+                    <button class="delete-btn" onclick="deleteChannel('${channel.channel_id}')">
+                        🗑️ حذف
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+    
+    channelsGrid.innerHTML = html;
+}
+
+/**
+ * فتح نموذج إضافة قناة
+ */
+function openAddChannelModal() {
+    console.log('🎯 Opening Add Channel Modal');
+    const modal = document.getElementById('add-channel-modal');
+    if (!modal) {
+        console.error('❌ Modal not found');
+        showToast('❌ خطأ: لم يتم العثور على النموذج', 'error');
+        return;
+    }
+    
+    // إعادة تعيين النموذج
+    document.getElementById('channel-name').value = '';
+    document.getElementById('channel-id').value = '';
+    document.getElementById('channel-url').value = '';
+    
+    // عرض النموذج
+    modal.style.display = 'flex';
+    console.log('✅ Modal opened');
+}
+
+/**
+ * إغلاق نموذج إضافة القناة
+ */
+function closeAddChannelModal() {
+    console.log('🚪 Closing Add Channel Modal');
+    const modal = document.getElementById('add-channel-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+/**
+ * إنشاء قناة جديدة
+ */
+async function createChannel() {
+    console.log('📝 Creating new channel...');
+    
+    try {
+        const channelName = document.getElementById('channel-name').value.trim();
+        const channelId = document.getElementById('channel-id').value.trim();
+        const channelUrl = document.getElementById('channel-url').value.trim();
+        
+        // التحقق من البيانات المطلوبة
+        if (!channelName) {
+            showToast('⚠️ الرجاء إدخال اسم القناة', 'warning');
+            return;
+        }
+        
+        if (!channelId) {
+            showToast('⚠️ الرجاء إدخال معرف القناة', 'warning');
+            return;
+        }
+        
+        if (!channelUrl) {
+            showToast('⚠️ الرجاء إدخال رابط القناة', 'warning');
+            return;
+        }
+        
+        // بيانات القناة
+        const channelData = {
+            channel_name: channelName,
+            channel_id: channelId.startsWith('@') ? channelId : '@' + channelId,
+            channel_url: channelUrl,
+            admin_id: 1797127532
+        };
+        
+        console.log('📤 Sending channel data:', channelData);
+        
+        // إرسال البيانات إلى API
+        showLoading();
+        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
+        const response = await fetch(`${API_BASE_URL}/admin/channels`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(channelData)
+        });
+        
+        const result = await response.json();
+        hideLoading();
+        
+        console.log('📥 Server response:', result);
+        
+        if (result.success) {
+            showToast('✅ تم إضافة القناة بنجاح!', 'success');
+            closeAddChannelModal();
+            loadChannels(); // إعادة تحميل القائمة
+        } else {
+            const errorMsg = result.message || 'فشل إضافة القناة';
+            showToast(`❌ ${errorMsg}`, 'error');
+            console.error('❌ Channel creation failed:', result);
+        }
+        
+    } catch (error) {
+        hideLoading();
+        console.error('❌ Error creating channel:', error);
+        showToast('❌ خطأ في الاتصال بالسيرفر', 'error');
+    }
+}
+
+/**
+ * حذف قناة
+ */
+async function deleteChannel(channelId) {
+    if (!confirm('هل أنت متأكد من حذف هذه القناة؟')) {
+        return;
+    }
+    
+    try {
+        showLoading();
+        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
+        const response = await fetch(`${API_BASE_URL}/admin/channels?channel_id=${encodeURIComponent(channelId)}`, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        hideLoading();
+        
+        if (data.success) {
+            showToast('✅ تم حذف القناة بنجاح', 'success');
+            loadChannels(); // إعادة تحميل القائمة
+        } else {
+            showToast('❌ فشل حذف القناة', 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        console.error('❌ Error deleting channel:', error);
+        showToast('❌ خطأ في الاتصال', 'error');
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -785,7 +1119,9 @@ function setupCharacterCounters() {
     const fields = [
         { id: 'task-name', max: 50, counterId: 'name-count' },
         { id: 'task-link', max: 200, counterId: 'link-count' },
-        { id: 'task-description', max: 100, counterId: 'desc-count' }
+        { id: 'task-description', max: 100, counterId: 'desc-count' },
+        { id: 'channel-name', max: 100, counterId: 'channel-name-count' },
+        { id: 'channel-url', max: 200, counterId: 'channel-url-count' }
     ];
     
     fields.forEach(field => {
@@ -929,6 +1265,18 @@ function openAddTaskModal() {
     
     // تعيين النوع الافتراضي إلى قناة
     selectTaskType('channel');
+    
+    // إعادة تعيين عنوان المودال وزر الحفظ
+    const modalTitle = modal.querySelector('.modal-header h2');
+    if (modalTitle) {
+        modalTitle.textContent = '➕ إضافة مهمة جديدة';
+    }
+    
+    const saveBtn = modal.querySelector('.btn-primary');
+    if (saveBtn) {
+        saveBtn.textContent = '➕ إضافة المهمة';
+        saveBtn.onclick = createTask;
+    }
     
     // عرض النموذج
     modal.style.display = 'flex';
@@ -1143,41 +1491,6 @@ function displayTasks(tasks) {
         `).join('');
 }
 
-async function loadChannels() {
-    try {
-        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
-        const response = await fetch(`${API_BASE_URL}/admin/channels`);
-        const result = await response.json();
-        
-        if (result.success) {
-            displayChannels(result.data);
-        }
-    } catch (error) {
-        console.error('Error loading channels:', error);
-    }
-}
-
-function displayChannels(channels) {
-    const grid = document.getElementById('channels-grid');
-    if (!grid) return;
-    
-    grid.innerHTML = channels.length === 0 ?
-        '<p style="text-align:center;padding:40px;color:var(--text-secondary)">لا توجد قنوات</p>' :
-        channels.map(channel => `
-            <div class="channel-card">
-                <div class="channel-header">
-                    <span class="channel-icon">📢</span>
-                    <button onclick="deleteChannel('${channel.channel_id}')" class="delete-btn">🗑️</button>
-                </div>
-                <h3>${channel.channel_name}</h3>
-                <p class="channel-id">${channel.channel_id}</p>
-                <a href="${channel.channel_url}" target="_blank" class="channel-link">
-                    افتح القناة
-                </a>
-            </div>
-        `).join('');
-}
-
 async function deleteTask(taskId) {
     if (!confirm('هل تريد حذف هذه المهمة؟')) return;
     
@@ -1203,10 +1516,13 @@ async function deleteChannel(channelId) {
     if (!confirm('هل تريد حذف هذه القناة؟')) return;
     
     try {
-        const response = await fetch(`/api/admin/channels?channel_id=${channelId}`, {
+        showLoading();
+        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
+        const response = await fetch(`${API_BASE_URL}/admin/channels?channel_id=${encodeURIComponent(channelId)}`, {
             method: 'DELETE'
         });
         const result = await response.json();
+        hideLoading();
         
         if (result.success) {
             showToast('✅ تم حذف القناة بنجاح', 'success');
@@ -1215,6 +1531,7 @@ async function deleteChannel(channelId) {
             showToast('❌ فشل حذف القناة', 'error');
         }
     } catch (error) {
+        hideLoading();
         console.error('Error deleting channel:', error);
         showToast('❌ خطأ في حذف القناة', 'error');
     }

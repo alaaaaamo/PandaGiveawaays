@@ -1156,7 +1156,7 @@ def manage_channels():
         print(f"Error in manage_channels: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/admin/tasks', methods=['GET', 'POST', 'DELETE'])
+@app.route('/api/admin/tasks', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def manage_tasks():
     """إدارة المهام"""
     try:
@@ -1257,6 +1257,71 @@ def manage_tasks():
                 'success': True, 
                 'message': 'تم إضافة المهمة بنجاح',
                 'task_id': task_id
+            })
+            
+        elif request.method == 'PUT':
+            # تحديث مهمة موجودة
+            data = request.get_json()
+            
+            task_id = data.get('task_id')
+            if not task_id:
+                return jsonify({'success': False, 'message': 'معرف المهمة مطلوب'}), 400
+            
+            task_name = data.get('task_name')
+            task_link = data.get('task_link')
+            task_type = data.get('task_type', 'link')
+            task_description = data.get('task_description', '')
+            channel_username = data.get('channel_username', '')
+            is_pinned = 1 if data.get('is_pinned', False) else 0
+            is_active = 1 if data.get('is_active', True) else 0
+            
+            # التحقق من البيانات المطلوبة
+            if not task_name or not task_link:
+                return jsonify({
+                    'success': False, 
+                    'message': 'اسم المهمة والرابط مطلوبان'
+                }), 400
+            
+            # إذا كان نوع المهمة قناة، التحقق من أن البوت مشرف
+            if task_type == 'channel' and channel_username:
+                try:
+                    import requests
+                    bot_url = 'http://localhost:8081/check-bot-admin'
+                    check_response = requests.post(bot_url, json={
+                        'channel_username': channel_username
+                    }, timeout=5)
+                    
+                    check_data = check_response.json()
+                    
+                    if not check_data.get('is_admin', False):
+                        return jsonify({
+                            'success': False,
+                            'message': '❌ البوت ليس مشرف في هذه القناة! أضف البوت كمشرف أولاً'
+                        }), 400
+                except Exception as e:
+                    print(f"Error checking bot admin: {e}")
+                    # نكمل حتى لو فشل التحقق
+                    pass
+            
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                UPDATE tasks 
+                SET task_type = ?, task_name = ?, task_description = ?, 
+                    task_link = ?, channel_username = ?, is_pinned = ?, is_active = ?
+                WHERE id = ?
+            """, (
+                task_type, task_name, task_description, task_link,
+                channel_username, is_pinned, is_active, task_id
+            ))
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({
+                'success': True, 
+                'message': 'تم تحديث المهمة بنجاح'
             })
             
         elif request.method == 'DELETE':

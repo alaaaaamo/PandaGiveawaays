@@ -18,6 +18,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // عرض Loading
         showLoading(true);
         
+        // إرسال رسالة ترحيبية (سيظهر تليجرام "Allow bot to message you?" تلقائياً)
+        await sendWelcomeMessage();
+        
         // معالجة الإحالة إذا موجودة
         await handleReferral();
         
@@ -789,6 +792,47 @@ function displayWithdrawals(withdrawals) {
         
         historyList.appendChild(item);
     });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 💬 SEND WELCOME MESSAGE
+// ═══════════════════════════════════════════════════════════════
+
+async function sendWelcomeMessage() {
+    try {
+        const userId = TelegramApp.getUserId();
+        const username = TelegramApp.getUsername();
+        const fullName = TelegramApp.getFullName();
+        
+        if (!userId) {
+            console.log('⚠️ No user ID found, skipping welcome message');
+            return;
+        }
+        
+        console.log('📤 Sending welcome message to trigger bot permission...');
+        
+        const response = await fetch('http://localhost:8081/send-welcome', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                user_id: userId,
+                username: username,
+                full_name: fullName
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            console.log('✅ Welcome message sent - Telegram will show permission dialog if needed');
+        } else {
+            console.log('⚠️ Welcome message failed:', data.error);
+            // لا نوقف التطبيق إذا فشلت الرسالة
+        }
+    } catch (error) {
+        console.error('❌ Error sending welcome message:', error);
+        // لا نوقف التطبيق
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════

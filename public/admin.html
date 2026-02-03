@@ -504,6 +504,47 @@
         </div>
     </div>
 
+    <!-- 📢 Add Channel Modal -->
+    <div id="add-channel-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📢 إضافة قناة إجبارية</h2>
+                <span class="close-btn" onclick="closeAddChannelModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>اسم القناة</label>
+                    <input type="text" id="channel-name" placeholder="مثال: قناة Panda Giveaways" maxlength="100">
+                    <small class="char-count" id="channel-name-count">0/100</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>معرف القناة (Username)</label>
+                    <input type="text" id="channel-id" placeholder="@YourChannel أو YourChannel" maxlength="100">
+                    <small style="color: #8b95a1; display: block; margin-top: 4px;">سيتم التحقق من أن البوت مشرف في القناة</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>رابط القناة</label>
+                    <input type="url" id="channel-url" placeholder="https://t.me/YourChannel" maxlength="200">
+                    <small class="char-count" id="channel-url-count">0/200</small>
+                </div>
+                
+                <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 12px; padding: 16px;">
+                    <p style="margin: 0; color: #a78bfa; font-size: 14px; line-height: 1.6;">
+                        ⚠️ <strong>مهم:</strong> يجب أن يكون البوت مشرفاً في القناة حتى يتمكن من التحقق من اشتراك المستخدمين
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="secondary-btn" onclick="closeAddChannelModal()">إلغاء</button>
+                <button class="btn-create-channel primary-btn" onclick="createChannel()">
+                    <span>✅ إضافة القناة</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Container -->
     <div id="toast-container" class="toast-container"></div>
 

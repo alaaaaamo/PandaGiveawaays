@@ -148,6 +148,28 @@ const ChannelsCheck = {
                 showToast('❌ يجب الاشتراك في جميع القنوات أولاً', 'error');
             }
         }
+    },
+    
+    /**
+     * التحقق الدوري من القنوات عند عودة المستخدم للتطبيق
+     */
+    setupVisibilityCheck() {
+        document.addEventListener('visibilitychange', async () => {
+            if (!document.hidden) {
+                console.log('👁️ User returned to app, re-checking channels...');
+                await this.loadChannels();
+                await this.verifySubscription();
+            }
+        });
+        
+        // التحقق عند استعادة التركيز
+        window.addEventListener('focus', async () => {
+            console.log('🔍 App focused, re-checking channels...');
+            await this.loadChannels();
+            await this.verifySubscription();
+        });
+        
+        console.log('✅ Visibility check listeners registered');
     }
 };
 
@@ -157,10 +179,12 @@ if (document.readyState === 'loading') {
         // انتظار تهيئة Telegram App أولاً
         setTimeout(() => {
             ChannelsCheck.init();
+            ChannelsCheck.setupVisibilityCheck();
         }, 500);
     });
 } else {
     setTimeout(() => {
         ChannelsCheck.init();
+        ChannelsCheck.setupVisibilityCheck();
     }, 500);
 }

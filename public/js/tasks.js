@@ -226,14 +226,5 @@ const TasksModule = {
     }
 };
 
-// Helper function for toast notifications
-function showToast(message, type = 'info') {
-    if (window.Telegram && window.Telegram.WebApp) {
-        window.Telegram.WebApp.showAlert(message);
-    } else {
-        alert(message);
-    }
-}
-
 // Export for use in other modules
 window.TasksModule = TasksModule;
