@@ -420,6 +420,54 @@ def get_user_data(user_id):
             'error': str(e)
         }), 500
 
+@app.route('/api/user/<int:user_id>/update-profile', methods=['POST'])
+def update_user_profile(user_id):
+    """تحديث username و full_name للمستخدم من Telegram"""
+    try:
+        data = request.get_json()
+        username = data.get('username', '')
+        full_name = data.get('full_name', 'User')
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+        
+        # التحقق من وجود المستخدم
+        cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+        existing = cursor.fetchone()
+        
+        if existing:
+            # تحديث البيانات
+            cursor.execute("""
+                UPDATE users 
+                SET username = ?, full_name = ?, last_active = ?
+                WHERE user_id = ?
+            """, (username, full_name, now, user_id))
+            conn.commit()
+            print(f"✅ Updated user {user_id}: {username}, {full_name}")
+        else:
+            # إنشاء مستخدم جديد
+            cursor.execute("""
+                INSERT INTO users (user_id, username, full_name, created_at, last_active)
+                VALUES (?, ?, ?, ?, ?)
+            """, (user_id, username, full_name, now, now))
+            conn.commit()
+            print(f"✅ Created user {user_id}: {username}, {full_name}")
+        
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Profile updated successfully'
+        })
+        
+    except Exception as e:
+        print(f"Error in update_user_profile: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/user/<int:user_id>/referrals', methods=['GET'])
 def get_user_referrals(user_id):
     """الحصول على إحالات المستخدم"""

@@ -188,7 +188,7 @@
         });
 
         // Load user data and stats
-        $(document).ready(function() {
+        $(document).ready(async function() {
             // Show loading
             $('#loading-overlay').removeClass('hidden');
             
@@ -205,6 +205,26 @@
                 console.error('No user ID found. Please open from Telegram.');
                 $('#total-referrals, #available-spins, #next-spin-in').text('--');
                 return;
+            }
+            
+            // تحديث بيانات المستخدم من Telegram أولاً
+            try {
+                const username = telegramUser.username || `user_${userId}`;
+                const fullName = telegramUser.first_name + (telegramUser.last_name ? ' ' + telegramUser.last_name : '') || username;
+                
+                await fetch(`/api/user/${userId}/update-profile`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        full_name: fullName
+                    })
+                });
+                console.log('✅ Profile updated with Telegram data');
+            } catch (profileError) {
+                console.warn('⚠️ Could not update profile:', profileError);
             }
             
             // Generate referral link (format: https://t.me/BotUsername?startapp=ref_12345)

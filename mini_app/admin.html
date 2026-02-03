@@ -1,395 +1,0 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>🔧 Panda Giveaways - Admin Panel</title>
-    <link rel="stylesheet" href="css/styles.css">
-    <link rel="stylesheet" href="css/admin.css">
-    
-    <!-- Telegram Web App SDK -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    
-    <!-- Lottie Player -->
-    <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
-    
-    <!-- Chart.js for Statistics -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
-</head>
-<body class="admin-body">
-    
-    <!-- 🔝 ADMIN HEADER -->
-    <header class="admin-header">
-        <div class="admin-logo">
-            <span class="logo-icon">🐼</span>
-            <div class="logo-text">
-                <h1>Panda Giveaways</h1>
-                <span class="admin-badge">⚙️ Admin Panel</span>
-            </div>
-        </div>
-        <div class="admin-actions">
-            <button class="refresh-btn" onclick="refreshData()">
-                <span class="btn-icon">🔄</span>
-                <span>تحديث</span>
-            </button>
-            <button class="logout-btn" onclick="logout()">
-                <span class="btn-icon">🚪</span>
-                <span>خروج</span>
-            </button>
-        </div>
-    </header>
-
-    <!-- 📊 STATISTICS DASHBOARD -->
-    <div class="admin-container">
-        
-        <!-- Quick Stats Cards -->
-        <section class="stats-section">
-            <h2 class="section-title">📊 الإحصائيات السريعة</h2>
-            
-            <div class="stats-grid">
-                <div class="stat-card animated">
-                    <div class="stat-icon-wrapper blue">
-                        <lottie-player src="../public/img/starOne.json" 
-                            background="transparent" speed="1" style="width: 60px; height: 60px;" 
-                            loop autoplay>
-                        </lottie-player>
-                    </div>
-                    <div class="stat-content">
-                        <h3 id="total-users">0</h3>
-                        <p>إجمالي المستخدمين</p>
-                    </div>
-                </div>
-
-                <div class="stat-card animated">
-                    <div class="stat-icon-wrapper green">
-                        <span class="stat-emoji">🎰</span>
-                    </div>
-                    <div class="stat-content">
-                        <h3 id="total-spins">0</h3>
-                        <p>إجمالي اللفات</p>
-                    </div>
-                </div>
-
-                <div class="stat-card animated">
-                    <div class="stat-icon-wrapper orange">
-                        <span class="stat-emoji">💰</span>
-                    </div>
-                    <div class="stat-content">
-                        <h3 id="total-balance">0.00</h3>
-                        <p>إجمالي الأرصدة (TON)</p>
-                    </div>
-                </div>
-
-                <div class="stat-card animated">
-                    <div class="stat-icon-wrapper red">
-                        <span class="stat-emoji">💸</span>
-                    </div>
-                    <div class="stat-content">
-                        <h3 id="pending-withdrawals">0</h3>
-                        <p>طلبات سحب معلقة</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Tabs Navigation -->
-        <div class="admin-tabs">
-            <button class="admin-tab active" data-tab="prizes">🎁 إدارة الجوائز</button>
-            <button class="admin-tab" data-tab="users">👥 المستخدمين</button>
-            <button class="admin-tab" data-tab="withdrawals">💸 السحوبات</button>
-            <button class="admin-tab" data-tab="tasks">📝 المهام</button>
-            <button class="admin-tab" data-tab="channels">📢 القنوات</button>
-            <button class="admin-tab" data-tab="settings">⚙️ الإعدادات</button>
-        </div>
-
-        <!-- 🎁 PRIZES MANAGEMENT TAB -->
-        <section id="tab-prizes" class="admin-tab-content active">
-            <div class="content-header">
-                <h2>🎁 إدارة جوائز عجلة الحظ</h2>
-                <button class="primary-btn" onclick="openAddPrizeModal()">
-                    <span>➕ إضافة جائزة جديدة</span>
-                </button>
-            </div>
-
-            <div class="prizes-manager">
-                <div class="manager-info">
-                    <div class="info-card">
-                        <span class="info-icon">🎯</span>
-                        <div class="info-text">
-                            <h4>إجمالي الجوائز</h4>
-                            <p id="total-prizes-count">0</p>
-                        </div>
-                    </div>
-                    <div class="info-card">
-                        <span class="info-icon">📊</span>
-                        <div class="info-text">
-                            <h4>مجموع النسب</h4>
-                            <p id="total-probability">0%</p>
-                        </div>
-                    </div>
-                    <div class="info-card">
-                        <span class="info-icon">✅</span>
-                        <div class="info-text">
-                            <h4>حالة النظام</h4>
-                            <p id="system-status" class="status-ok">✓ صحيح</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Prizes List -->
-                <div class="prizes-list" id="prizes-list">
-                    <!-- سيتم ملؤها ديناميكياً -->
-                </div>
-            </div>
-        </section>
-
-        <!-- 👥 USERS MANAGEMENT TAB -->
-        <section id="tab-users" class="admin-tab-content">
-            <div class="content-header">
-                <h2>👥 إدارة المستخدمين</h2>
-                <div class="search-box">
-                    <input type="text" id="user-search" placeholder="🔍 ابحث عن مستخدم...">
-                </div>
-            </div>
-
-            <div class="table-container">
-                <table class="admin-table">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>الاسم</th>
-                            <th>اسم المستخدم</th>
-                            <th>الرصيد</th>
-                            <th>اللفات</th>
-                            <th>الإحالات</th>
-                            <th>تاريخ التسجيل</th>
-                            <th>الإجراءات</th>
-                        </tr>
-                    </thead>
-                    <tbody id="users-table-body">
-                        <!-- سيتم ملؤها ديناميكياً -->
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- 💸 WITHDRAWALS MANAGEMENT TAB -->
-        <section id="tab-withdrawals" class="admin-tab-content">
-            <div class="content-header">
-                <h2>💸 إدارة طلبات السحب</h2>
-                <div class="filter-tabs">
-                    <button class="filter-btn active" data-status="pending">⏳ معلقة</button>
-                    <button class="filter-btn" data-status="approved">✅ مقبولة</button>
-                    <button class="filter-btn" data-status="rejected">❌ مرفوضة</button>
-                    <button class="filter-btn" data-status="all">📋 الكل</button>
-                </div>
-            </div>
-
-            <div class="withdrawals-list" id="withdrawals-list">
-                <!-- سيتم ملؤها ديناميكياً -->
-            </div>
-        </section>
-
-        <!-- 📝 TASKS MANAGEMENT TAB -->
-        <section id="tab-tasks" class="admin-tab-content">
-            <div class="content-header">
-                <h2>📝 إدارة المهام</h2>
-                <button class="primary-btn" onclick="openAddTaskModal()">
-                    <span>➕ إضافة مهمة جديدة</span>
-                </button>
-            </div>
-
-            <div class="tasks-list" id="admin-tasks-list">
-                <!-- سيتم ملؤها ديناميكياً -->
-            </div>
-        </section>
-
-        <!-- 📢 CHANNELS MANAGEMENT TAB -->
-        <section id="tab-channels" class="admin-tab-content">
-            <div class="content-header">
-                <h2>📢 إدارة القنوات الإجبارية</h2>
-                <button class="primary-btn" onclick="openAddChannelModal()">
-                    <span>➕ إضافة قناة جديدة</span>
-                </button>
-            </div>
-
-            <div class="channels-list" id="admin-channels-list">
-                <!-- سيتم ملؤها ديناميكياً -->
-            </div>
-        </section>
-
-        <!-- ⚙️ SETTINGS TAB -->
-        <section id="tab-settings" class="admin-tab-content">
-            <div class="content-header">
-                <h2>⚙️ إعدادات النظام</h2>
-            </div>
-
-            <div class="settings-grid">
-                <div class="setting-card">
-                    <h3>💰 إعدادات السحب</h3>
-                    <div class="setting-item">
-                        <label>الحد الأدنى للسحب (TON)</label>
-                        <input type="number" id="min-withdrawal" value="1.0" step="0.1">
-                    </div>
-                    <div class="setting-item">
-                        <label>الحد الأقصى للسحب (TON)</label>
-                        <input type="number" id="max-withdrawal" value="100.0" step="1">
-                    </div>
-                    <div class="setting-item">
-                        <label>السحب التلقائي لـ TON</label>
-                        <label class="switch">
-                            <input type="checkbox" id="auto-withdrawal">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                </div>
-
-                <div class="setting-card">
-                    <h3>🎰 إعدادات عجلة الحظ</h3>
-                    <div class="setting-item">
-                        <label>الحد الأقصى للفات يومياً</label>
-                        <input type="number" id="max-daily-spins" value="10" step="1">
-                    </div>
-                    <div class="setting-item">
-                        <label>وقت الانتظار بين اللفات (ثواني)</label>
-                        <input type="number" id="spin-cooldown" value="2" step="1">
-                    </div>
-                    <div class="setting-item">
-                        <label>لفات مجانية عند التسجيل</label>
-                        <input type="number" id="initial-spins" value="3" step="1">
-                    </div>
-                </div>
-
-                <div class="setting-card">
-                    <h3>👥 إعدادات الإحالات</h3>
-                    <div class="setting-item">
-                        <label>عدد الإحالات للفة واحدة</label>
-                        <input type="number" id="referrals-per-spin" value="5" step="1">
-                    </div>
-                    <div class="setting-item">
-                        <label>مكافأة TON لكل إحالة</label>
-                        <input type="number" id="referral-bonus" value="0.001" step="0.001">
-                    </div>
-                </div>
-
-                <div class="setting-card">
-                    <h3>🔐 إعدادات الأمان</h3>
-                    <div class="setting-item">
-                        <label>تفعيل Rate Limiting</label>
-                        <label class="switch">
-                            <input type="checkbox" id="rate-limiting" checked>
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="setting-item">
-                        <label>تسجيل جميع الأحداث</label>
-                        <label class="switch">
-                            <input type="checkbox" id="event-logging" checked>
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                </div>
-            </div>
-
-            <div class="save-settings-section">
-                <button class="save-btn" onclick="saveSettings()">
-                    <span>💾 حفظ الإعدادات</span>
-                </button>
-            </div>
-        </section>
-
-    </div>
-
-    <!-- 🔔 MODALS -->
-    
-    <!-- Add Prize Modal -->
-    <div id="add-prize-modal" class="modal">
-        <div class="modal-content admin-modal">
-            <div class="modal-header">
-                <h2>🎁 إضافة جائزة جديدة</h2>
-                <button class="close-modal" onclick="closeModal('add-prize-modal')">✕</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label>اسم الجائزة</label>
-                    <input type="text" id="prize-name" placeholder="مثال: 0.1 TON">
-                </div>
-                <div class="form-group">
-                    <label>قيمة الجائزة (TON)</label>
-                    <input type="number" id="prize-value" placeholder="0.1" step="0.001">
-                </div>
-                <div class="form-group">
-                    <label>نسبة الظهور (%)</label>
-                    <input type="number" id="prize-probability" placeholder="10" step="0.1" min="0" max="100">
-                    <small>⚠️ يجب أن يكون مجموع جميع النسب = 100%</small>
-                </div>
-                <div class="form-group">
-                    <label>لون الجائزة</label>
-                    <input type="color" id="prize-color" value="#ffa500">
-                </div>
-                <div class="form-group">
-                    <label>أيقونة الجائزة (Emoji)</label>
-                    <input type="text" id="prize-emoji" placeholder="💰" maxlength="2">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="secondary-btn" onclick="closeModal('add-prize-modal')">إلغاء</button>
-                <button class="primary-btn" onclick="addPrize()">✅ إضافة</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Edit Prize Modal -->
-    <div id="edit-prize-modal" class="modal">
-        <div class="modal-content admin-modal">
-            <div class="modal-header">
-                <h2>✏️ تعديل جائزة</h2>
-                <button class="close-modal" onclick="closeModal('edit-prize-modal')">✕</button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="edit-prize-id">
-                <div class="form-group">
-                    <label>اسم الجائزة</label>
-                    <input type="text" id="edit-prize-name">
-                </div>
-                <div class="form-group">
-                    <label>قيمة الجائزة (TON)</label>
-                    <input type="number" id="edit-prize-value" step="0.001">
-                </div>
-                <div class="form-group">
-                    <label>نسبة الظهور (%)</label>
-                    <input type="number" id="edit-prize-probability" step="0.1" min="0" max="100">
-                </div>
-                <div class="form-group">
-                    <label>لون الجائزة</label>
-                    <input type="color" id="edit-prize-color">
-                </div>
-                <div class="form-group">
-                    <label>أيقونة الجائزة (Emoji)</label>
-                    <input type="text" id="edit-prize-emoji" maxlength="2">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="secondary-btn" onclick="closeModal('edit-prize-modal')">إلغاء</button>
-                <button class="primary-btn" onclick="updatePrize()">💾 حفظ</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Toast Container -->
-    <div id="toast-container" class="toast-container"></div>
-
-    <!-- Loading Overlay -->
-    <div id="loading-overlay" class="loading-overlay">
-        <lottie-player src="../public/img/preloaderSticker.json" 
-            background="transparent" speed="1" style="width: 150px; height: 150px;" 
-            loop autoplay>
-        </lottie-player>
-        <p>جاري التحميل...</p>
-    </div>
-
-    <!-- Scripts -->
-    <script src="js/config.js"></script>
-    <script src="js/admin.js"></script>
-</body>
-</html>

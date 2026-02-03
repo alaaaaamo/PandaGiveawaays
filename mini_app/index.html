@@ -1,294 +1,0 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>🐼 Panda Giveaways</title>
-    <link rel="stylesheet" href="css/styles.css">
-    
-    <!-- Telegram Web App SDK -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    
-    <!-- Lottie Player -->
-    <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
-</head>
-<body>
-    
-    <!-- 🔝 HEADER - معلومات المستخدم -->
-    <header id="app-header" class="app-header">
-        <div class="user-profile">
-            <div class="user-avatar">
-                <img id="user-avatar" src="" alt="User Avatar">
-            </div>
-            <div class="user-info">
-                <h3 id="user-name">جاري التحميل...</h3>
-                <p id="user-username">@username</p>
-            </div>
-        </div>
-        <div class="user-balance">
-            <span class="balance-label">💰 الرصيد</span>
-            <span class="balance-amount" id="user-balance">0.0000</span>
-            <span class="balance-currency">TON</span>
-        </div>
-    </header>
-
-    <!-- 📱 MAIN CONTAINER -->
-    <main class="main-container">
-        
-        <!-- 🎰 الصفحة الرئيسية - عجلة الحظ -->
-        <section id="page-wheel" class="page active">
-            <div class="spins-info">
-                <div class="spins-available">
-                    <span class="spins-count" id="available-spins">0</span>
-                    <span class="spins-label">لفة متاحة</span>
-                </div>
-            </div>
-
-            <!-- عجلة الحظ -->
-            <div class="wheel-container">
-                <div class="wheel-wrapper">
-                    <div class="wheel-pointer"></div>
-                    <canvas id="wheel-canvas" width="350" height="350"></canvas>
-                    <button id="spin-button" class="spin-button">
-                        <span>🎰 لف الآن</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- نتيجة اللفة -->
-            <div id="spin-result" class="spin-result hidden">
-                <lottie-player id="success-animation" src="../public/img/success_stars.json" 
-                    background="transparent" speed="1" style="width: 150px; height: 150px; margin: 0 auto;" 
-                    loop autoplay>
-                </lottie-player>
-                <h2 id="result-text">🎉 تهانينا!</h2>
-                <p id="result-amount">ربحت 0.1 TON</p>
-            </div>
-
-            <!-- آخر الأرباح -->
-            <div class="recent-wins">
-                <h3>🏆 آخر أرباحك</h3>
-                <div id="recent-wins-list" class="wins-list">
-                    <!-- سيتم ملؤها ديناميكياً -->
-                </div>
-            </div>
-        </section>
-
-        <!-- 👥 صفحة الإحالات -->
-        <section id="page-referrals" class="page">
-            <!-- Loading Animation for Referrals Page -->
-            <div id="referrals-loading" class="page-loading">
-                <lottie-player src="../public/img/loginSticker.json" 
-                    background="transparent" speed="1" style="width: 200px; height: 200px; margin: 0 auto;" 
-                    loop autoplay>
-                </lottie-player>
-                <p>جاري تحميل بيانات الإحالات...</p>
-            </div>
-
-            <div id="referrals-content" class="referrals-content">
-                <div class="page-header">
-                    <h2>👥 الإحالات</h2>
-                </div>
-
-                <div class="referral-stats">
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <img src="../public/img/profile/referral_program.svg" alt="Referrals" style="width: 40px; height: 40px;">
-                        </div>
-                        <div class="stat-info">
-                            <span class="stat-value" id="total-referrals">0</span>
-                            <span class="stat-label">إجمالي الإحالات</span>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">🎰</div>
-                        <div class="stat-info">
-                            <span class="stat-value" id="earned-spins">0</span>
-                            <span class="stat-label">اللفات المكتسبة</span>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">⏳</div>
-                        <div class="stat-info">
-                            <span class="stat-value" id="next-spin-in">5</span>
-                            <span class="stat-label">متبقي للفة القادمة</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- رابط الإحالة -->
-                <div class="referral-link-box">
-                    <h3>🔗 رابط الإحالة الخاص بك</h3>
-                    <div class="link-input-group">
-                        <img src="../public/img/referral_program.svg" alt="Link" class="link-icon">
-                        <input type="text" id="referral-link" readonly>
-                        <button id="copy-link-btn" class="copy-btn modern-btn">
-                            <span class="btn-icon">📋</span>
-                            <span class="btn-text">نسخ</span>
-                        </button>
-                    </div>
-                    <button id="share-link-btn" class="share-btn modern-btn">
-                        <span class="btn-icon">📤</span>
-                        <span class="btn-text">مشاركة الرابط</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- قائمة المدعوين -->
-            <div class="referrals-list">
-                <h3>📋 قائمة المدعوين</h3>
-                <div id="referrals-list-content" class="list-content">
-                    <!-- سيتم ملؤها ديناميكياً -->
-                </div>
-            </div>
-        </section>
-
-        <!-- 📝 صفحة المهام -->
-        <section id="page-tasks" class="page">
-            <div class="page-header">
-                <h2>📝 المهام</h2>
-                <p class="page-description">أكمل المهام واحصل على مكافآت!</p>
-            </div>
-
-            <div class="tasks-progress">
-                <div class="progress-info">
-                    <span>📊 تقدمك: <strong id="completed-tasks-count">0</strong> / <strong id="total-tasks-count">0</strong></span>
-                </div>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="tasks-progress-fill"></div>
-                </div>
-            </div>
-
-            <!-- قائمة المهام -->
-            <div class="tasks-list" id="tasks-list">
-                <!-- سيتم ملؤها ديناميكياً -->
-            </div>
-        </section>
-
-        <!-- 💸 صفحة السحب -->
-        <section id="page-withdraw" class="page">
-            <div class="page-header">
-                <h2>💸 السحب</h2>
-            </div>
-
-            <div class="balance-display">
-                <div class="balance-card">
-                    <span class="balance-label">💰 رصيدك الحالي</span>
-                    <span class="balance-value" id="withdraw-balance">0.0000</span>
-                    <span class="balance-currency">TON</span>
-                </div>
-            </div>
-
-            <!-- طرق السحب -->
-            <div class="withdrawal-methods">
-                <h3>اختر طريقة السحب</h3>
-                
-                <div class="method-tabs">
-                    <button class="method-tab active" data-method="ton">
-                        <span class="tab-icon">💎</span>
-                        <span>TON Wallet</span>
-                    </button>
-                    <button class="method-tab" data-method="vodafone">
-                        <span class="tab-icon">📱</span>
-                        <span>Vodafone Cash</span>
-                    </button>
-                </div>
-
-                <!-- نموذج السحب TON -->
-                <div id="withdraw-form-ton" class="withdraw-form active">
-                    <div class="form-group">
-                        <label>🔐 عنوان محفظة TON</label>
-                        <input type="text" id="ton-wallet-input" placeholder="UQxxxxxxxxxxxxxxxx">
-                    </div>
-                    <div class="form-group">
-                        <label>💰 المبلغ (TON)</label>
-                        <div class="amount-input-group">
-                            <input type="number" id="ton-amount-input" placeholder="0.00" step="0.01" min="1">
-                            <button id="max-btn-ton" class="max-btn">MAX</button>
-                        </div>
-                        <span class="min-withdraw-note">الحد الأدنى: 1.0 TON</span>
-                    </div>
-                    <button id="withdraw-btn-ton" class="withdraw-btn">💸 طلب السحب</button>
-                </div>
-
-                <!-- نموذج السحب Vodafone -->
-                <div id="withdraw-form-vodafone" class="withdraw-form">
-                    <div class="form-group">
-                        <label>📱 رقم فودافون كاش</label>
-                        <input type="tel" id="vodafone-number-input" placeholder="01xxxxxxxxx">
-                    </div>
-                    <div class="form-group">
-                        <label>💰 المبلغ (TON)</label>
-                        <div class="amount-input-group">
-                            <input type="number" id="vodafone-amount-input" placeholder="0.00" step="0.01" min="1">
-                            <button id="max-btn-vodafone" class="max-btn">MAX</button>
-                        </div>
-                        <span class="min-withdraw-note">الحد الأدنى: 0.1 TON</span>
-                    </div>
-                    <button id="withdraw-btn-vodafone" class="withdraw-btn">💸 طلب السحب</button>
-                </div>
-            </div>
-
-            <!-- سجل السحوبات -->
-            <div class="withdrawal-history">
-                <h3>📜 سجل السحوبات</h3>
-                <div id="withdrawal-history-list" class="history-list">
-                    <!-- سيتم ملؤها ديناميكياً -->
-                </div>
-            </div>
-        </section>
-
-    </main>
-
-    <!-- 📱 BOTTOM NAVIGATION -->
-    <nav class="bottom-nav">
-        <button class="nav-item active" data-page="wheel">
-            <span class="nav-icon">🎰</span>
-            <span class="nav-label">العجلة</span>
-        </button>
-        <button class="nav-item" data-page="referrals">
-            <span class="nav-icon">👥</span>
-            <span class="nav-label">الإحالات</span>
-        </button>
-        <button class="nav-item" data-page="tasks">
-            <span class="nav-icon">📝</span>
-            <span class="nav-label">المهام</span>
-        </button>
-        <button class="nav-item" data-page="withdraw">
-            <span class="nav-icon">💸</span>
-            <span class="nav-label">السحب</span>
-        </button>
-    </nav>
-
-    <!-- 🔔 TOAST NOTIFICATIONS -->
-    <div id="toast-container" class="toast-container"></div>
-
-    <!-- ⏳ LOADING OVERLAY -->
-    <div id="loading-overlay" class="loading-overlay">
-        <lottie-player src="../public/img/login.json" 
-            background="transparent" speed="1" style="width: 200px; height: 200px;" 
-            loop autoplay>
-        </lottie-player>
-        <p class="loading-text">جاري التحميل...</p>
-    </div>
-
-    <!-- 🎉 WIN MODAL -->
-    <div id="win-modal" class="modal">
-        <div class="modal-content win-modal">
-            <lottie-player id="win-animation" src="../public/img/success_stars.json" 
-                background="transparent" speed="1" style="width: 200px; height: 200px; margin: 0 auto;" 
-                loop autoplay>
-            </lottie-player>
-            <h2 id="modal-win-title">🎉 تهانينا!</h2>
-            <p id="modal-win-amount">ربحت 0.1 TON</p>
-            <button class="modal-btn" onclick="closeWinModal()">رائع! 🎊</button>
-        </div>
-    </div>
-
-    <!-- Scripts -->
-    <script src="js/config.js"></script>
-    <script src="js/api.js"></script>
-    <script src="js/wheel.js"></script>
-    <script src="js/app.js"></script>
-</body>
-</html>

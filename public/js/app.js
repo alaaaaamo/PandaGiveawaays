@@ -150,6 +150,27 @@ async function loadUserData() {
         }
         
         console.log('Loading data for user:', userId);
+        
+        // تحديث بيانات المستخدم من Telegram أولاً
+        try {
+            const username = TelegramApp.getUsername() || `user_${userId}`;
+            const fullName = TelegramApp.getFullName() || username;
+            
+            await fetch(`${CONFIG.API_BASE_URL}/user/${userId}/update-profile`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    username: username,
+                    full_name: fullName
+                })
+            });
+            console.log('✅ Profile updated with Telegram data');
+        } catch (profileError) {
+            console.warn('⚠️ Could not update profile:', profileError);
+        }
+        
         const response = await API.getUserData(userId);
         
         if (response.success) {
