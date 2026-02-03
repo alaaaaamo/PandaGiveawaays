@@ -15,6 +15,9 @@
     <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js"></script>
 
+    <!-- Lottie Player -->
+    <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
+
     <link rel="stylesheet" href="css/reset.css">
     <link rel="stylesheet" href="css/base_v2026.css?v=2026">
     <link rel="stylesheet" href="css/profile.css">
@@ -99,6 +102,15 @@
         </div>
     </div>
 
+    <!-- ⏳ LOADING OVERLAY -->
+    <div id="loading-overlay" class="loading-overlay">
+        <lottie-player src="./img/loginSticker.json" 
+            background="transparent" speed="1" style="width: 200px; height: 200px;" 
+            loop autoplay>
+        </lottie-player>
+        <p class="loading-text">جاري تحميل بيانات الإحالة...</p>
+    </div>
+
     <!-- 📱 BOTTOM NAVIGATION -->
     <nav class="bottom-nav">
         <button class="nav-item" onclick="window.location.href='index.html'">
@@ -165,6 +177,9 @@
 
         // Load user data and stats
         $(document).ready(function() {
+            // Show loading
+            $('#loading-overlay').removeClass('hidden');
+            
             // Display user info
             $('#myself').text(username);
             
@@ -212,14 +227,18 @@
                     let html = '';
                     referralsData.data.forEach(referral => {
                         console.log('Referral item:', referral);
-                        const refUsername = referral.username || 'مجهول';
-                        const refFullName = referral.full_name || 'مستخدم';
+                        // استخدام البيانات الحقيقية مع fallback ذكي
+                        const refUsername = referral.username || `user${referral.referred_id}`;
+                        const refFullName = referral.full_name || referral.username || `User ${referral.referred_id}`;
                         html += `<div class="referral-record-row"><div><a href="#">@${refUsername}</a></div><div>${refFullName}</div></div>`;
                     });
                     $('#referrals-list-container').html(html);
                 } else {
                     console.log('No referrals found or empty data');
                 }
+                
+                // Hide loading after data is loaded
+                $('#loading-overlay').addClass('hidden');
             })
             .catch(error => {
                 console.error('Error loading data:', error);
@@ -227,6 +246,9 @@
                 $('#total-referrals').text('0');
                 $('#available-spins').text('0');
                 $('#next-spin-in').text('5');
+                
+                // Hide loading even on error
+                $('#loading-overlay').addClass('hidden');
             });
         });
 
