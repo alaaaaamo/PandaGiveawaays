@@ -9,13 +9,13 @@ const CONFIG = {
     
     // Wheel Configuration
     WHEEL_PRIZES: [
-        { name: '0.1 TON', amount: 0.1, probability: 5, color: '#ffa500' },
-        { name: '0.2 TON', amount: 0.2, probability: 3, color: '#ff6347' },
-        { name: '0.5 TON', amount: 0.5, probability: 1, color: '#32cd32' },
-        { name: '1.0 TON', amount: 1.0, probability: 0.5, color: '#ff1493' },
-        { name: '0.05 TON', amount: 0.05, probability: 10, color: '#00bfff' },
-        { name: '0.01 TON', amount: 0.01, probability: 30, color: '#9370db' },
-        { name: 'حظ أوفر', amount: 0, probability: 50.5, color: '#808080' }
+        { name: '0.1 TON', amount: 0.1, probability: 5, color: '#FF9500' },      // برتقالي زاهي
+        { name: '0.2 TON', amount: 0.2, probability: 3, color: '#FF3B30' },      // أحمر زاهي
+        { name: '0.5 TON', amount: 0.5, probability: 1, color: '#34C759' },      // أخضر زاهي
+        { name: '1.0 TON', amount: 1.0, probability: 0.5, color: '#FF2D55' },    // وردي زاهي
+        { name: '0.05 TON', amount: 0.05, probability: 10, color: '#00C7BE' },   // سيان زاهي
+        { name: '0.01 TON', amount: 0.01, probability: 30, color: '#AF52DE' },   // بنفسجي زاهي
+        { name: 'حظ أوفر', amount: 0, probability: 50.5, color: '#8E8E93' }       // رمادي
     ],
     
     // Referral & Tasks (تذاكر بدلاً من عملات)

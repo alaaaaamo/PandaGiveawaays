@@ -405,8 +405,40 @@ function renderUsersTable() {
             <td>${user.referrals}</td>
             <td>${user.joined}</td>
             <td>
-                <button class="icon-btn" onclick="viewUser(${user.id})">👁️</button>
-                <button class="icon-btn edit" onclick="editUser(${user.id})">✏️</button>
+                <button class="icon-btn" onclick="viewUserReferrals(${user.id}, '${user.name}')">👁️ إحالات</button>
+                <button class="icon-btn" style="background: #3fb950;" onclick="quickAddSpins(${user.id}, '${user.username}')">🎰 لفات</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+// تصفية جدول المستخدمين حسب البحث
+function filterUsersTable(query) {
+    const tbody = document.getElementById('users-table-body');
+    if (!tbody) return;
+    
+    const filteredUsers = adminData.users.filter(user => {
+        const searchText = `${user.id} ${user.name} ${user.username}`.toLowerCase();
+        return searchText.includes(query);
+    });
+    
+    if (filteredUsers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: #8b95a1;">لا توجد نتائج</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = filteredUsers.map(user => `
+        <tr>
+            <td>${user.id}</td>
+            <td>${user.name}</td>
+            <td>${user.username}</td>
+            <td>${user.balance.toFixed(4)} TON</td>
+            <td>${user.spins}</td>
+            <td>${user.referrals}</td>
+            <td>${user.joined}</td>
+            <td>
+                <button class="icon-btn" onclick="viewUserReferrals(${user.id}, '${user.name}')">👁️ إحالات</button>
+                <button class="icon-btn" style="background: #3fb950;" onclick="quickAddSpins(${user.id}, '${user.username}')">🎰 لفات</button>
             </td>
         </tr>
     `).join('');
@@ -1077,10 +1109,26 @@ function setupEventListeners() {
     const searchInput = document.getElementById('user-search');
     if (searchInput) {
         console.log('User search input found');
-        searchInput.addEventListener('input', (e) => {
-            const query = e.target.value.toLowerCase();
-            // Filter users table
-            // TODO: Implement search functionality
+        // البحث عند الخروج من حقل النص
+        searchInput.addEventListener('blur', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            if (query) {
+                filterUsersTable(query);
+            } else {
+                renderUsersTable(); // إعادة عرض جميع المستخدمين
+            }
+        });
+        
+        // البحث عند الضغط على Enter
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const query = e.target.value.toLowerCase().trim();
+                if (query) {
+                    filterUsersTable(query);
+                } else {
+                    renderUsersTable();
+                }
+            }
         });
     }
     
@@ -1472,6 +1520,56 @@ async function openAddChannelModal() {
 // 🎰 ADD SPINS TO USER
 // ═══════════════════════════════════════════════════════════════
 
+// إضافة لفات سريعة لمستخدم محدد
+function quickAddSpins(userId, username) {
+    const spins = prompt(`🎰 كم لفة تريد إضافتها لـ ${username}?`);
+    
+    if (!spins) return;
+    
+    const spinsAmount = parseInt(spins);
+    
+    if (isNaN(spinsAmount) || spinsAmount < 1) {
+        showToast('❌ يرجى إدخال عدد صحيح', 'error');
+        return;
+    }
+    
+    addSpinsToUserByUsername(username, spinsAmount);
+}
+
+async function addSpinsToUserByUsername(username, spinsAmount) {
+    try {
+        showLoading();
+        
+        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
+        const response = await fetch(`${API_BASE_URL}/admin/add-spins`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                username: username,
+                spins_count: spinsAmount,
+                admin_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 1797127532
+            })
+        });
+        
+        const result = await response.json();
+        
+        hideLoading();
+        
+        if (result.success) {
+            showToast(`✅ تم إضافة ${spinsAmount} لفة لـ ${username}`, 'success');
+            loadUsers();
+        } else {
+            showToast('❌ فشل إضافة اللفات: ' + result.error, 'error');
+        }
+    } catch (error) {
+        console.error('Error adding spins:', error);
+        hideLoading();
+        showToast('❌ خطأ في إضافة اللفات', 'error');
+    }
+}
+
 function openAddSpinsModal() {
     const modal = document.getElementById('add-spins-modal');
     if (modal) {
@@ -1563,6 +1661,92 @@ async function deleteChannel(channelId) {
     }
 }
 
-function editUser(userId) {
-    showToast(`تعديل المستخدم: ${userId}`, 'info');
+// عرض إحالات المستخدم
+async function viewUserReferrals(userId, userName) {
+    try {
+        showLoading();
+        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
+        const response = await fetch(`${API_BASE_URL}/admin/user-referrals?user_id=${userId}`);
+        const result = await response.json();
+        
+        hideLoading();
+        
+        if (result.success) {
+            const referrals = result.data || [];
+            showReferralsModal(userName, referrals);
+        } else {
+            showToast('❌ فشل تحميل الإحالات', 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        console.error('Error loading referrals:', error);
+        showToast('❌ خطأ في تحميل الإحالات', 'error');
+    }
+}
+
+// عرض modal الإحالات
+function showReferralsModal(userName, referrals) {
+    const modal = document.getElementById('user-referrals-modal');
+    if (!modal) {
+        // إنشاء modal جديد
+        const modalHtml = `
+            <div id="user-referrals-modal" class="modal active">
+                <div class="modal-content" style="max-width: 800px;">
+                    <div class="modal-header">
+                        <h2>👥 إحالات ${userName}</h2>
+                        <button class="close-modal" onclick="closeModal('user-referrals-modal')">✕</button>
+                    </div>
+                    <div class="modal-body" id="referrals-list-container">
+                        <!-- سيتم ملؤها بالبيانات -->
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    } else {
+        modal.classList.add('active');
+    }
+    
+    // ملء قائمة الإحالات
+    const container = document.getElementById('referrals-list-container');
+    
+    if (referrals.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #8b95a1;">
+                <p style="font-size: 48px; margin-bottom: 16px;">👥</p>
+                <p style="font-size: 18px;">لا توجد إحالات</p>
+                <p style="font-size: 14px; margin-top: 8px;">لم يقم أحد بالتسجيل عبر رابط هذا المستخدم بعد</p>
+            </div>
+        `;
+    } else {
+        container.innerHTML = `
+            <div style="max-height: 500px; overflow-y: auto;">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>الاسم</th>
+                            <th>اسم المستخدم</th>
+                            <th>تاريخ التسجيل</th>
+                            <th>الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${referrals.map(ref => `
+                            <tr>
+                                <td>${ref.id}</td>
+                                <td>${ref.name}</td>
+                                <td>${ref.username || '-'}</td>
+                                <td>${new Date(ref.joined_at).toLocaleDateString('ar-EG')}</td>
+                                <td><span class="status-badge ${ref.is_verified ? 'active' : ''}">${ref.is_verified ? '✅ مفعّل' : '⏳ معلق'}</span></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <div style="padding: 20px; text-align: center; color: #8b95a1; border-top: 1px solid #30363d; margin-top: 20px;">
+                    <strong>إجمالي الإحالات:</strong> ${referrals.length}
+                </div>
+            </div>
+        `;
+    }
 }

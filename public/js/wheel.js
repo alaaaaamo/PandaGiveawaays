@@ -263,7 +263,9 @@ class WheelOfFortune {
         
         if (prize.amount > 0) {
             resultText.textContent = '🎉 تهانينا!';
-            resultAmount.textContent = `ربحت ${prize.amount} TON`;
+            // إضافة أيقونة TON
+            const tonIcon = '<img src="img/Ton.png" alt="TON" class="ton-icon">';
+            resultAmount.innerHTML = `ربحت ${prize.amount} ${tonIcon}`;
             resultDiv.style.borderColor = '#3fb950';
         } else {
             resultText.textContent = '😢 حظ أوفر المرة القادمة!';
@@ -296,7 +298,9 @@ function showWinModal(prize) {
     const amount = document.getElementById('modal-win-amount');
     
     title.textContent = '🎊 فوز عظيم!';
-    amount.textContent = `ربحت ${prize.amount} TON`;
+    // إضافة أيقونة TON
+    const tonIcon = '<img src="img/Ton.png" alt="TON" class="ton-icon">';
+    amount.innerHTML = `ربحت ${prize.amount} ${tonIcon}`;
     
     modal.classList.add('active');
     
