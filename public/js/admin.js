@@ -482,15 +482,21 @@ function renderWithdrawals(status = 'pending') {
         return;
     }
     
-    container.innerHTML = filtered.map(w => `
+    container.innerHTML = filtered.map(w => {
+        const date = w.requested_at ? new Date(w.requested_at).toLocaleString('ar-EG') : 'غير محدد';
+        const method = w.withdrawal_type || 'غير محدد';
+        const address = w.wallet_address || 'غير محدد';
+        const phone = w.phone_number || 'غير محدد';
+        
+        return `
         <div class="withdrawal-item">
             <div class="withdrawal-info">
-                <h4>👤 ${w.user_name} (${w.user_id})</h4>
+                <h4>👤 ${w.user_name || 'Unknown'} (${w.user_id})</h4>
                 <div class="withdrawal-details">
                     <span>💰 ${w.amount} TON</span>
-                    <span>📱 ${w.method}</span>
-                    <span>🕐 ${w.date}</span>
-                    ${w.method === 'TON' ? `<span>📍 ${w.address}</span>` : `<span>📞 ${w.number}</span>`}
+                    <span>📱 ${method}</span>
+                    <span>🕐 ${date}</span>
+                    ${method.toUpperCase().includes('TON') ? `<span>📍 ${address}</span>` : `<span>📞 ${phone}</span>`}
                 </div>
             </div>
             ${w.status === 'pending' ? `
@@ -499,13 +505,14 @@ function renderWithdrawals(status = 'pending') {
                     <button class="reject-btn" onclick="rejectWithdrawal(${w.id})">❌ رفض</button>
                 </div>
             ` : `
-                <span class="status-badge ${w.status}">${w.status === 'approved' ? '<img src="/img/checksup.png" alt="✓" style="width: 14px; height: 14px; vertical-align: middle; margin-left: 2px;"> مقبول' : '❌ مرفوض'}</span>
+                <span class="status-badge ${w.status}">${w.status === 'completed' ? '<img src="/img/checksup.png" alt="✓" style="width: 14px; height: 14px; vertical-align: middle; margin-left: 2px;"> مقبول' : '❌ مرفوض'}</span>
             `}
         </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
-function approveWithdrawal(id) {
+async function approveWithdrawal(id) {
     const withdrawal = adminData.withdrawals.find(w => w.id === id);
     if (!withdrawal) return;
     
@@ -513,22 +520,68 @@ function approveWithdrawal(id) {
         return;
     }
     
-    withdrawal.status = 'approved';
-    renderWithdrawals('pending');
-    showToast('✅ تم قبول طلب السحب', 'success');
-    
-    // TODO: Send actual TON transaction
+    try {
+        showLoading();
+        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
+        const response = await fetch(`${API_BASE_URL}/withdrawal/approve`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                withdrawal_id: id,
+                admin_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 1797127532
+            })
+        });
+        
+        const result = await response.json();
+        hideLoading();
+        
+        if (result.success) {
+            showToast('✅ تم قبول طلب السحب بنجاح', 'success');
+            loadWithdrawals(); // إعادة تحميل القائمة
+        } else {
+            showToast('❌ فشل قبول الطلب: ' + result.error, 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        console.error('Error approving withdrawal:', error);
+        showToast('❌ خطأ في قبول الطلب', 'error');
+    }
 }
 
-function rejectWithdrawal(id) {
+async function rejectWithdrawal(id) {
     const withdrawal = adminData.withdrawals.find(w => w.id === id);
     if (!withdrawal) return;
     
     const reason = prompt('سبب الرفض (اختياري):');
+    if (reason === null) return; // ألغى المستخدم
     
-    withdrawal.status = 'rejected';
-    renderWithdrawals('pending');
-    showToast('✅ تم رفض طلب السحب', 'success');
+    try {
+        showLoading();
+        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
+        const response = await fetch(`${API_BASE_URL}/withdrawal/reject`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                withdrawal_id: id,
+                admin_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 1797127532,
+                reason: reason || 'لم يتم تحديد سبب'
+            })
+        });
+        
+        const result = await response.json();
+        hideLoading();
+        
+        if (result.success) {
+            showToast('✅ تم رفض طلب السحب وإرجاع المبلغ', 'success');
+            loadWithdrawals(); // إعادة تحميل القائمة
+        } else {
+            showToast('❌ فشل رفض الطلب: ' + result.error, 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        console.error('Error rejecting withdrawal:', error);
+        showToast('❌ خطأ في رفض الطلب', 'error');
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════

@@ -11,9 +11,110 @@ import threading
 import subprocess
 import random
 import hashlib
+import requests  # لجلب سعر TON
 
 # إضافة المسار الحالي لـ 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# دالة لجلب سعر TON بالدولار
+def get_ton_price_usd():
+    """جلب سعر TON من HTX API"""
+    try:
+        response = requests.get(
+            'https://www.htx.com/-/x/pro/market/history/kline?period=1day&size=1&symbol=tonusdt',
+            timeout=5
+        )
+        data = response.json()
+        if data and 'data' in data and len(data['data']) > 0:
+            # سعر الإغلاق
+            price = float(data['data'][0]['close'])
+            return price
+        return 5.0  # سعر افتراضي
+    except Exception as e:
+        print(f"خطأ في جلب سعر TON: {e}")
+        return 5.0  # سعر افتراضي
+
+def calculate_egp_amount(ton_amount):
+    """حساب المبلغ بالجنيه المصري"""
+    ton_price_usd = get_ton_price_usd()
+    usd_to_egp = 47  # سعر الدولار بالجنيه
+    egp_amount = ton_amount * ton_price_usd * usd_to_egp
+    return round(egp_amount, 2)
+
+# BOT TOKEN & ADMIN IDS
+BOT_TOKEN = os.environ.get('BOT_TOKEN', '8481889290:AAHpTFQYm-261ra5lu4HXVsjYNmCp7uHqqk')
+ADMIN_IDS = [1797127532, 6603009212]
+
+def send_withdrawal_notification_to_admin(user_id, username, full_name, amount, withdrawal_type, wallet_address, phone_number, withdrawal_id):
+    """إرسال إشعار للأدمن في البوت عند طلب سحب"""
+    try:
+        from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
+        
+        # إنشاء رسالة مختلفة حسب نوع السحب
+        if withdrawal_type.upper() == 'VODAFONE' or withdrawal_type.upper() == 'VODAFONE_CASH':
+            egp_amount = calculate_egp_amount(amount)
+            vodafone_code = f"*9*7*{phone_number}*{int(egp_amount)}#"
+            
+            message = f"""
+🆕 <b>طلب سحب جديد - فودافون كاش</b>
+
+👤 <b>المستخدم:</b> {full_name}
+🆔 <b>ID:</b> <code>{user_id}</code>
+📱 <b>Username:</b> @{username if username else 'N/A'}
+
+💰 <b>المبلغ:</b> {amount} TON
+💵 <b>المبلغ بالجنيه:</b> {egp_amount} EGP
+📞 <b>رقم فودافون:</b> <code>{phone_number}</code>
+
+📋 <b>كود التحويل:</b>
+<code>{vodafone_code}</code>
+
+⏰ <b>التاريخ:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+🔢 <b>رقم الطلب:</b> #{withdrawal_id}
+            """
+        else:
+            message = f"""
+🆕 <b>طلب سحب جديد - TON Wallet</b>
+
+👤 <b>المستخدم:</b> {full_name}
+🆔 <b>ID:</b> <code>{user_id}</code>
+📱 <b>Username:</b> @{username if username else 'N/A'}
+
+💰 <b>المبلغ:</b> {amount} TON
+💳 <b>عنوان المحفظة:</b>
+<code>{wallet_address}</code>
+
+⏰ <b>التاريخ:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+🔢 <b>رقم الطلب:</b> #{withdrawal_id}
+            """
+        
+        # أزرار القبول والرفض
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("✅ قبول", callback_data=f"approve_withdrawal_{withdrawal_id}"),
+                InlineKeyboardButton("❌ رفض", callback_data=f"reject_withdrawal_{withdrawal_id}")
+            ]
+        ])
+        
+        # إرسال الرسالة لكل أدمن
+        bot = Bot(token=BOT_TOKEN)
+        for admin_id in ADMIN_IDS:
+            try:
+                bot.send_message(
+                    chat_id=admin_id,
+                    text=message,
+                    parse_mode='HTML',
+                    reply_markup=keyboard
+                )
+            except Exception as e:
+                print(f"Failed to send to admin {admin_id}: {e}")
+        
+        print(f"✅ Withdrawal notification sent to admins")
+        
+    except Exception as e:
+        print(f"❌ Error sending withdrawal notification: {e}")
+        import traceback
+        traceback.print_exc()
 
 app = Flask(__name__, static_folder='public', static_url_path='')
 CORS(app)  # السماح بـ CORS
@@ -842,8 +943,11 @@ def request_withdrawal():
         data = request.get_json()
         user_id = data.get('user_id')
         amount = float(data.get('amount', 0))
-        withdrawal_type = data.get('type') or data.get('withdrawal_type') or 'TON'  # قيمة افتراضية
+        withdrawal_type = data.get('withdrawal_type') or data.get('type') or 'TON'
         wallet_address = data.get('wallet_address') or data.get('address', '')
+        phone_number = data.get('phone_number', '')
+        
+        print(f"💸 Withdrawal request: user={user_id}, amount={amount}, type={withdrawal_type}")
         
         if not user_id or amount <= 0:
             return jsonify({'success': False, 'error': 'بيانات غير صالحة'}), 400
@@ -860,18 +964,24 @@ def request_withdrawal():
         cursor = conn.cursor()
         
         # التحقق من رصيد المستخدم
-        cursor.execute('SELECT balance FROM users WHERE user_id = ?', (user_id,))
+        cursor.execute('SELECT balance, username, full_name FROM users WHERE user_id = ?', (user_id,))
         user = cursor.fetchone()
         
-        if not user or user['balance'] < amount:
+        if not user:
+            conn.close()
+            return jsonify({'success': False, 'error': 'مستخدم غير موجود'}), 404
+            
+        if user['balance'] < amount:
             conn.close()
             return jsonify({'success': False, 'error': 'رصيد غير كافٍ'}), 400
         
         # إنشاء طلب السحب
         cursor.execute("""
-            INSERT INTO withdrawals (user_id, amount, withdrawal_type, wallet_address, status, requested_at)
-            VALUES (?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP)
-        """, (user_id, amount, withdrawal_type, wallet_address))
+            INSERT INTO withdrawals (user_id, amount, withdrawal_type, wallet_address, phone_number, status, requested_at)
+            VALUES (?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP)
+        """, (user_id, amount, withdrawal_type, wallet_address, phone_number))
+        
+        withdrawal_id = cursor.lastrowid
         
         # خصم المبلغ من رصيد المستخدم
         cursor.execute("""
@@ -889,11 +999,27 @@ def request_withdrawal():
         
         conn.close()
         
+        # إرسال إشعار للأدمن في البوت
+        try:
+            send_withdrawal_notification_to_admin(
+                user_id=user_id,
+                username=user['username'],
+                full_name=user['full_name'],
+                amount=amount,
+                withdrawal_type=withdrawal_type,
+                wallet_address=wallet_address,
+                phone_number=phone_number,
+                withdrawal_id=withdrawal_id
+            )
+        except Exception as e:
+            print(f"⚠️ Failed to send admin notification: {e}")
+        
         return jsonify({
             'success': True,
             'message': 'تم إرسال طلب السحب بنجاح',
             'data': {
-                'new_balance': new_balance
+                'new_balance': new_balance,
+                'withdrawal_id': withdrawal_id
             }
         })
         
@@ -944,6 +1070,99 @@ def get_all_withdrawals():
         
     except Exception as e:
         print(f"Error in get_all_withdrawals: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/withdrawal/approve', methods=['POST'])
+def approve_withdrawal():
+    """قبول طلب سحب"""
+    try:
+        data = request.get_json()
+        withdrawal_id = data.get('withdrawal_id')
+        admin_id = data.get('admin_id')
+        tx_hash = data.get('tx_hash', '')
+        
+        if not withdrawal_id:
+            return jsonify({'success': False, 'error': 'withdrawal_id is required'}), 400
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # تحديث حالة الطلب
+        cursor.execute("""
+            UPDATE withdrawals 
+            SET status = 'completed',
+                processed_at = CURRENT_TIMESTAMP,
+                processed_by = ?,
+                tx_hash = ?
+            WHERE id = ?
+        """, (admin_id, tx_hash, withdrawal_id))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'تم قبول طلب السحب بنجاح'
+        })
+        
+    except Exception as e:
+        print(f"Error in approve_withdrawal: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/withdrawal/reject', methods=['POST'])
+def reject_withdrawal():
+    """رفض طلب سحب وإرجاع المبلغ"""
+    try:
+        data = request.get_json()
+        withdrawal_id = data.get('withdrawal_id')
+        admin_id = data.get('admin_id')
+        reason = data.get('reason', 'لم يتم تحديد سبب')
+        
+        if not withdrawal_id:
+            return jsonify({'success': False, 'error': 'withdrawal_id is required'}), 400
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # الحصول على معلومات الطلب
+        cursor.execute('SELECT user_id, amount FROM withdrawals WHERE id = ?', (withdrawal_id,))
+        withdrawal = cursor.fetchone()
+        
+        if not withdrawal:
+            conn.close()
+            return jsonify({'success': False, 'error': 'طلب السحب غير موجود'}), 404
+        
+        # إرجاع المبلغ للمستخدم
+        cursor.execute("""
+            UPDATE users 
+            SET balance = balance + ?
+            WHERE user_id = ?
+        """, (withdrawal['amount'], withdrawal['user_id']))
+        
+        # تحديث حالة الطلب
+        cursor.execute("""
+            UPDATE withdrawals 
+            SET status = 'rejected',
+                processed_at = CURRENT_TIMESTAMP,
+                processed_by = ?,
+                rejection_reason = ?
+            WHERE id = ?
+        """, (admin_id, reason, withdrawal_id))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'تم رفض طلب السحب وإرجاع المبلغ'
+        })
+        
+    except Exception as e:
+        print(f"Error in reject_withdrawal: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
