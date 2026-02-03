@@ -1004,6 +1004,33 @@ def request_withdrawal():
         
         conn.close()
         
+        # التحقق من تفعيل السحب التلقائي
+        conn_check = get_db_connection()
+        cursor_check = conn_check.cursor()
+        cursor_check.execute("SELECT setting_value FROM bot_settings WHERE setting_key = 'auto_withdrawal_enabled'")
+        auto_withdrawal_row = cursor_check.fetchone()
+        conn_check.close()
+        
+        auto_withdrawal_enabled = auto_withdrawal_row and auto_withdrawal_row['setting_value'] == 'true' if auto_withdrawal_row else False
+        
+        # إذا كان السحب التلقائي مفعّل ونوع السحب TON
+        if auto_withdrawal_enabled and withdrawal_type.upper() == 'TON' and wallet_address:
+            print(f"🚀 Auto-withdrawal is enabled! Processing withdrawal #{withdrawal_id} automatically...")
+            try:
+                # استدعاء endpoint البوت لمعالجة السحب التلقائي
+                import requests
+                bot_api_url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
+                
+                # إرسال أمر خاص للبوت لمعالجة السحب تلقائياً
+                requests.post(bot_api_url, json={
+                    'chat_id': ADMIN_IDS[0],  # إرسال للأدمن الأول
+                    'text': f'🤖 AUTO_PROCESS_WITHDRAWAL_{withdrawal_id}'
+                }, timeout=5)
+                
+                print(f"✅ Auto-withdrawal request sent for withdrawal #{withdrawal_id}")
+            except Exception as auto_error:
+                print(f"⚠️ Auto-withdrawal trigger failed: {auto_error}")
+        
         # إرسال إشعار للأدمن في البوت
         try:
             send_withdrawal_notification_to_admin(

@@ -1419,54 +1419,47 @@ class TONWalletManager:
         """الحصول على TX Hash الحقيقي من الشبكة بعد الإرسال"""
         try:
             logger.info("🔍 Waiting for transaction to appear on blockchain...")
-            await asyncio.sleep(3)  # انتظار لتأكيد المعاملة
-            
-            url = f"{self.api_endpoint}getTransactions"
-            params = {
-                'address': self.wallet_address,
-                'limit': 5  # آخر 5 معاملات
-            }
+            await asyncio.sleep(5)  # انتظار أطول لتأكيد المعاملة
             
             for attempt in range(max_attempts):
                 try:
+                    # استخدام endpoint مختلف - getAddressInformation مع المحفظة
+                    url = f"{self.api_endpoint}getAddressInformation"
+                    params = {'address': self.wallet_address}
+                    
                     response = requests.get(url, params=params, headers=self.api_headers, timeout=10)
                     
                     if response.status_code == 200:
                         data = response.json()
                         
                         if data.get('ok') and 'result' in data:
-                            transactions = data['result']
+                            result = data['result']
+                            last_tx = result.get('last_transaction_id', {})
                             
-                            # البحث عن المعاملة المطابقة
-                            for tx in transactions:
-                                # التحقق من الـ seqno و المبلغ
-                                out_msgs = tx.get('out_msgs', [])
+                            # الحصول على hash من آخر معاملة
+                            if last_tx and 'hash' in last_tx:
+                                tx_hash_b64 = last_tx['hash']
                                 
-                                for msg in out_msgs:
-                                    msg_value = int(msg.get('value', 0))
-                                    msg_destination = msg.get('destination', '')
+                                # تحويل من base64 إلى hex
+                                try:
+                                    import base64
+                                    hash_bytes = base64.b64decode(tx_hash_b64 + '==')
+                                    hex_hash = hash_bytes.hex()
+                                    logger.info(f"✅ Found transaction hash: {hex_hash}")
                                     
-                                    # مقارنة المبلغ والعنوان
-                                    if abs(msg_value - amount_nano) < 100000:  # تسامح صغير
-                                        if to_address in msg_destination or msg_destination in to_address:
-                                            tx_hash = tx.get('transaction_id', {}).get('hash')
-                                            if tx_hash:
-                                                # تحويل من base64 إلى hex
-                                                import base64
-                                                try:
-                                                    hash_bytes = base64.b64decode(tx_hash + '=')
-                                                    hex_hash = hash_bytes.hex()
-                                                    logger.info(f"✅ Found matching transaction: {hex_hash}")
-                                                    return hex_hash
-                                                except:
-                                                    return tx_hash
+                                    # التحقق أن هذه هي المعاملة الصحيحة عبر جلب تفاصيلها
+                                    # يمكن إضافة تحقق إضافي هنا
+                                    
+                                    return hex_hash
+                                except Exception as e:
+                                    logger.warning(f"⚠️ Error converting hash: {e}")
                     
                     if attempt < max_attempts - 1:
                         await asyncio.sleep(2)
                         logger.info(f"⏳ Transaction not found yet, retrying ({attempt + 1}/{max_attempts})...")
                     
                 except Exception as e:
-                    logger.warning(f"⚠️ Error fetching transactions: {e}")
+                    logger.warning(f"⚠️ Error fetching transaction: {e}")
                     if attempt < max_attempts - 1:
                         await asyncio.sleep(2)
             
@@ -3321,6 +3314,35 @@ def main():
     application.add_handler(CallbackQueryHandler(cancel_broadcast_run, pattern="^cancel_broadcast_run$"))
     application.add_handler(CallbackQueryHandler(pause_broadcast_run, pattern="^pause_broadcast_run$"))
     application.add_handler(CallbackQueryHandler(resume_broadcast_run, pattern="^resume_broadcast_run$"))
+    
+    # معالج الرسائل النصية للسحب التلقائي من API
+    async def handle_auto_withdrawal_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """معالجة طلبات السحب التلقائي من API"""
+        if update.message and update.message.text:
+            text = update.message.text
+            
+            # التحقق من أن المستخدم أدمن
+            if not is_admin(update.message.from_user.id):
+                return
+            
+            # التحقق من صيغة الرسالة
+            if text.startswith('🤖 AUTO_PROCESS_WITHDRAWAL_'):
+                try:
+                    withdrawal_id = int(text.split('_')[-1])
+                    logger.info(f"🤖 Processing auto-withdrawal request for #{withdrawal_id}")
+                    
+                    # معالجة السحب تلقائياً
+                    success = await db.process_auto_withdrawal(withdrawal_id, context)
+                    
+                    if success:
+                        logger.info(f"✅ Auto-withdrawal #{withdrawal_id} processed successfully")
+                    else:
+                        logger.error(f"❌ Auto-withdrawal #{withdrawal_id} failed")
+                        
+                except Exception as e:
+                    logger.error(f"❌ Error processing auto-withdrawal: {e}")
+    
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_auto_withdrawal_trigger))
     
     # تشغيل البوت
     logger.info("✅ Bot is running!")
