@@ -716,6 +716,25 @@ async function processWithdrawal(data) {
     }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// 📝 TASKS PAGE
+// ═══════════════════════════════════════════════════════════════
+
+async function loadTasks() {
+    try {
+        // Initialize tasks module
+        if (window.TasksModule) {
+            await TasksModule.init();
+        }
+    } catch (error) {
+        console.error('Error loading tasks:', error);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 💸 WITHDRAWAL PAGE
+// ═══════════════════════════════════════════════════════════════
+
 async function loadWithdrawals() {
     try {
         const response = await API.getWithdrawals(TelegramApp.getUserId());

@@ -38,6 +38,9 @@ except ImportError:
     TON_SDK_AVAILABLE = False
     print("⚠️ tonsdk not available - install: pip install tonsdk requests")
 
+from flask import Flask, request, jsonify
+import threading
+
 from telegram import (
     Update, 
     InlineKeyboardButton, 
@@ -2440,8 +2443,136 @@ async def cancel_add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE)
 # 🚀 MAIN FUNCTION
 # ═══════════════════════════════════════════════════════════════
 
+# متغير عام للبوت
+bot_instance = None
+
+# ═══════════════════════════════════════════════════════════════
+# 🌐 FLASK SERVER FOR VERIFICATION
+# ═══════════════════════════════════════════════════════════════
+
+verification_app = Flask(__name__)
+
+@verification_app.route('/verify-subscription', methods=['POST'])
+def verify_subscription():
+    """التحقق من اشتراك المستخدم في القناة"""
+    global bot_instance
+    
+    if not bot_instance:
+        return jsonify({'success': False, 'is_subscribed': False, 'error': 'Bot not initialized'}), 500
+    
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        channel_username = data.get('channel_username')
+        
+        if not user_id or not channel_username:
+            return jsonify({'success': False, 'is_subscribed': False, 'error': 'Missing parameters'}), 400
+        
+        # إزالة @ إذا كان موجود
+        if channel_username.startswith('@'):
+            channel_username = channel_username[1:]
+        
+        # التحقق من الاشتراك
+        try:
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            member = loop.run_until_complete(
+                bot_instance.bot.get_chat_member(chat_id=f'@{channel_username}', user_id=user_id)
+            )
+            
+            loop.close()
+            
+            # التحقق من حالة العضوية
+            is_subscribed = member.status in ['member', 'administrator', 'creator']
+            
+            return jsonify({
+                'success': True,
+                'is_subscribed': is_subscribed,
+                'status': member.status
+            })
+            
+        except Exception as e:
+            logger.error(f"Error checking subscription: {e}")
+            return jsonify({
+                'success': False,
+                'is_subscribed': False,
+                'error': str(e)
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error in verify_subscription: {e}")
+        return jsonify({'success': False, 'is_subscribed': False, 'error': str(e)}), 500
+
+@verification_app.route('/check-bot-admin', methods=['POST'])
+def check_bot_admin():
+    """التحقق من أن البوت مشرف في القناة"""
+    global bot_instance
+    
+    if not bot_instance:
+        return jsonify({'success': False, 'is_admin': False, 'error': 'Bot not initialized'}), 500
+    
+    try:
+        data = request.get_json()
+        channel_username = data.get('channel_username')
+        
+        if not channel_username:
+            return jsonify({'success': False, 'is_admin': False, 'error': 'Missing channel_username'}), 400
+        
+        # إزالة @ إذا كان موجود
+        if channel_username.startswith('@'):
+            channel_username = channel_username[1:]
+        
+        # التحقق من أن البوت مشرف
+        try:
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            # الحصول على معلومات البوت في القناة
+            bot_member = loop.run_until_complete(
+                bot_instance.bot.get_chat_member(chat_id=f'@{channel_username}', user_id=bot_instance.bot.id)
+            )
+            
+            loop.close()
+            
+            # التحقق من أن البوت مشرف أو صاحب القناة
+            is_admin = bot_member.status in ['administrator', 'creator']
+            
+            return jsonify({
+                'success': True,
+                'is_admin': is_admin,
+                'status': bot_member.status
+            })
+            
+        except Exception as e:
+            logger.error(f"Error checking bot admin: {e}")
+            return jsonify({
+                'success': False,
+                'is_admin': False,
+                'error': str(e)
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error in check_bot_admin: {e}")
+        return jsonify({'success': False, 'is_admin': False, 'error': str(e)}), 500
+
+def run_flask_server():
+    """تشغيل Flask server في thread منفصل"""
+    try:
+        logger.info("🌐 Starting Flask verification server on port 8081...")
+        verification_app.run(host='0.0.0.0', port=8081, debug=False, use_reloader=False)
+    except Exception as e:
+        logger.error(f"Failed to start Flask server: {e}")
+
+# ═══════════════════════════════════════════════════════════════
+# 🚀 MAIN FUNCTION
+# ═══════════════════════════════════════════════════════════════
+
 def main():
     """تشغيل البوت"""
+    global bot_instance
     
     # التحقق من التوكن
     if BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
@@ -2455,6 +2586,12 @@ def main():
     
     # إنشاء التطبيق
     application = Application.builder().token(BOT_TOKEN).build()
+    bot_instance = application
+    
+    # تشغيل Flask server في thread منفصل
+    flask_thread = threading.Thread(target=run_flask_server, daemon=True)
+    flask_thread.start()
+    logger.info("✅ Flask verification server started on port 8081")
     
     # إضافة المعالجات
     application.add_handler(CommandHandler("start", start_command))

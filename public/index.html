@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>🐼 Panda Giveaways</title>
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/tasks.css">
     
     <!-- Telegram Web App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -90,7 +91,7 @@
                     </lottie-player>
                     المهام
                 </h2>
-                <p class="page-description">أكمل المهام واحصل على مكافآت!</p>
+                <p class="page-description">أكمل المهام واحصل على لفات مجانية!</p>
             </div>
 
             <div class="tasks-progress">
@@ -103,8 +104,14 @@
             </div>
 
             <!-- قائمة المهام -->
-            <div class="tasks-list" id="tasks-list">
-                <!-- سيتم ملؤها ديناميكياً -->
+            <div class="tasks-container" id="tasks-list">
+                <!-- Loading state -->
+                <div class="tasks-loading">
+                    <lottie-player src="./img/login.json" background="transparent" speed="1" 
+                        style="width: 100px; height: 100px;" loop autoplay>
+                    </lottie-player>
+                    <p>جاري تحميل المهام...</p>
+                </div>
             </div>
         </section>
 
@@ -282,6 +289,7 @@
     <!-- Scripts -->
     <script src="js/config.js"></script>
     <script src="js/api.js"></script>
+    <script src="js/tasks.js"></script>
     <script src="js/channels.js"></script>
     <script src="js/wheel.js"></script>
     <script src="js/app.js"></script>

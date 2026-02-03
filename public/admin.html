@@ -431,6 +431,79 @@
         </div>
     </div>
 
+    <!-- 📝 Add Task Modal -->
+    <div id="add-task-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📝 إضافة مهمة جديدة</h2>
+                <span class="close-btn" onclick="closeModal('add-task-modal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>اسم المهمة</label>
+                    <input type="text" id="task-name" placeholder="مثال: اشترك في قناة Panda Giveaways" maxlength="50">
+                    <small class="char-count" id="name-count">0/50</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>الرابط</label>
+                    <input type="url" id="task-link" placeholder="https://t.me/YourChannel" maxlength="200">
+                    <small class="char-count" id="link-count">0/200</small>
+                    <small style="color: #8b95a1; display: block; margin-top: 4px;">رابط القناة أو الرابط المطلوب</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>نوع المهمة</label>
+                    <div class="task-type-selector">
+                        <button type="button" class="type-btn active" id="type-channel" data-type="channel">
+                            <span class="type-icon">📢</span>
+                            <span>قناة / مجموعة</span>
+                        </button>
+                        <button type="button" class="type-btn" id="type-link" data-type="link">
+                            <span class="type-icon">🔗</span>
+                            <span>رابط عادي</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="channel-username-group">
+                    <label>يوزرنيم القناة (للتحقق)</label>
+                    <input type="text" id="channel-username" placeholder="@YourChannel أو YourChannel">
+                    <small style="color: #c4b5fd;">مطلوب للتحقق من الاشتراك - يجب أن يكون البوت مشرف</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>الوصف (اختياري)</label>
+                    <textarea id="task-description" rows="2" placeholder="وصف قصير للمهمة..." maxlength="100"></textarea>
+                    <small class="char-count" id="desc-count">0/100</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>المكافأة (عدد اللفات)</label>
+                    <input type="number" id="task-reward" min="1" max="10" value="1" step="1">
+                </div>
+                
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="task-pinned">
+                        <span>📌 تثبيت في الأعلى</span>
+                    </label>
+                </div>
+                
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="task-active" checked>
+                        <span>✅ نشط</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="secondary-btn" onclick="closeModal('add-task-modal')">إلغاء</button>
+                <button class="primary-btn" onclick="createTask()">✅ إنشاء المهمة</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Container -->
     <div id="toast-container" class="toast-container"></div>
 

@@ -12,22 +12,25 @@
     align-items: center;
     justify-content: center;
     gap: 10px;
-    padding: 5px 20px 5px 20px;
+    padding: 10px 20px 8px 20px;
     background: transparent;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
 .page-title-icon {
-    width: 26px;
-    height: 26px;
-    opacity: 0.7;
-    filter: brightness(0) saturate(100%) invert(61%) sepia(7%) saturate(555%) hue-rotate(169deg) brightness(92%) contrast(87%);
+    width: 24px;
+    height: 24px;
+    opacity: 0.9;
+    filter: brightness(0) saturate(100%) invert(85%) sepia(47%) saturate(1067%) hue-rotate(359deg) brightness(103%) contrast(101%);
 }
 
 .page-title {
     margin: 0;
-    font-size: 20px;
-    font-weight: 600;
-    color: #8b95a1;
+    font-size: 18px;
+    font-weight: 700;
+    color: #ffd436;
     text-align: center;
 }
 

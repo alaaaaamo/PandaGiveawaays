@@ -139,14 +139,31 @@ def init_database():
             task_type TEXT NOT NULL,
             task_name TEXT NOT NULL,
             task_description TEXT,
-            channel_id TEXT,
-            link_url TEXT,
-            reward_amount REAL DEFAULT 0,
+            task_link TEXT,
+            channel_username TEXT,
+            is_pinned INTEGER DEFAULT 0,
             is_active INTEGER DEFAULT 1,
             added_by INTEGER NOT NULL,
             added_at TEXT NOT NULL
         )
     """)
+    
+    # التحقق من الأعمدة الجديدة وإضافتها إن لم تكن موجودة
+    try:
+        cursor.execute("SELECT is_pinned FROM tasks LIMIT 1")
+    except:
+        cursor.execute("ALTER TABLE tasks ADD COLUMN is_pinned INTEGER DEFAULT 0")
+        
+    try:
+        cursor.execute("SELECT task_link FROM tasks LIMIT 1")
+    except:
+        cursor.execute("ALTER TABLE tasks ADD COLUMN task_link TEXT")
+        
+    try:
+        cursor.execute("SELECT channel_username FROM tasks LIMIT 1")
+    except:
+        cursor.execute("ALTER TABLE tasks ADD COLUMN channel_username TEXT")
+
     
     # جدول إنجاز المهام
     cursor.execute("""
@@ -610,43 +627,192 @@ def get_bot_stats_route():
 
 @app.route('/api/tasks', methods=['GET'])
 def get_tasks():
-    """الحصول على المهام النشطة"""
+    """الحصول على المهام النشطة للمستخدمين"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM tasks WHERE is_active = 1 ORDER BY added_at DESC")
-        tasks = [dict(row) for row in cursor.fetchall()]
+        
+        cursor.execute("""
+            SELECT id, task_type, task_name, task_description, task_link, 
+                   channel_username, is_pinned
+            FROM tasks 
+            WHERE is_active = 1 
+            ORDER BY is_pinned DESC, id DESC
+        """)
+        
+        tasks = []
+        for row in cursor.fetchall():
+            tasks.append({
+                'id': row[0],
+                'task_type': row[1],
+                'task_name': row[2],
+                'task_description': row[3],
+                'task_link': row[4],
+                'channel_username': row[5],
+                'is_pinned': row[6]
+            })
+        
         conn.close()
         return jsonify({
             'success': True,
-            'data': tasks
+            'tasks': tasks
         })
+        
     except Exception as e:
         print(f"Error in get_tasks: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
 
-@app.route('/api/user/<int:user_id>/tasks', methods=['GET'])
-def get_user_tasks(user_id):
+@app.route('/api/user/<int:user_id>/completed-tasks', methods=['GET'])
+def get_user_completed_tasks(user_id):
     """الحصول على المهام المكتملة للمستخدم"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+        
         cursor.execute("""
-            SELECT ut.*, t.task_name, t.reward_amount 
-            FROM user_tasks ut
-            JOIN tasks t ON ut.task_id = t.id
-            WHERE ut.user_id = ?
-            ORDER BY ut.completed_at DESC
+            SELECT task_id, completed_at, verified
+            FROM user_tasks
+            WHERE user_id = ? AND verified = 1
         """, (user_id,))
-        tasks = [dict(row) for row in cursor.fetchall()]
+        
+        completed_tasks = []
+        for row in cursor.fetchall():
+            completed_tasks.append({
+                'task_id': row[0],
+                'completed_at': row[1],
+                'verified': row[2]
+            })
+        
         conn.close()
         return jsonify({
             'success': True,
-            'data': tasks
+            'completed_tasks': completed_tasks
         })
+        
     except Exception as e:
-        print(f"Error in get_user_tasks: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"Error in get_user_completed_tasks: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/tasks/<int:task_id>/verify', methods=['POST'])
+def verify_task_completion(task_id):
+    """التحقق من إتمام المهمة عبر البوت"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        
+        if not user_id:
+            return jsonify({'success': False, 'message': 'معرف المستخدم مطلوب'}), 400
+        
+        # جلب بيانات المهمة
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT task_type, channel_username
+            FROM tasks
+            WHERE id = ? AND is_active = 1
+        """, (task_id,))
+        
+        task = cursor.fetchone()
+        if not task:
+            conn.close()
+            return jsonify({'success': False, 'message': 'المهمة غير موجودة'}), 404
+        
+        task_type = task[0]
+        channel_username = task[1]
+        
+        # التحقق من أن المستخدم لم يكمل المهمة من قبل
+        cursor.execute("""
+            SELECT id FROM user_tasks
+            WHERE user_id = ? AND task_id = ? AND verified = 1
+        """, (user_id, task_id))
+        
+        if cursor.fetchone():
+            conn.close()
+            return jsonify({'success': False, 'message': 'لقد أكملت هذه المهمة من قبل'})
+        
+        # إذا كانت قناة، التحقق من الاشتراك عبر البوت
+        if task_type == 'channel' and channel_username:
+            try:
+                # إرسال طلب للبوت للتحقق من الاشتراك
+                import requests
+                bot_url = 'http://localhost:8081/verify-subscription'
+                verify_response = requests.post(bot_url, json={
+                    'user_id': user_id,
+                    'channel_username': channel_username
+                }, timeout=5)
+                
+                verify_data = verify_response.json()
+                
+                if not verify_data.get('is_subscribed', False):
+                    conn.close()
+                    return jsonify({
+                        'success': False, 
+                        'message': '❌ لم يتم العثور على اشتراكك! تأكد من الاشتراك في القناة أولاً'
+                    })
+                    
+            except Exception as e:
+                print(f"Error verifying subscription: {e}")
+                conn.close()
+                return jsonify({
+                    'success': False,
+                    'message': '❌ خطأ في التحقق من الاشتراك. حاول مرة أخرى'
+                })
+        
+        # تسجيل إتمام المهمة
+        now = datetime.now().isoformat()
+        
+        cursor.execute("""
+            INSERT OR REPLACE INTO user_tasks (user_id, task_id, completed_at, verified)
+            VALUES (?, ?, ?, 1)
+        """, (user_id, task_id, now))
+        
+        # التحقق من عدد المهام المكتملة
+        cursor.execute("""
+            SELECT COUNT(*) FROM user_tasks
+            WHERE user_id = ? AND verified = 1
+        """, (user_id,))
+        
+        completed_count = cursor.fetchone()[0]
+        
+        # كل 5 مهمات = 1 دورة
+        new_spin = 0
+        if completed_count % 5 == 0:
+            cursor.execute("""
+                UPDATE users 
+                SET available_spins = available_spins + 1
+                WHERE user_id = ?
+            """, (user_id,))
+            new_spin = 1
+        
+        conn.commit()
+        
+        # جلب الدورات الجديدة
+        cursor.execute("SELECT available_spins FROM users WHERE user_id = ?", (user_id,))
+        result = cursor.fetchone()
+        new_spins = result[0] if result else 0
+        
+        conn.close()
+        
+        message = f'✅ تم إتمام المهمة! ({completed_count}/5)'
+        if new_spin:
+            message = f'🎉 تم إتمام المهمة! حصلت على دورة جديدة! (أكملت 5 مهمات)'
+        
+        return jsonify({
+            'success': True,
+            'message': message,
+            'completed_count': completed_count,
+            'new_spin_awarded': new_spin == 1,
+            'total_spins': new_spins
+        })
+        
+    except Exception as e:
+        print(f"Error in verify_task_completion: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': f'خطأ: {str(e)}'}), 500
 
 @app.route('/api/user/<int:user_id>/withdrawals', methods=['GET'])
 def get_user_withdrawals(user_id):
@@ -863,62 +1029,135 @@ def manage_channels():
         print(f"Error in manage_channels: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/admin/tasks', methods=['POST', 'DELETE'])
+@app.route('/api/admin/tasks', methods=['GET', 'POST', 'DELETE'])
 def manage_tasks():
     """إدارة المهام"""
     try:
-        if request.method == 'POST':
+        if request.method == 'GET':
+            # جلب جميع المهام للإدمن
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT id, task_type, task_name, task_description, task_link, 
+                       channel_username, is_pinned, is_active, added_at
+                FROM tasks
+                ORDER BY is_pinned DESC, added_at DESC
+            """)
+            
+            tasks = []
+            for row in cursor.fetchall():
+                tasks.append({
+                    'id': row[0],
+                    'task_type': row[1],
+                    'task_name': row[2],
+                    'task_description': row[3],
+                    'task_link': row[4],
+                    'channel_username': row[5],
+                    'is_pinned': row[6],
+                    'is_active': row[7],
+                    'added_at': row[8]
+                })
+            
+            conn.close()
+            return jsonify({'success': True, 'tasks': tasks})
+            
+        elif request.method == 'POST':
+            # إضافة مهمة جديدة
             data = request.get_json()
-            task_type = data.get('task_type')  # 'channel', 'link'
+            
             task_name = data.get('task_name')
-            task_description = data.get('task_description')
-            reward_amount = data.get('reward_amount', 0)
-            admin_id = data.get('admin_id')
+            task_link = data.get('task_link')
+            task_type = data.get('task_type', 'link')
+            task_description = data.get('task_description', '')
+            channel_username = data.get('channel_username', '')
+            is_pinned = 1 if data.get('is_pinned', False) else 0
+            is_active = 1 if data.get('is_active', True) else 0
             
-            # For channel tasks
-            channel_id = data.get('channel_id')
-            # For link tasks
-            link_url = data.get('link_url')
-            duration = data.get('duration', 10)  # seconds
+            # التحقق من البيانات المطلوبة
+            if not task_name or not task_link:
+                return jsonify({
+                    'success': False, 
+                    'message': 'اسم المهمة والرابط مطلوبان'
+                }), 400
             
-            if not all([task_type, task_name, admin_id]):
-                return jsonify({'success': False, 'error': 'Missing parameters'}), 400
+            # إذا كان نوع المهمة قناة، التحقق من أن البوت مشرف
+            if task_type == 'channel' and channel_username:
+                try:
+                    import requests
+                    bot_url = 'http://localhost:8081/check-bot-admin'
+                    check_response = requests.post(bot_url, json={
+                        'channel_username': channel_username
+                    }, timeout=5)
+                    
+                    check_data = check_response.json()
+                    
+                    if not check_data.get('is_admin', False):
+                        return jsonify({
+                            'success': False,
+                            'message': '❌ البوت ليس مشرف في هذه القناة! أضف البوت كمشرف أولاً'
+                        }), 400
+                except Exception as e:
+                    print(f"Error checking bot admin: {e}")
+                    # نكمل حتى لو فشل التحقق
+                    pass
             
             conn = get_db_connection()
             cursor = conn.cursor()
             now = datetime.now().isoformat()
             
-            cursor.execute("""
-                INSERT INTO tasks (task_type, task_name, task_description, channel_id, link_url, reward_amount, is_active, added_by, added_at)
-                VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
-            """, (task_type, task_name, task_description, channel_id, link_url, reward_amount, admin_id, now))
+            # افتراض admin_id = 1797127532 (يمكن تحديثه من Telegram WebApp)
+            admin_id = 1797127532
             
+            cursor.execute("""
+                INSERT INTO tasks (
+                    task_type, task_name, task_description, task_link, 
+                    channel_username, is_pinned, is_active, 
+                    added_by, added_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                task_type, task_name, task_description, task_link,
+                channel_username, is_pinned, is_active,
+                admin_id, now
+            ))
+            
+            task_id = cursor.lastrowid
             conn.commit()
             conn.close()
             
-            return jsonify({'success': True, 'message': 'Task added successfully'})
+            return jsonify({
+                'success': True, 
+                'message': 'تم إضافة المهمة بنجاح',
+                'task_id': task_id
+            })
             
         elif request.method == 'DELETE':
-            # Delete task
+            # حذف مهمة
             task_id = request.args.get('task_id')
             if not task_id:
-                return jsonify({'success': False, 'error': 'Task ID required'}), 400
+                return jsonify({'success': False, 'message': 'معرف المهمة مطلوب'}), 400
             
             conn = get_db_connection()
             cursor = conn.cursor()
+            
+            # تعطيل المهمة بدلاً من حذفها
             cursor.execute("""
                 UPDATE tasks 
                 SET is_active = 0 
                 WHERE id = ?
             """, (task_id,))
+            
             conn.commit()
             conn.close()
             
-            return jsonify({'success': True, 'message': 'Task removed'})
+            return jsonify({'success': True, 'message': 'تم تعطيل المهمة'})
             
     except Exception as e:
         print(f"Error in manage_tasks: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': f'خطأ في السيرفر: {str(e)}'}), 500
 
 # ═══════════════════════════════════════════════════════════════
 # 🎁 WHEEL PRIZES MANAGEMENT
