@@ -1004,50 +1004,27 @@ def request_withdrawal():
         
         conn.close()
         
-        # التحقق من تفعيل السحب التلقائي
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT setting_value FROM bot_settings WHERE setting_key = 'auto_withdrawal_enabled'")
-        auto_withdrawal_row = cursor.fetchone()
-        auto_withdrawal_enabled = auto_withdrawal_row and auto_withdrawal_row['setting_value'] == 'true'
-        conn.close()
-        
-        # إرسال إشعار للأدمن في البوت (فقط إذا كان السحب التلقائي معطل)
-        if not auto_withdrawal_enabled:
-            try:
-                send_withdrawal_notification_to_admin(
-                    user_id=user_id,
-                    username=user['username'],
-                    full_name=user['full_name'],
-                    amount=amount,
-                    withdrawal_type=withdrawal_type,
-                    wallet_address=wallet_address,
-                    phone_number=phone_number,
-                    withdrawal_id=withdrawal_id
-                )
-            except Exception as e:
-                print(f"⚠️ Failed to send admin notification: {e}")
-        else:
-            print(f"💡 Auto-withdrawal is enabled - Skipping admin notification for withdrawal #{withdrawal_id}")
-            # إرسال طلب للبوت لمعالجة السحب تلقائياً
-            try:
-                # إرسال webhook للبوت لمعالجة السحب
-                import requests as req
-                webhook_url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
-                req.post(webhook_url, json={
-                    'chat_id': ADMIN_IDS[0],  # إرسال لأول أدمن فقط كإشعار داخلي
-                    'text': f'🤖 معالجة سحب تلقائي #{withdrawal_id}\n💰 {amount} TON\n👤 {user["full_name"]}'
-                }, timeout=5)
-            except:
-                pass
+        # إرسال إشعار للأدمن في البوت
+        try:
+            send_withdrawal_notification_to_admin(
+                user_id=user_id,
+                username=user['username'],
+                full_name=user['full_name'],
+                amount=amount,
+                withdrawal_type=withdrawal_type,
+                wallet_address=wallet_address,
+                phone_number=phone_number,
+                withdrawal_id=withdrawal_id
+            )
+        except Exception as e:
+            print(f"⚠️ Failed to send admin notification: {e}")
         
         return jsonify({
             'success': True,
-            'message': 'تم إرسال طلب السحب بنجاح' if not auto_withdrawal_enabled else 'جاري معالجة السحب تلقائياً...',
+            'message': 'تم إرسال طلب السحب بنجاح',
             'data': {
                 'new_balance': new_balance,
-                'withdrawal_id': withdrawal_id,
-                'auto_withdrawal': auto_withdrawal_enabled
+                'withdrawal_id': withdrawal_id
             }
         })
         

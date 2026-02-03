@@ -1419,17 +1419,17 @@ class TONWalletManager:
         """الحصول على TX Hash الحقيقي من الشبكة بعد الإرسال"""
         try:
             logger.info("🔍 Waiting for transaction to appear on blockchain...")
-            await asyncio.sleep(5)  # انتظار أطول لتأكيد المعاملة
+            await asyncio.sleep(3)  # انتظار لتأكيد المعاملة
             
             url = f"{self.api_endpoint}getTransactions"
             params = {
                 'address': self.wallet_address,
-                'limit': 10  # آخر 10 معاملات
+                'limit': 5  # آخر 5 معاملات
             }
             
             for attempt in range(max_attempts):
                 try:
-                    response = requests.get(url, params=params, headers=self.api_headers, timeout=15)
+                    response = requests.get(url, params=params, headers=self.api_headers, timeout=10)
                     
                     if response.status_code == 200:
                         data = response.json()
@@ -1439,24 +1439,7 @@ class TONWalletManager:
                             
                             # البحث عن المعاملة المطابقة
                             for tx in transactions:
-                                # التحقق من الـ seqno أولاً
-                                tx_seqno = tx.get('seqno')
-                                if tx_seqno == seqno:
-                                    # وجدنا المعاملة بنفس الـ seqno
-                                    tx_hash = tx.get('transaction_id', {}).get('hash')
-                                    if tx_hash:
-                                        # تحويل من base64 إلى hex
-                                        import base64
-                                        try:
-                                            hash_bytes = base64.b64decode(tx_hash + '==')
-                                            hex_hash = hash_bytes.hex()
-                                            logger.info(f"✅ Found matching transaction by seqno: {hex_hash}")
-                                            return hex_hash
-                                        except Exception as e:
-                                            logger.warning(f"Error converting hash: {e}")
-                                            return tx_hash
-                                
-                                # التحقق البديل بالمبلغ والعنوان
+                                # التحقق من الـ seqno و المبلغ
                                 out_msgs = tx.get('out_msgs', [])
                                 
                                 for msg in out_msgs:
@@ -1651,18 +1634,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )])
     
     # زر إثباتات الدفع
-    if PAYMENT_PROOF_CHANNEL:
-        # تحويل @channel إلى رابط https://t.me/channel
-        channel_url = PAYMENT_PROOF_CHANNEL
-        if channel_url.startswith('@'):
-            channel_url = f"https://t.me/{channel_url[1:]}"
-        elif not channel_url.startswith('http'):
-            channel_url = f"https://t.me/{channel_url}"
-        
-        keyboard.append([InlineKeyboardButton(
-            "💎 إثباتات الدفع",
-            url=channel_url
-        )])
+    keyboard.append([InlineKeyboardButton(
+        "💎 إثباتات الدفع",
+        url=PAYMENT_PROOF_CHANNEL
+    )])
     
     # زر لوحة الأدمن (للأدمن فقط)
     if is_admin(user_id):
@@ -2048,19 +2023,10 @@ async def back_to_start_callback(update: Update, context: ContextTypes.DEFAULT_T
         switch_inline_query=ref_text
     )])
     
-    # زر إثباتات الدفع
-    if PAYMENT_PROOF_CHANNEL:
-        # تحويل @channel إلى رابط https://t.me/channel
-        channel_url = PAYMENT_PROOF_CHANNEL
-        if channel_url.startswith('@'):
-            channel_url = f"https://t.me/{channel_url[1:]}"
-        elif not channel_url.startswith('http'):
-            channel_url = f"https://t.me/{channel_url}"
-        
-        keyboard.append([InlineKeyboardButton(
-            "💎 إثباتات الدفع",
-            url=channel_url
-        )])
+    keyboard.append([InlineKeyboardButton(
+        "💎 إثباتات الدفع",
+        url=PAYMENT_PROOF_CHANNEL
+    )])
     
     if is_admin(user_id):
         keyboard.append([
@@ -3356,42 +3322,9 @@ def main():
     application.add_handler(CallbackQueryHandler(pause_broadcast_run, pattern="^pause_broadcast_run$"))
     application.add_handler(CallbackQueryHandler(resume_broadcast_run, pattern="^resume_broadcast_run$"))
     
-    # إضافة job للتحقق من السحوبات التلقائية كل 30 ثانية
-    application.job_queue.run_repeating(
-        check_pending_auto_withdrawals,
-        interval=30,
-        first=10
-    )
-    
     # تشغيل البوت
     logger.info("✅ Bot is running!")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
-
-async def check_pending_auto_withdrawals(context: ContextTypes.DEFAULT_TYPE):
-    """التحقق من طلبات السحب المعلقة ومعالجتها تلقائياً"""
-    try:
-        # التحقق من تفعيل السحب التلقائي
-        if not db.is_auto_withdrawal_enabled():
-            return
-        
-        # الحصول على طلبات السحب المعلقة
-        pending = db.get_pending_withdrawals()
-        
-        for withdrawal in pending:
-            # التحقق من نوع السحب
-            if withdrawal['withdrawal_type'] == 'ton' and withdrawal['wallet_address']:
-                logger.info(f"🤖 Processing auto-withdrawal #{withdrawal['id']}")
-                
-                # معالجة السحب تلقائياً
-                success = await db.process_auto_withdrawal(withdrawal['id'], context)
-                
-                if success:
-                    logger.info(f"✅ Auto-withdrawal #{withdrawal['id']} completed")
-                else:
-                    logger.warning(f"⚠️ Auto-withdrawal #{withdrawal['id']} failed")
-                    
-    except Exception as e:
-        logger.error(f"❌ Error in check_pending_auto_withdrawals: {e}")
 
 if __name__ == "__main__":
     main()

@@ -223,7 +223,7 @@ function updatePrizesInfo() {
     
     const statusEl = document.getElementById('system-status');
     if (isValid) {
-        statusEl.innerHTML = '<img src="/img/payment-success.svg" alt="✓" style="width: 14px; height: 14px; vertical-align: middle; margin-left: 2px;"> صحيح';
+        statusEl.innerHTML = '<img src="/img/checksup.png" alt="✓" style="width: 14px; height: 14px; vertical-align: middle; margin-left: 2px;"> صحيح';
         statusEl.className = 'status-ok';
     } else {
         statusEl.textContent = `✗ خطأ (${totalProbability}%)`;
@@ -501,11 +501,11 @@ function renderWithdrawals(status = 'pending') {
             </div>
             ${w.status === 'pending' ? `
                 <div class="withdrawal-actions">
-                    <button class="approve-btn" onclick="approveWithdrawal(${w.id})"><img src="/img/payment-success.svg" alt="✓" style="width: 14px; height: 14px; vertical-align: middle; margin-left: 2px;"> قبول</button>
+                    <button class="approve-btn" onclick="approveWithdrawal(${w.id})"><img src="/img/checksup.png" alt="✓" style="width: 14px; height: 14px; vertical-align: middle; margin-left: 2px;"> قبول</button>
                     <button class="reject-btn" onclick="rejectWithdrawal(${w.id})">❌ رفض</button>
                 </div>
             ` : `
-                <span class="status-badge ${w.status}">${w.status === 'completed' ? '<img src="/img/payment-success.svg" alt="✓" style="width: 14px; height: 14px; vertical-align: middle; margin-left: 2px;"> مقبول' : '❌ مرفوض'}</span>
+                <span class="status-badge ${w.status}">${w.status === 'completed' ? '<img src="/img/checksup.png" alt="✓" style="width: 14px; height: 14px; vertical-align: middle; margin-left: 2px;"> مقبول' : '❌ مرفوض'}</span>
             `}
         </div>
         `;
@@ -731,7 +731,7 @@ function editTask(taskId) {
     
     const saveBtn = document.getElementById('task-submit-btn');
     if (saveBtn) {
-        saveBtn.innerHTML = '<img src="/img/payment-success.svg" alt="✓" style="width: 14px; height: 14px; vertical-align: middle; margin-left: 2px;"> حفظ التعديل';
+        saveBtn.innerHTML = '<img src="/img/checksup.png" alt="✓" style="width: 14px; height: 14px; vertical-align: middle; margin-left: 2px;"> حفظ التعديل';
         saveBtn.onclick = () => updateTask(taskId);
     }
     
