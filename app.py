@@ -842,8 +842,8 @@ def request_withdrawal():
         data = request.get_json()
         user_id = data.get('user_id')
         amount = float(data.get('amount', 0))
-        withdrawal_type = data.get('type')  # 'ton' or 'usdt'
-        wallet_address = data.get('wallet_address', '')
+        withdrawal_type = data.get('type') or data.get('withdrawal_type') or 'TON'  # قيمة افتراضية
+        wallet_address = data.get('wallet_address') or data.get('address', '')
         
         if not user_id or amount <= 0:
             return jsonify({'success': False, 'error': 'بيانات غير صالحة'}), 400
@@ -869,8 +869,8 @@ def request_withdrawal():
         
         # إنشاء طلب السحب
         cursor.execute("""
-            INSERT INTO withdrawals (user_id, amount, withdrawal_type, wallet_address, status)
-            VALUES (?, ?, ?, ?, 'pending')
+            INSERT INTO withdrawals (user_id, amount, withdrawal_type, wallet_address, status, requested_at)
+            VALUES (?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP)
         """, (user_id, amount, withdrawal_type, wallet_address))
         
         # خصم المبلغ من رصيد المستخدم
@@ -899,6 +899,51 @@ def request_withdrawal():
         
     except Exception as e:
         print(f"Error in request_withdrawal: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/withdrawals', methods=['GET'])
+def get_all_withdrawals():
+    """الحصول على جميع طلبات السحب (للأدمن)"""
+    try:
+        status = request.args.get('status', 'all')  # all, pending, completed, rejected
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        if status == 'all':
+            cursor.execute("""
+                SELECT 
+                    w.*,
+                    u.full_name as user_name,
+                    u.username
+                FROM withdrawals w
+                JOIN users u ON w.user_id = u.user_id
+                ORDER BY w.requested_at DESC
+            """)
+        else:
+            cursor.execute("""
+                SELECT 
+                    w.*,
+                    u.full_name as user_name,
+                    u.username
+                FROM withdrawals w
+                JOIN users u ON w.user_id = u.user_id
+                WHERE w.status = ?
+                ORDER BY w.requested_at DESC
+            """, (status,))
+        
+        withdrawals = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'data': withdrawals
+        })
+        
+    except Exception as e:
+        print(f"Error in get_all_withdrawals: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
