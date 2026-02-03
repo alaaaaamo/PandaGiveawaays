@@ -1008,21 +1008,36 @@ class TONWalletManager:
     """إدارة محفظة TON للسحوبات"""
     
     def __init__(self, wallet_address: str, mnemonic: List[str], api_key: str):
+        logger.info("🔧 Initializing TONWalletManager...")
+        logger.info(f"   Wallet Address: {wallet_address[:20]}..." if wallet_address else "   Wallet Address: MISSING")
+        logger.info(f"   Mnemonic words: {len(mnemonic)} words")
+        logger.info(f"   API Key: {'SET' if api_key else 'MISSING'}")
+        logger.info(f"   TON_SDK_AVAILABLE: {TON_SDK_AVAILABLE}")
+        
         self.wallet_address = wallet_address
         self.mnemonic = mnemonic
         self.api_key = api_key
         self.api_endpoint = "https://toncenter.com/api/v2/"
-        self.api_headers = {"X-API-Key": api_key}
+        self.api_headers = {"X-API-Key": api_key} if api_key else {}
         
-        if TON_SDK_AVAILABLE and mnemonic:
-            self._init_wallet()
-        else:
-            logger.warning("⚠️ TON SDK not available or mnemonic not provided")
+        if not TON_SDK_AVAILABLE:
+            logger.error("❌ TON SDK not available! Install: pip install tonsdk")
             self.wallet_obj = None
+            return
+            
+        if not mnemonic or len(mnemonic) != 24:
+            logger.error(f"❌ Invalid mnemonic! Expected 24 words, got {len(mnemonic)}")
+            self.wallet_obj = None
+            return
+        
+        logger.info("✅ Prerequisites OK, calling _init_wallet()...")
+        self._init_wallet()
     
     def _init_wallet(self):
         """تهيئة المحفظة"""
+        logger.info("🔑 Starting wallet initialization...")
         try:
+            logger.info("📝 Creating wallet from mnemonic (v5r1)...")
             # استخدام v5r1 بدلاً من v3r2 عشان يطابق المحفظة الحقيقية
             mnemonics, _pub_k, _priv_k, wallet = Wallets.from_mnemonics(
                 self.mnemonic, 
@@ -1065,6 +1080,9 @@ class TONWalletManager:
                 
         except Exception as e:
             logger.error(f"❌ Failed to initialize TON wallet: {e}")
+            logger.error(f"   Exception type: {type(e).__name__}")
+            import traceback
+            logger.error(traceback.format_exc())
             self.wallet_obj = None
     
     async def send_ton(self, to_address: str, amount: float, memo: Optional[str] = None) -> Optional[str]:
