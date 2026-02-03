@@ -257,12 +257,18 @@
                         
                         const fullName = referral.full_name || `مستخدم ${referral.referred_id}`;
                         const username = referral.username ? `@${referral.username}` : '';
-                        // استخدام API الصورة من Telegram
-                        const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=4a9eff&color=fff&size=128`;
+                        
+                        // الحصول على صورة Telegram الحقيقية من API
+                        const userId = referral.referred_id;
+                        const avatarUrl = `https://t.me/i/userpic/160/${userId}.jpg`;
+                        const fallbackUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=4a9eff&color=fff&size=80`;
                         
                         html += `
                             <div class="referral-item">
-                                <img src="${avatarUrl}" alt="${fullName}" class="referral-avatar">
+                                <img src="${avatarUrl}" 
+                                     onerror="this.src='${fallbackUrl}'" 
+                                     alt="${fullName}" 
+                                     class="referral-avatar">
                                 <div class="referral-info">
                                     <div class="referral-name">${fullName}</div>
                                     ${username ? `<div class="referral-username">${username}</div>` : ''}
