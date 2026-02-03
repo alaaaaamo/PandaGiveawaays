@@ -1503,6 +1503,58 @@ def add_spins_to_user():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # ═══════════════════════════════════════════════════════════════
+# 👥 USERS LIST FOR ADMIN
+# ═══════════════════════════════════════════════════════════════
+
+@app.route('/api/admin/users', methods=['GET'])
+def get_all_users():
+    """جلب جميع المستخدمين للأدمن"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                user_id,
+                username,
+                full_name,
+                balance,
+                available_spins as spins,
+                total_referrals as referrals,
+                created_at as joined,
+                is_banned
+            FROM users
+            ORDER BY created_at DESC
+        """)
+        
+        users = []
+        for row in cursor.fetchall():
+            users.append({
+                'id': row['user_id'],
+                'name': row['full_name'] or 'Unknown',
+                'username': f"@{row['username']}" if row['username'] else f"user_{row['user_id']}",
+                'balance': row['balance'] or 0,
+                'spins': row['spins'] or 0,
+                'referrals': row['referrals'] or 0,
+                'joined': row['joined'],
+                'is_banned': bool(row['is_banned'])
+            })
+        
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'data': users,
+            'count': len(users)
+        })
+        
+    except Exception as e:
+        print(f"Error getting users: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ═══════════════════════════════════════════════════════════════
 # 🏥 HEALTH CHECK
 # ═══════════════════════════════════════════════════════════════
 

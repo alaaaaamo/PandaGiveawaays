@@ -366,18 +366,26 @@ async function deletePrize(prizeId) {
 async function loadUsers() {
     // تحميل المستخدمين من API
     try {
+        showLoading();
         const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
-        const response = await fetch(`${API_BASE_URL}/users`);
+        const response = await fetch(`${API_BASE_URL}/admin/users`);
         const result = await response.json();
+        
+        hideLoading();
         
         if (result.success) {
             adminData.users = result.data || [];
+            console.log(`✅ Loaded ${adminData.users.length} users`);
         } else {
+            console.error('❌ Failed to load users:', result.error);
             adminData.users = [];
+            showToast('فشل تحميل المستخدمين', 'error');
         }
     } catch (error) {
+        hideLoading();
         console.error('Error loading users:', error);
         adminData.users = [];
+        showToast('خطأ في تحميل المستخدمين', 'error');
     }
     
     renderUsersTable();
@@ -1489,52 +1497,6 @@ function displayTasks(tasks) {
                 </div>
             </div>
         `).join('');
-}
-
-async function deleteTask(taskId) {
-    if (!confirm('هل تريد حذف هذه المهمة؟')) return;
-    
-    try {
-        const response = await fetch(`/api/admin/tasks?task_id=${taskId}`, {
-            method: 'DELETE'
-        });
-        const result = await response.json();
-        
-        if (result.success) {
-            showToast('✅ تم حذف المهمة بنجاح', 'success');
-            loadTasks();
-        } else {
-            showToast('❌ فشل حذف المهمة', 'error');
-        }
-    } catch (error) {
-        console.error('Error deleting task:', error);
-        showToast('❌ خطأ في حذف المهمة', 'error');
-    }
-}
-
-async function deleteChannel(channelId) {
-    if (!confirm('هل تريد حذف هذه القناة؟')) return;
-    
-    try {
-        showLoading();
-        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
-        const response = await fetch(`${API_BASE_URL}/admin/channels?channel_id=${encodeURIComponent(channelId)}`, {
-            method: 'DELETE'
-        });
-        const result = await response.json();
-        hideLoading();
-        
-        if (result.success) {
-            showToast('✅ تم حذف القناة بنجاح', 'success');
-            loadChannels();
-        } else {
-            showToast('❌ فشل حذف القناة', 'error');
-        }
-    } catch (error) {
-        hideLoading();
-        console.error('Error deleting channel:', error);
-        showToast('❌ خطأ في حذف القناة', 'error');
-    }
 }
 
 // ═══════════════════════════════════════════════════════════════

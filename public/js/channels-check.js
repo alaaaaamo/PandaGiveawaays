@@ -136,6 +136,11 @@ const ChannelsCheck = {
                 showToast('✅ تم التحقق من الاشتراك بنجاح!', 'success');
             }
             
+            // تسجيل الإحالة المعلقة بعد التحقق من القنوات
+            if (typeof registerPendingReferral !== 'undefined') {
+                await registerPendingReferral();
+            }
+            
             // إعادة تحميل بيانات المستخدم
             if (typeof loadUserData !== 'undefined') {
                 await loadUserData();

@@ -21,8 +21,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         // إرسال رسالة ترحيبية (سيظهر تليجرام "Allow bot to message you?" تلقائياً)
         await sendWelcomeMessage();
         
-        // معالجة الإحالة إذا موجودة
-        await handleReferral();
+        // حفظ referrer_id مؤقتاً إذا موجود (سيتم تسجيله بعد التحقق من القنوات)
+        savePendingReferral();
         
         // Check required channels FIRST before loading anything
         const channelsVerified = await checkRequiredChannels();
@@ -33,6 +33,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.log('⏸️ Waiting for channel verification...');
             return;
         }
+        
+        // بعد التحقق من القنوات، نسجل الإحالة
+        await registerPendingReferral();
         
         // تحميل بيانات المستخدم
         await loadUserData();
@@ -92,6 +95,82 @@ async function loadWheelPrizes() {
 // ═══════════════════════════════════════════════════════════════
 // 🔗 REFERRAL HANDLING
 // ═══════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════
+// 🔗 REFERRAL HANDLING (بعد التحقق من القنوات)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * حفظ referrer_id مؤقتاً في localStorage
+ */
+function savePendingReferral() {
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const startParam = urlParams.get('tgWebAppStartParam');
+        
+        if (startParam && startParam.startsWith('ref_')) {
+            const referrerId = parseInt(startParam.replace('ref_', ''));
+            const currentUserId = TelegramApp.getUserId() || urlParams.get('user_id');
+            
+            if (referrerId && currentUserId && referrerId !== parseInt(currentUserId)) {
+                console.log('💾 Saving pending referral:', referrerId, '->', currentUserId);
+                
+                // حفظ في localStorage
+                localStorage.setItem('pendingReferral', JSON.stringify({
+                    referrer_id: referrerId,
+                    referred_id: parseInt(currentUserId),
+                    timestamp: Date.now()
+                }));
+            }
+        }
+    } catch (error) {
+        console.error('Error saving pending referral:', error);
+    }
+}
+
+/**
+ * تسجيل الإحالة بعد التحقق من القنوات
+ */
+async function registerPendingReferral() {
+    try {
+        const pendingData = localStorage.getItem('pendingReferral');
+        
+        if (!pendingData) {
+            console.log('ℹ️ No pending referral');
+            return;
+        }
+        
+        const referralData = JSON.parse(pendingData);
+        console.log('📎 Registering pending referral after channel verification:', referralData);
+        
+        // تسجيل الإحالة
+        const response = await fetch(`${CONFIG.API_BASE_URL}/referral/register`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                referrer_id: referralData.referrer_id,
+                referred_id: referralData.referred_id
+            })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+            console.log('✅ Referral registered successfully after channel verification');
+            showToast('تم تسجيل الإحالة بنجاح! 🎉', 'success');
+            
+            // حذف البيانات المؤقتة
+            localStorage.removeItem('pendingReferral');
+        } else {
+            console.log('⚠️ Referral registration failed:', result.error);
+            // نبقي البيانات للمحاولة مرة أخرى
+        }
+    } catch (error) {
+        console.error('Error registering pending referral:', error);
+        // نبقي البيانات للمحاولة مرة أخرى
+    }
+}
 
 async function handleReferral() {
     try {
@@ -838,5 +917,9 @@ async function sendWelcomeMessage() {
 // ═══════════════════════════════════════════════════════════════
 // 🎯 EXPORTS & READY
 // ═══════════════════════════════════════════════════════════════
+
+// تصدير الوظائف للاستخدام من ملفات أخرى
+window.registerPendingReferral = registerPendingReferral;
+window.loadUserData = loadUserData;
 
 console.log('🐼 Panda Giveaways App Loaded');
