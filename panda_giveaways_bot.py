@@ -1862,6 +1862,69 @@ async def admin_withdrawals_callback(update: Update, context: ContextTypes.DEFAU
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
+# ═══════════════════════════════════════════════════════════════
+# 📢 PAYMENT PROOF CHANNEL
+# ═══════════════════════════════════════════════════════════════
+
+async def send_payment_proof_to_channel(context: ContextTypes.DEFAULT_TYPE, 
+                                       username: str, 
+                                       full_name: str,
+                                       user_id: int,
+                                       amount: float, 
+                                       wallet_address: str,
+                                       tx_hash: str,
+                                       withdrawal_id: int):
+    """نشر إثبات الدفع في قناة الإثباتات"""
+    if not PAYMENT_PROOF_CHANNEL:
+        logger.warning("⚠️ PAYMENT_PROOF_CHANNEL not configured")
+        return
+    
+    try:
+        # رابط المستخدم
+        user_link = f"@{username}" if username else f"<a href='tg://user?id={user_id}'>{full_name}</a>"
+        
+        # رابط المعاملة على TON Explorer
+        ton_explorer_url = f"https://tonscan.org/tx/{tx_hash}"
+        
+        # تنسيق عنوان المحفظة (الأحرف الأولى والأخيرة فقط)
+        wallet_short = f"{wallet_address[:6]}...{wallet_address[-6:]}"
+        
+        # رسالة الإثبات
+        proof_message = f"""
+🎉 <b>تم تنفيذ سحب جديد!</b>
+
+👤 <b>المستخدم:</b> {user_link}
+💰 <b>المبلغ:</b> {amount:.4f} TON
+💳 <b>المحفظة:</b> <code>{wallet_short}</code>
+📋 <b>رقم الطلب:</b> #{withdrawal_id}
+
+🔗 <b>تفاصيل المعاملة:</b>
+<a href="{ton_explorer_url}">عرض على TON Explorer</a>
+
+🔐 <b>TX Hash:</b>
+<code>{tx_hash}</code>
+
+━━━━━━━━━━━━━━━
+✅ تم التحويل بنجاح عبر البوت الآلي
+⏰ التوقيت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+━━━━━━━━━━━━━━━
+
+🐼 @{BOT_USERNAME}
+"""
+        
+        # إرسال الرسالة للقناة
+        await context.bot.send_message(
+            chat_id=PAYMENT_PROOF_CHANNEL,
+            text=proof_message,
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=False
+        )
+        
+        logger.info(f"✅ Payment proof sent to channel for withdrawal #{withdrawal_id}")
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to send payment proof to channel: {e}")
+
 async def approve_withdrawal_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """الموافقة على طلب سحب"""
     query = update.callback_query
@@ -1925,6 +1988,18 @@ async def approve_withdrawal_callback(update: Update, context: ContextTypes.DEFA
                 except:
                     pass
                 
+                # نشر إثبات الدفع في القناة
+                await send_payment_proof_to_channel(
+                    context=context,
+                    username=withdrawal.get('username', 'مستخدم'),
+                    full_name=withdrawal['full_name'],
+                    user_id=withdrawal['user_id'],
+                    amount=withdrawal['amount'],
+                    wallet_address=withdrawal['wallet_address'],
+                    tx_hash=tx_hash,
+                    withdrawal_id=withdrawal_id
+                )
+                
                 await query.edit_message_text(success_msg, parse_mode=ParseMode.HTML)
                 return
         except Exception as e:
@@ -1944,6 +2019,7 @@ async def approve_withdrawal_callback(update: Update, context: ContextTypes.DEFA
         approval_msg += f"\n📞 <b>الرقم:</b> <code>{withdrawal['phone_number']}</code>\n\n⚠️ يرجى إرسال المبلغ يدوياً إلى الرقم أعلاه"
     else:
         approval_msg += f"\n🔐 <b>المحفظة:</b> <code>{withdrawal['wallet_address']}</code>\n\n⚠️ يرجى إرسال المبلغ يدوياً إلى المحفظة أعلاه"
+        approval_msg += f"\n\n💡 <b>ملاحظة:</b> بعد إرسال المبلغ، استخدم /add_tx_hash_{withdrawal_id} لإضافة tx_hash ونشره في قناة الإثباتات"
     
     # إرسال إشعار للمستخدم
     try:
@@ -1971,7 +2047,89 @@ async def approve_withdrawal_callback(update: Update, context: ContextTypes.DEFA
     )
 
 # ═══════════════════════════════════════════════════════════════
-# 📢 BROADCAST SYSTEM
+# � ADD TX HASH FOR MANUAL WITHDRAWALS
+# ═══════════════════════════════════════════════════════════════
+
+async def add_tx_hash_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """إضافة tx_hash لسحب تمت الموافقة عليه يدوياً"""
+    user_id = update.effective_user.id
+    
+    if not is_admin(user_id):
+        await update.message.reply_text("❌ هذا الأمر للإدمن فقط!")
+        return
+    
+    # التحقق من صيغة الأمر
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text(
+            "❌ صيغة خاطئة!\n\n"
+            "الاستخدام الصحيح:\n"
+            "/add_tx_hash <withdrawal_id> <tx_hash>\n\n"
+            "مثال:\n"
+            "/add_tx_hash 123 64-utInJYG0mrpAy77spv_QyRqAIlqOb..."
+        )
+        return
+    
+    try:
+        withdrawal_id = int(context.args[0])
+        tx_hash = context.args[1]
+        
+        # الحصول على معلومات السحب
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT w.*, u.username, u.full_name
+            FROM withdrawals w
+            JOIN users u ON w.user_id = u.user_id
+            WHERE w.id = ? AND w.status = 'completed'
+        """, (withdrawal_id,))
+        
+        withdrawal = cursor.fetchone()
+        
+        if not withdrawal:
+            await update.message.reply_text(f"❌ لم يتم العثور على سحب مكتمل برقم #{withdrawal_id}")
+            conn.close()
+            return
+        
+        withdrawal_dict = dict(withdrawal)
+        
+        # تحديث tx_hash في قاعدة البيانات
+        cursor.execute("""
+            UPDATE withdrawals 
+            SET tx_hash = ?
+            WHERE id = ?
+        """, (tx_hash, withdrawal_id))
+        
+        conn.commit()
+        conn.close()
+        
+        # نشر إثبات الدفع في القناة
+        await send_payment_proof_to_channel(
+            context=context,
+            username=withdrawal_dict.get('username', 'مستخدم'),
+            full_name=withdrawal_dict['full_name'],
+            user_id=withdrawal_dict['user_id'],
+            amount=withdrawal_dict['amount'],
+            wallet_address=withdrawal_dict['wallet_address'],
+            tx_hash=tx_hash,
+            withdrawal_id=withdrawal_id
+        )
+        
+        await update.message.reply_text(
+            f"✅ تم تحديث TX Hash للسحب #{withdrawal_id}\n"
+            f"📢 تم نشر الإثبات في قناة الإثباتات"
+        )
+        
+        logger.info(f"✅ TX Hash added for withdrawal #{withdrawal_id} by admin {user_id}")
+        
+    except ValueError:
+        await update.message.reply_text("❌ رقم السحب يجب أن يكون رقماً صحيحاً!")
+    except Exception as e:
+        logger.error(f"Error adding tx_hash: {e}")
+        await update.message.reply_text(f"❌ حدث خطأ: {str(e)}")
+
+# ═══════════════════════════════════════════════════════════════
+# �📢 BROADCAST SYSTEM
 # ═══════════════════════════════════════════════════════════════
 
 async def safe_answer_query(query):
@@ -2861,6 +3019,7 @@ def main():
     application.add_handler(CommandHandler("stats", stats_command))
     application.add_handler(CommandHandler("referrals", referrals_command))
     application.add_handler(CommandHandler("balance", balance_command))
+    application.add_handler(CommandHandler("add_tx_hash", add_tx_hash_command))
     
     # معالج Inline Query
     application.add_handler(InlineQueryHandler(inline_query_handler))
