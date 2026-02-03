@@ -98,7 +98,7 @@
             <div class="tasks-progress">
                 <div class="progress-info">
                     <span>📊 تقدمك: <strong id="completed-tasks-count">0</strong> / <strong id="total-tasks-count">0</strong></span>
-                    <span style="margin-right: 16px; color: #ffd436;">� متبقي <strong id="tasks-remaining">5</strong> / 5 للفة القادمة</span>
+                    <span style="margin-right: 16px; color: #ffd436;">متبقي <strong id="tasks-remaining">5</strong> / 5 للفة القادمة</span>
                 </div>
                 <div class="progress-bar">
                     <div class="progress-fill" id="tasks-progress-fill"></div>
@@ -215,21 +215,13 @@
 
     <!-- 📱 BOTTOM NAVIGATION -->
     <nav class="bottom-nav">
-        <button class="nav-item active" data-page="wheel">
+        <button class="nav-item" data-page="withdraw">
             <span class="nav-icon">
-                <lottie-player src="./img/roll.json" background="transparent" speed="1" 
+                <lottie-player src="./img/withdraw.json" background="transparent" speed="1" 
                     style="width: 32px; height: 32px;" loop autoplay>
                 </lottie-player>
             </span>
-            <span class="nav-label">العجلة</span>
-        </button>
-        <button class="nav-item" onclick="window.location.href='referral-program.html'">
-            <span class="nav-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
-                </svg>
-            </span>
-            <span class="nav-label">الإحالات</span>
+            <span class="nav-label">السحب</span>
         </button>
         <button class="nav-item" data-page="tasks">
             <span class="nav-icon">
@@ -239,13 +231,21 @@
             </span>
             <span class="nav-label">المهام</span>
         </button>
-        <button class="nav-item" data-page="withdraw">
+        <button class="nav-item" onclick="window.location.href='referral-program.html'">
             <span class="nav-icon">
-                <lottie-player src="./img/withdraw.json" background="transparent" speed="1" 
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+                </svg>
+            </span>
+            <span class="nav-label">الإحالات</span>
+        </button>
+        <button class="nav-item active" data-page="wheel">
+            <span class="nav-icon">
+                <lottie-player src="./img/roll.json" background="transparent" speed="1" 
                     style="width: 32px; height: 32px;" loop autoplay>
                 </lottie-player>
             </span>
-            <span class="nav-label">السحب</span>
+            <span class="nav-label">العجلة</span>
         </button>
     </nav>
 

@@ -52,6 +52,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         // تحميل البيانات الأولية
         await loadInitialData();
         
+        // التحقق من معاملات URL للتنقل
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetPage = urlParams.get('page');
+        if (targetPage && ['wheel', 'tasks', 'withdraw'].includes(targetPage)) {
+            switchPage(targetPage);
+        }
+        
         // إخفاء Loading
         showLoading(false);
         

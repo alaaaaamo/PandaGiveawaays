@@ -542,7 +542,10 @@ function renderAdminTasks() {
         return;
     }
     
-    if (!adminData.tasks || adminData.tasks.length === 0) {
+    // فلترة المهام النشطة فقط
+    const activeTasks = adminData.tasks.filter(task => task.is_active !== false);
+    
+    if (!activeTasks || activeTasks.length === 0) {
         tasksGrid.innerHTML = `
             <div style="text-align: center; padding: 40px; color: #8b95a1;">
                 <p style="font-size: 48px; margin-bottom: 16px;">📝</p>
@@ -555,7 +558,7 @@ function renderAdminTasks() {
     
     let html = '';
     
-    adminData.tasks.forEach(task => {
+    activeTasks.forEach(task => {
         const statusBadge = task.is_active 
             ? '<span class="task-status active">نشط</span>' 
             : '<span class="task-status">غير نشط</span>';
@@ -641,14 +644,14 @@ function editTask(taskId) {
         modalTitle.textContent = '✏️ تعديل مهمة';
     }
     
-    const saveBtn = modal.querySelector('.btn-primary');
+    const saveBtn = document.getElementById('task-submit-btn');
     if (saveBtn) {
-        saveBtn.textContent = '💾 حفظ التعديلات';
+        saveBtn.innerHTML = '<img src="/img/checksup.png" alt="✓" style="width: 14px; height: 14px; vertical-align: middle; margin-left: 2px;"> حفظ التعديل';
         saveBtn.onclick = () => updateTask(taskId);
     }
     
     // عرض المودال
-    modal.style.display = 'flex';
+    modal.classList.add('active');
     console.log('✅ Edit modal opened for task:', taskId);
 }
 
@@ -719,7 +722,7 @@ async function updateTask(taskId) {
         
         if (result.success) {
             showToast('✅ تم تحديث المهمة بنجاح!', 'success');
-            closeAddTaskModal();
+            closeModal('add-task-modal');
             loadTasks(); // إعادة تحميل القائمة
         } else {
             const errorMsg = result.message || 'فشل تحديث المهمة';
@@ -1282,14 +1285,14 @@ function openAddTaskModal() {
         modalTitle.textContent = '➕ إضافة مهمة جديدة';
     }
     
-    const saveBtn = modal.querySelector('.btn-primary');
+    const saveBtn = document.getElementById('task-submit-btn');
     if (saveBtn) {
-        saveBtn.textContent = '➕ إضافة المهمة';
+        saveBtn.innerHTML = '<img src="/img/checksup.png" alt="✓" style="width: 14px; height: 14px; vertical-align: middle; margin-left: 2px;"> إنشاء المهمة';
         saveBtn.onclick = createTask;
     }
     
     // عرض النموذج
-    modal.style.display = 'flex';
+    modal.classList.add('active');
     console.log('✅ Modal opened');
 }
 
