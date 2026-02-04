@@ -756,12 +756,12 @@ def perform_spin():
         
         # Define prizes with probabilities
         prizes = [
-            {'name': '0.01 TON', 'amount': 0.01, 'probability': 40, 'color': '#ffa500', 'emoji': '🪙'},
+            {'name': '0.01 TON', 'amount': 0.01, 'probability': 25, 'color': '#ffa500', 'emoji': '🪙'},
             {'name': '0.05 TON', 'amount': 0.05, 'probability': 25, 'color': '#4a9eff', 'emoji': '💎'},
-            {'name': '0.1 TON', 'amount': 0.1, 'probability': 15, 'color': '#66bb6a', 'emoji': '💰'},
-            {'name': '0.5 TON', 'amount': 0.5, 'probability': 10, 'color': '#ef5350', 'emoji': '🎁'},
-            {'name': '1.0 TON', 'amount': 1.0, 'probability': 5, 'color': '#ab47bc', 'emoji': '🏆'},
-            {'name': 'حظ أوفر', 'amount': 0.0, 'probability': 5, 'color': '#90a4ae', 'emoji': '😔'}
+            {'name': '0.1 TON', 'amount': 0.1, 'probability': 25, 'color': '#66bb6a', 'emoji': '💰'},
+            {'name': '0.5 TON', 'amount': 0.5, 'probability': 0, 'color': '#ef5350', 'emoji': '🎁'},
+            {'name': '1.0 TON', 'amount': 1.0, 'probability': 0, 'color': '#ab47bc', 'emoji': '🏆'},
+            {'name': 'حظ أوفر', 'amount': 0.0, 'probability': 25, 'color': '#90a4ae', 'emoji': '😔'}
         ]
         
         # Select prize based on probability

@@ -159,22 +159,39 @@ class WheelOfFortune {
             
             // حساب زاوية الدوران للجائزة
             const prizeIndex = this.prizes.findIndex(p => p.name === prize.name);
+            if (prizeIndex === -1) {
+                console.error('Prize not found:', prize.name);
+                throw new Error('الجائزة غير موجودة في القائمة');
+            }
+            
             const anglePerSegment = (2 * Math.PI) / this.prizes.length;
             
-            // الزاوية الحالية المطبعة
+            // الزاوية الحالية (مطبعة)
             const currentRotation = this.rotation % (2 * Math.PI);
             
-            // الزاوية المستهدفة (عكس اتجاه عقارب الساعة لأن العجلة تدور عكسياً)
-            // المؤشر في الأعلى، لذلك نحتاج لحساب الزاوية من الأعلى
-            const targetAngle = (2 * Math.PI) - (prizeIndex * anglePerSegment) - (anglePerSegment / 2);
+            // حساب الزاوية المستهدفة بدقة
+            // المؤشر في الأعلى (الزاوية 0)، نريد أن يكون مركز الجائزة عند الأعلى
+            const prizeAngle = prizeIndex * anglePerSegment;
+            const targetAngle = (2 * Math.PI) - prizeAngle - (anglePerSegment / 2);
             
             // حساب أقصر مسافة للوصول للهدف
             let angleDiff = targetAngle - currentRotation;
-            if (angleDiff < 0) angleDiff += 2 * Math.PI;
+            while (angleDiff < 0) angleDiff += 2 * Math.PI;
+            while (angleDiff >= 2 * Math.PI) angleDiff -= 2 * Math.PI;
             
             // عدد الدورات الإضافية (5-7 دورات)
-            const extraRotations = 5 + Math.random() * 2;
+            const extraRotations = 5 + Math.floor(Math.random() * 3);
             const totalRotation = (extraRotations * 2 * Math.PI) + angleDiff;
+            
+            console.log('Spin calculation:', {
+                prizeName: prize.name,
+                prizeIndex,
+                currentRotation: (currentRotation * 180 / Math.PI).toFixed(2) + '°',
+                targetAngle: (targetAngle * 180 / Math.PI).toFixed(2) + '°',
+                angleDiff: (angleDiff * 180 / Math.PI).toFixed(2) + '°',
+                extraRotations,
+                totalRotation: (totalRotation * 180 / Math.PI).toFixed(2) + '°'
+            });
             
             // تدوير العجلة
             await this.animateSpin(totalRotation);
@@ -232,16 +249,8 @@ class WheelOfFortune {
                 const elapsed = now - startTime;
                 const progress = Math.min(elapsed / duration, 1);
                 
-                // Enhanced easing function (ease-out cubic with bounce)
-                let easeOut;
-                if (progress < 0.9) {
-                    // Smooth acceleration
-                    easeOut = 1 - Math.pow(1 - progress / 0.9, 3);
-                } else {
-                    // Slight deceleration at the end
-                    const bounceProgress = (progress - 0.9) / 0.1;
-                    easeOut = 1 - (0.05 * Math.sin(bounceProgress * Math.PI * 4) * (1 - bounceProgress));
-                }
+                // Smooth easing function (ease-out cubic) بدون bounce
+                const easeOut = 1 - Math.pow(1 - progress, 3);
                 
                 // تحديث الدوران
                 this.rotation = startRotation + (totalRotation * easeOut);
