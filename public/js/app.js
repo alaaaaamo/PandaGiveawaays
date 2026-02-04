@@ -124,13 +124,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         await loadUserData();
         
         // تحميل جوائز العجلة من API
+        console.log('🎁 Loading wheel prizes...');
         await loadWheelPrizes();
+        
+        // التحقق من وجود جوائز
+        if (!CONFIG.WHEEL_PRIZES || CONFIG.WHEEL_PRIZES.length === 0) {
+            console.error('❌ No prizes available! Using default prizes.');
+            CONFIG.WHEEL_PRIZES = [
+                { name: '0.01 TON', amount: 0.01, probability: 25 },
+                { name: '0.05 TON', amount: 0.05, probability: 25 },
+                { name: '0.1 TON', amount: 0.1, probability: 25 },
+                { name: 'حظ أوفر', amount: 0, probability: 25 }
+            ];
+        }
+        
+        console.log('✅ Prizes ready:', CONFIG.WHEEL_PRIZES.length);
         
         // تهيئة UI
         initUI();
         
         // تهيئة عجلة الحظ
+        console.log('🎰 Initializing wheel...');
         wheel = new WheelOfFortune('wheel-canvas', CONFIG.WHEEL_PRIZES);
+        console.log('✅ Wheel initialized successfully');
         
         // تحميل البيانات الأولية
         await loadInitialData();
@@ -170,15 +186,35 @@ async function loadWheelPrizes() {
                 name: prize.name,
                 amount: prize.value,
                 probability: prize.probability,
-                color: prize.color
+                color: prize.color || '#808080'
             }));
-            console.log(`✅ Loaded ${CONFIG.WHEEL_PRIZES.length} prizes from database`);
+            console.log(`✅ Loaded ${CONFIG.WHEEL_PRIZES.length} prizes from database:`, CONFIG.WHEEL_PRIZES);
         } else {
-            console.log('⚠️ Using default prizes from config');
+            console.log('⚠️ No prizes from DB, using default config prizes');
+            // التأكد من وجود جوائز افتراضية
+            if (!CONFIG.WHEEL_PRIZES || CONFIG.WHEEL_PRIZES.length === 0) {
+                CONFIG.WHEEL_PRIZES = [
+                    { name: '0.01 TON', amount: 0.01, probability: 25 },
+                    { name: '0.05 TON', amount: 0.05, probability: 25 },
+                    { name: '0.1 TON', amount: 0.1, probability: 25 },
+                    { name: 'حظ أوفر', amount: 0, probability: 25 }
+                ];
+                console.log('✅ Using fallback prizes:', CONFIG.WHEEL_PRIZES);
+            }
         }
     } catch (error) {
         console.error('❌ Error loading prizes:', error);
         console.log('⚠️ Using default prizes from config');
+        // التأكد من وجود جوائز افتراضية
+        if (!CONFIG.WHEEL_PRIZES || CONFIG.WHEEL_PRIZES.length === 0) {
+            CONFIG.WHEEL_PRIZES = [
+                { name: '0.01 TON', amount: 0.01, probability: 25 },
+                { name: '0.05 TON', amount: 0.05, probability: 25 },
+                { name: '0.1 TON', amount: 0.1, probability: 25 },
+                { name: 'حظ أوفر', amount: 0, probability: 25 }
+            ];
+            console.log('✅ Using fallback prizes:', CONFIG.WHEEL_PRIZES);
+        }
     }
 }
 
@@ -317,11 +353,12 @@ async function loadUserData() {
         
         // إذا لم نجد user_id، استخدم قيمة تجريبية
         if (!userId) {
-            console.warn('No user ID found, using test ID');
+            console.warn('⚠️ No user ID found, using test ID');
             userId = 123456789; // Test user
         }
         
-        console.log('Loading data for user:', userId);
+        console.log('📊 Loading data for user:', userId);
+        showLoading(true, 'جاري تحميل بياناتك...');
         
         // تحديث بيانات المستخدم من Telegram أولاً
         try {
@@ -343,17 +380,22 @@ async function loadUserData() {
             console.warn('⚠️ Could not update profile:', profileError);
         }
         
+        console.log('🔄 Fetching user data from API...');
         const response = await API.getUserData(userId);
         
         if (response.success) {
+            console.log('✅ User data loaded:', response.data);
             UserState.init(response.data);
             updateUserProfile();
             updateUI();
+            showLoading(false);
         } else {
-            throw new Error('فشل تحميل بيانات المستخدم');
+            console.error('❌ API returned error:', response.error);
+            throw new Error(response.error || 'فشل تحميل بيانات المستخدم');
         }
     } catch (error) {
-        console.error('Error loading user data:', error);
+        console.error('❌ Error loading user data:', error);
+        showLoading(false);
         showToast('حدث خطأ في تحميل البيانات', 'error');
         // لا نرمي الخطأ لنسمح للتطبيق بالاستمرار
     }
