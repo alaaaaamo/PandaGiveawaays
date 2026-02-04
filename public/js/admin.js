@@ -515,7 +515,8 @@ function filterUsersTable(query) {
             <td>${user.joined}</td>
             <td>${actionButtons}</td>
         </tr>
-    `).join('');
+        `;
+    }).join('');
 }
 
 // ═══════════════════════════════════════════════════════════════
