@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>التحقق من الجهاز</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
 <style>
 :root { --bg:#0f1115; --card:#181c22; --accent:#5b8bff; --accent-grad:linear-gradient(135deg,#5b8bff,#936bff 55%,#ff7ac6); --text:#e7ecf2; --danger:#ff4d61; --success:#35c06e; --border:1px solid #252b33; font-family:'Segoe UI',Tahoma,Arial,sans-serif; }
 body {background:radial-gradient(circle at 20% 20%, #1e2530, #0d0f13);margin:0;padding:0;color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;}
@@ -13,41 +14,40 @@ body {background:radial-gradient(circle at 20% 20%, #1e2530, #0d0f13);margin:0;p
 header {text-align:center;margin-bottom:26px;}
 header h1 {margin:0;font-size:1.55rem;letter-spacing:.5px;background:var(--accent-grad);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:600;}
 header p {margin:10px 0 0;font-size:.9rem;opacity:.85;line-height:1.4;}
-.fingerprint-box {background:#12161c;border-radius:18px;padding:18px 16px;border:var(--border);margin-bottom:20px;display:grid;gap:14px;}
-.item {display:flex;align-items:center;gap:12px;font-size:.85rem;}
-.item span.key {flex:0 0 120px;opacity:.6;font-weight:500;}
-.item span.val {font-family:monospace;font-size:.8rem;word-break:break-all;}
-button {cursor:pointer;background:var(--accent-grad);color:#fff;border:none;padding:14px 22px;font-size:.95rem;font-weight:600;border-radius:14px;display:inline-flex;align-items:center;gap:10px;box-shadow:0 6px 18px -4px rgba(0,0,0,.5);transition:.35s;}
-button:hover {transform:translateY(-2px);box-shadow:0 10px 26px -6px rgba(0,0,0,.6);}
-button:active {transform:translateY(0);}
-.status {margin-top:14px;font-size:.85rem;font-weight:500;display:flex;align-items:center;gap:8px;}
-.status.ok {color:var(--success);} .status.err {color:var(--danger);} .status.pending {color:#ffc861;}
+.animation-box {display:flex;justify-content:center;align-items:center;min-height:200px;margin:20px 0;}
+.animation-box lottie-player {width:200px;height:200px;}
+.status-icon {width:80px;height:80px;margin:20px auto;display:none;}
+.status-icon.show {display:block;}
+.status {margin-top:14px;font-size:1rem;font-weight:600;text-align:center;padding:12px;border-radius:12px;}
+.status.ok {color:var(--success);background:rgba(53,192,110,.1);} 
+.status.err {color:var(--danger);background:rgba(255,77,97,.1);} 
+.status.pending {color:#ffc861;background:rgba(255,200,97,.1);}
 footer {margin-top:30px;text-align:center;font-size:.7rem;opacity:.55;}
-.loader {width:18px;height:18px;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite;}
-@keyframes spin {to {transform:rotate(360deg);}}
 .glow {position:absolute;inset:0;pointer-events:none;}
 .glow:before, .glow:after {content:"";position:absolute;border-radius:50%;filter:blur(70px);opacity:.5;animation:float 8s ease-in-out infinite;}
 .glow:before {width:320px;height:320px;background:#5b8bff;top:-120px;left:-120px;animation-delay:-2s;}
 .glow:after {width:260px;height:260px;background:#ff7ac6;bottom:-100px;right:-90px;}
 @keyframes float {0%,100% {transform:translateY(0);}50% {transform:translateY(40px);}}
-.info-tip {margin-top:12px;font-size:.7rem;opacity:.6;text-align:center;}
+.hidden {display:none!important;}
 </style>
 </head>
 <body>
   <div class="container">
     <div class="glow"></div>
     <header>
-      <h1>التحقق من الجهاز</h1>
-      <p>نقوم بإنشاء بصمة فريدة لهاتفك لضمان منع تكرار الحسابات.</p>
+      <h1>🔐 التحقق من الجهاز</h1>
+      <p>جارٍ التحقق من جهازك لضمان نزاهة النظام...</p>
     </header>
-    <div id="fpBox" class="fingerprint-box"></div>
-    <button id="sendBtn" disabled>
-      <span id="btnIcon" class="loader"></span>
-      <span id="btnText">جارٍ تجهيز البصمة...</span>
-    </button>
-    <div id="status" class="status pending">جارٍ الإعداد...</div>
-    <div class="info-tip" id="outsideHint" style="display:none">⚠️ افتح هذه الصفحة عبر زر "تحقق من جهازك" داخل تيليجرام وليس من المتصفح الخارجي.</div>
-    <footer>جميع البيانات تستخدم لتعزيز نزاهة المستخدمين.</footer>
+    
+    <div class="animation-box">
+      <lottie-player id="animationPlayer" src="/img/preloaderSticker.json" background="transparent" speed="1" loop autoplay></lottie-player>
+    </div>
+    
+    <img id="statusIcon" class="status-icon" src="" alt="">
+    
+    <div id="status" class="status pending">🔍 جارٍ فحص الجهاز...</div>
+    
+    <footer>جميع البيانات تُستخدم لحماية المستخدمين من التلاعب.</footer>
   </div>
 <script>
 (function initTelegram(){
@@ -62,7 +62,6 @@ function getUserIdFromUrl(){
     const userId = params.get('user_id');
     if(userId && /^\d+$/.test(userId)) return parseInt(userId);
     
-    // محاولة من hash أيضاً
     const hashParams = new URLSearchParams(location.hash.replace(/^#/, ''));
     const hashUserId = hashParams.get('user_id');
     if(hashUserId && /^\d+$/.test(hashUserId)) return parseInt(hashUserId);
@@ -73,23 +72,12 @@ function getUserIdFromUrl(){
 }
 
 (async function(){
-  const box = document.getElementById('fpBox');
-  const sendBtn = document.getElementById('sendBtn');
+  const animationPlayer = document.getElementById('animationPlayer');
+  const statusIcon = document.getElementById('statusIcon');
   const status = document.getElementById('status');
-  const btnIcon = document.getElementById('btnIcon');
-  const btnText = document.getElementById('btnText');
   const outsideHint = document.getElementById('outsideHint');
 
-  const inTelegram = !!(window.Telegram && Telegram.WebApp);
-  if(!inTelegram){ outsideHint.style.display='block'; }
-
-  function line(key,val){
-    const div=document.createElement('div');div.className='item';
-    const k=document.createElement('span');k.className='key';k.textContent=key;
-    const v=document.createElement('span');v.className='val';v.textContent=val;
-    div.appendChild(k);div.appendChild(v);box.appendChild(div);
-  }
-
+  
   function localId(){
     const k='__fp_local_id';
     let id=localStorage.getItem(k);
@@ -103,23 +91,28 @@ function getUserIdFromUrl(){
   async function digest(str){ const buf=new TextEncoder().encode(str); const h=await crypto.subtle.digest('SHA-256',buf); return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,'0')).join('').slice(0,32); }
 
   async function build(){
-    const ua=navigator.userAgent; const rez=screen.width+'x'+screen.height; const tz=Intl.DateTimeFormat().resolvedOptions().timeZone || 'NA'; const lid=localId(); const cfp=await canvasFP(); const afp=await audioFP();
-    const raw = ua+'|'+rez+'|'+tz+'|'+lid+'|'+cfp+'|'+afp; const final = await digest(raw);
-    line('User-Agent', ua); line('Resolution', rez); line('Timezone', tz); line('Local ID', lid); line('Canvas', cfp); line('Audio', afp); line('Fingerprint', final);
+    const ua=navigator.userAgent; 
+    const rez=screen.width+'x'+screen.height; 
+    const tz=Intl.DateTimeFormat().resolvedOptions().timeZone || 'NA'; 
+    const lid=localId(); 
+    const cfp=await canvasFP(); 
+    const afp=await audioFP();
+    const raw = ua+'|'+rez+'|'+tz+'|'+lid+'|'+cfp+'|'+afp; 
+    const final = await digest(raw);
     
-    // الحصول على IP address من خدمة خارجية
+    // الحصول على IP address (بدون عرضه)
     let userIP = 'Unknown';
     try {
       const ipResp = await fetch('https://api.ipify.org?format=json');
       const ipData = await ipResp.json();
       userIP = ipData.ip || 'Unknown';
-      line('IP Address', userIP);
     } catch(e) {
       console.error('Failed to get IP:', e);
-      line('IP Address', 'Unable to detect');
     }
     
-    btnIcon.className=''; btnIcon.textContent='🔐'; btnText.textContent='إرسال البصمة'; sendBtn.disabled=false; status.textContent='جاهز للإرسال'; status.className='status ok';
+    status.textContent='📡 جارٍ إرسال البيانات...';
+    status.className='status pending';
+    
     async function doSend(){
       const uid = getUserIdFromUrl();
       const fpToken = new URLSearchParams(location.search).get('fp_token');
@@ -127,18 +120,11 @@ function getUserIdFromUrl(){
       
       let success = false;
       
-      // إظهار حالة الإرسال
-      btnIcon.className='loader';
-      btnText.textContent='جارٍ الإرسال...';
-      sendBtn.disabled=true;
-      status.textContent='📤 جارٍ إرسال البيانات للبوت...';
-      status.className='status pending';
-      
-      // استخدام API المباشر بدلاً من Telegram.WebApp.sendData
-      // لأن sendData لا يعطينا رد فوري ويغلق النافذة
+      // استخدام API المباشر
       if(uid && fpToken){
         try {
-          status.textContent='📡 جارٍ الإرسال للخادم...';
+          status.textContent='📡 جارٍ التحقق من الجهاز...';
+          status.className='status pending';
           
           const resp = await fetch('/api/fingerprint', {
             method: 'POST',
@@ -149,18 +135,17 @@ function getUserIdFromUrl(){
           if(resp.ok){
             const result = await resp.json();
             if(result.ok){
+              // نجح التحقق - عرض allowed animation
+              animationPlayer.load('/img/allowed.json');
+              animationPlayer.play();
+              
+              // عرض أيقونة النجاح
+              statusIcon.src = '/img/payment-success.svg';
+              statusIcon.classList.add('show');
+              
               status.textContent='✅ تم التحقق من جهازك بنجاح!';
               status.className='status ok';
-              btnIcon.className='';
-              btnIcon.textContent='✅';
-              btnText.textContent='تم التحقق';
               success = true;
-              
-              // إظهار رسالة نجاح
-              const successMsg = document.createElement('div');
-              successMsg.style.cssText = 'margin-top:20px;padding:15px;background:#35c06e;color:#fff;border-radius:12px;text-align:center;';
-              successMsg.innerHTML = '<b>🎉 تم التحقق بنجاح!</b><br/>يمكنك الآن استخدام البوت';
-              box.appendChild(successMsg);
               
               // إغلاق النافذة تلقائياً بعد 3 ثوان
               setTimeout(() => {
@@ -171,19 +156,17 @@ function getUserIdFromUrl(){
                 }
               }, 3000);
             } else {
-              // إظهار سبب الفشل
+              // فشل التحقق - عرض notallowed animation
+              animationPlayer.load('/img/notallowed.json');
+              animationPlayer.play();
+              
+              // عرض أيقونة الفشل
+              statusIcon.src = '/img/payment-failure.svg';
+              statusIcon.classList.add('show');
+              
               const errorReason = result.error || 'خطأ غير معروف';
               status.textContent=`❌ ${errorReason}`;
               status.className='status err';
-              btnIcon.className='';
-              btnIcon.textContent='❌';
-              btnText.textContent='فشل التحقق';
-              
-              // إظهار رسالة تفصيلية
-              const errorMsg = document.createElement('div');
-              errorMsg.style.cssText = 'margin-top:20px;padding:15px;background:#ff4d61;color:#fff;border-radius:12px;text-align:center;line-height:1.6;';
-              errorMsg.innerHTML = `<b>⚠️ فشل التحقق</b><br/>${errorReason}`;
-              box.appendChild(errorMsg);
             }
           } else {
             // معالجة الأخطاء من الخادم (403, 400, etc)
@@ -195,58 +178,73 @@ function getUserIdFromUrl(){
               errorMessage = `خطأ ${resp.status}: ${resp.statusText}`;
             }
             
-            status.textContent=`❌ ${errorMessage}`;
-            status.className='status err';
-            btnIcon.className='';
-            btnIcon.textContent='❌';
-            btnText.textContent='فشل التحقق';
+            // عرض notallowed animation
+            animationPlayer.load('/img/notallowed.json');
+            animationPlayer.play();
             
-            // إظهار رسالة تفصيلية
-            const errorMsg = document.createElement('div');
-            errorMsg.style.cssText = 'margin-top:20px;padding:15px;background:#ff4d61;color:#fff;border-radius:12px;text-align:center;line-height:1.6;';
+            // عرض أيقونة الفشل
+            statusIcon.src = '/img/payment-failure.svg';
+            statusIcon.classList.add('show');
             
             if(resp.status === 403) {
-              errorMsg.innerHTML = '<b>🚫 جهاز مسجل مسبقاً</b><br/>هذا الجهاز مسجل بالفعل لمستخدم آخر.<br/>كل جهاز يمكن استخدامه لحساب واحد فقط.';
+              status.textContent='🚫 جهاز مسجل مسبقاً - هذا الجهاز مستخدم بالفعل';
             } else {
-              errorMsg.innerHTML = `<b>⚠️ فشل التحقق</b><br/>${errorMessage}`;
+              status.textContent=`❌ ${errorMessage}`;
             }
-            box.appendChild(errorMsg);
+            status.className='status err';
           }
         } catch(err){ 
           console.error('Direct server request failed:', err);
+          
+          // عرض notallowed animation
+          animationPlayer.load('/img/notallowed.json');
+          animationPlayer.play();
+          
+          // عرض أيقونة الفشل
+          statusIcon.src = '/img/payment-failure.svg';
+          statusIcon.classList.add('show');
+          
           status.textContent='❌ فشل الاتصال بالخادم';
           status.className='status err';
-          btnIcon.className='';
-          btnIcon.textContent='❌';
-          btnText.textContent='فشل الإرسال';
-          sendBtn.disabled=false;
-          
-          // إظهار رسالة خطأ
-          const errorMsg = document.createElement('div');
-          errorMsg.style.cssText = 'margin-top:20px;padding:15px;background:#ff4d61;color:#fff;border-radius:12px;text-align:center;';
-          errorMsg.innerHTML = '<b>❌ فشل الاتصال</b><br/>حدث خطأ في الاتصال بالخادم. تحقق من الاتصال بالإنترنت وحاول مرة أخرى.';
-          box.appendChild(errorMsg);
         }
       }
       
       if(!success && !uid){
         status.textContent='⚠️ افتح الصفحة من زر داخل تيليجرام'; 
         status.className='status err';
-        btnIcon.className='';
-        btnIcon.textContent='⚠️';
-        btnText.textContent='خطأ';
-        sendBtn.disabled=false;
+        
+        // عرض notallowed animation
+        animationPlayer.load('/img/notallowed.json');
+        animationPlayer.play();
+        
+        statusIcon.src = '/img/payment-failure.svg';
+        statusIcon.classList.add('show');
       }
       
       return success;
     }
-    sendBtn.addEventListener('click', doSend);
-    setTimeout(()=>{ if(!sendBtn.disabled) doSend(); }, 1500);
+    
+    // بدء التحقق تلقائياً بعد تحميل البيانات
+    await doSend();
   }
 
-  try { const fp = await import('https://openfpcdn.io/fingerprintjs/v3').then(x=>x.load()); const result = await fp.get(); line('FPJS', result.visitorId); } catch(e) { line('FPJS','غير متاح'); }
+  try { 
+    const fp = await import('https://openfpcdn.io/fingerprintjs/v3').then(x=>x.load()); 
+    const result = await fp.get(); 
+    console.log('FPJS ID:', result.visitorId);
+  } catch(e) { 
+    console.log('FPJS not available'); 
+  }
+  
   await build();
-  if(window.Telegram && Telegram.WebApp){ const theme = Telegram.WebApp.themeParams || {}; const root=document.documentElement; if(theme.bg_color) root.style.setProperty('--bg', theme.bg_color); if(theme.secondary_bg_color) root.style.setProperty('--card', theme.secondary_bg_color); if(theme.text_color) root.style.setProperty('--text', theme.text_color); }
+  
+  if(window.Telegram && Telegram.WebApp){ 
+    const theme = Telegram.WebApp.themeParams || {}; 
+    const root=document.documentElement; 
+    if(theme.bg_color) root.style.setProperty('--bg', theme.bg_color); 
+    if(theme.secondary_bg_color) root.style.setProperty('--card', theme.secondary_bg_color); 
+    if(theme.text_color) root.style.setProperty('--text', theme.text_color); 
+  }
 })();
 </script>
 </body>
