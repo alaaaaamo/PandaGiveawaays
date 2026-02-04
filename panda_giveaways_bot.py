@@ -485,6 +485,12 @@ class DatabaseManager:
         conn.close()
         
         if row:
+            # التحقق من وجود عمود ban_reason
+            try:
+                ban_reason_value = row['ban_reason'] if 'ban_reason' in row.keys() else None
+            except (KeyError, IndexError):
+                ban_reason_value = None
+            
             return User(
                 user_id=row['user_id'],
                 username=row['username'],
@@ -497,7 +503,7 @@ class DatabaseManager:
                 created_at=row['created_at'],
                 last_active=row['last_active'],
                 is_banned=bool(row['is_banned']),
-                ban_reason=row.get('ban_reason'),
+                ban_reason=ban_reason_value,
                 last_spin_time=row['last_spin_time'],
                 spin_count_today=row['spin_count_today']
             )
