@@ -71,6 +71,27 @@ function getUserIdFromUrl(){
   return null;
 }
 
+function getReferrerIdFromUrl(){
+  try {
+    // محاولة من start_param في initDataUnsafe
+    const initData = window.Telegram?.WebApp?.initDataUnsafe;
+    if(initData?.start_param) {
+      const startParam = initData.start_param;
+      if(startParam.startsWith('ref_')) {
+        return parseInt(startParam.replace('ref_', ''));
+      }
+    }
+    
+    // محاولة من URL parameters
+    const params = new URLSearchParams(location.search);
+    const refParam = params.get('referrer_id') || params.get('ref');
+    if(refParam && /^\d+$/.test(refParam)) return parseInt(refParam);
+  } catch(e) {
+    console.error('Error extracting referrer_id:', e);
+  }
+  return null;
+}
+
 (async function(){
   const animationPlayer = document.getElementById('animationPlayer');
   const statusIcon = document.getElementById('statusIcon');
@@ -116,7 +137,23 @@ function getUserIdFromUrl(){
     async function doSend(){
       const uid = getUserIdFromUrl();
       const fpToken = new URLSearchParams(location.search).get('fp_token');
-      const payload = { fingerprint: final, meta:{ ua, rez, tz, lid, cfp, afp, ip: userIP }, user_id: uid, fp_token: fpToken };
+      const referrerId = getReferrerIdFromUrl();
+      
+      // إنشاء fallback link
+      let fallbackLink = 'https://t.me/PandaGiveawaysBot';
+      if(referrerId) {
+        fallbackLink = `https://t.me/PandaGiveawaysBot?start=ref_${referrerId}`;
+        console.log('📎 Referrer found:', referrerId, 'Fallback link:', fallbackLink);
+      }
+      
+      const payload = { 
+        fingerprint: final, 
+        meta:{ ua, rez, tz, lid, cfp, afp, ip: userIP }, 
+        user_id: uid, 
+        fp_token: fpToken,
+        referrer_id: referrerId,
+        fallback_link: fallbackLink
+      };
       
       let success = false;
       

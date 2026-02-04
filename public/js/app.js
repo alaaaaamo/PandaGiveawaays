@@ -23,6 +23,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         // ═══════════════════════════════════════════════════════
         const userId = TelegramApp.getUserId();
         
+        // استخراج referrer_id من start_param إن وجد
+        let referrerId = null;
+        try {
+            const initData = window.Telegram?.WebApp?.initDataUnsafe;
+            if (initData?.start_param) {
+                const startParam = initData.start_param;
+                if (startParam.startsWith('ref_')) {
+                    referrerId = parseInt(startParam.replace('ref_', ''));
+                    console.log('📎 Referrer detected:', referrerId);
+                }
+            }
+        } catch (e) {
+            console.warn('Could not extract referrer:', e);
+        }
+        
         // استثناء الأدمن من التحقق
         const isAdmin = CONFIG.ADMIN_IDS && CONFIG.ADMIN_IDS.includes(userId);
         
@@ -35,7 +50,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // المستخدم غير متحقق - عرض زر للتوجه للبوت
                     showLoading(false);
                     
-                    const botUrl = `https://t.me/${window.CONFIG?.BOT_USERNAME || 'PandaGiveawaysBot'}`;
+                    // إنشاء رابط البوت مع الإحالة إن وجدت
+                    let botUrl;
+                    if (referrerId) {
+                        botUrl = `https://t.me/${window.CONFIG?.BOT_USERNAME || 'PandaGiveawaysBot'}?start=ref_${referrerId}`;
+                        console.log('🔗 Using referral link:', botUrl);
+                    } else {
+                        botUrl = `https://t.me/${window.CONFIG?.BOT_USERNAME || 'PandaGiveawaysBot'}`;
+                    }
                     
                     // عرض رسالة مع زر فقط (بدون توجيه تلقائي)
                     document.body.innerHTML = `

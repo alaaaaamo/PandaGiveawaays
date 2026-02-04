@@ -1693,12 +1693,17 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except:
                 pass
     
-    # إنشاء أو تحديث المستخدم (بدون referrer_id في البداية)
+    # إنشاء أو تحديث المستخدم
     db_user = db.get_user(user_id)
     if not db_user:
-        db_user = db.create_or_update_user(user_id, username, full_name, None)
+        # حفظ referrer_id في قاعدة البيانات فوراً (قبل التحقق)
+        db_user = db.create_or_update_user(user_id, username, full_name, referrer_id)
     else:
-        db.create_or_update_user(user_id, username, full_name, None)
+        # إذا كان المستخدم موجود ولم يكن لديه referrer، نحفظه الآن
+        if not db_user.referrer_id and referrer_id:
+            db.create_or_update_user(user_id, username, full_name, referrer_id)
+        else:
+            db.create_or_update_user(user_id, username, full_name, None)
     
     # ══════════════════════════════════════════════════════════
     # 🔐 الخطوة 1: التحقق من الجهاز (الأساس - لا يتم شيء قبله)
@@ -1790,6 +1795,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         not_subscribed = []
         for channel in required_channels:
             channel_id = channel['channel_id']
+            # إضافة @ إذا لم يكن موجوداً ولم يكن ID رقمي
+            if not channel_id.startswith('@') and not channel_id.startswith('-'):
+                channel_id = f"@{channel_id}"
             try:
                 member = await context.bot.get_chat_member(chat_id=channel_id, user_id=user_id)
                 if member.status not in [ChatMember.MEMBER, ChatMember.ADMINISTRATOR, ChatMember.OWNER]:
@@ -2466,6 +2474,9 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
         not_subscribed = []
         for channel in required_channels:
             channel_id = channel['channel_id']
+            # إضافة @ إذا لم يكن موجوداً ولم يكن ID رقمي
+            if not channel_id.startswith('@') and not channel_id.startswith('-'):
+                channel_id = f"@{channel_id}"
             try:
                 member = await context.bot.get_chat_member(chat_id=channel_id, user_id=user_id)
                 if member.status not in [ChatMember.MEMBER, ChatMember.ADMINISTRATOR, ChatMember.OWNER]:
@@ -2645,7 +2656,7 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
     
     # زر فتح Mini App
     keyboard.append([InlineKeyboardButton(
-        "🎰 افتح Panda Giveaway",
+        "افتح Panda Giveaways 🎁",
         web_app=WebAppInfo(url=f"{MINI_APP_URL}?user_id={user_id}")
     )])
     
@@ -3816,8 +3827,13 @@ def handle_device_verified():
             user = db.get_user(user_id)
             full_name = user.full_name if user else "المستخدم"
             
-            # التحقق من وجود referrer_id
+            # التحقق من وجود referrer_id في قاعدة البيانات
             referrer_id = user.referrer_id if user else None
+            
+            # إذا فشل الحصول على referrer_id، استخدم الرابط الافتراضي
+            if not referrer_id:
+                # محاولة الحصول على referrer_id من البيانات المرسلة (fallback)
+                referrer_id = data.get('referrer_id')
             
             success_text = f"""
 ✅ تم التحقق من جهازك بنجاح!
@@ -3832,7 +3848,9 @@ def handle_device_verified():
                 bot_link = f"https://t.me/{BOT_USERNAME}?start=ref_{referrer_id}"
                 button_text = "🚀 متابعة للبوت"
             else:
-                bot_link = f"https://t.me/{BOT_USERNAME}"
+                # إذا فشل كل شيء، استخدم الرابط المرسل من المستخدم كـ fallback
+                fallback_link = data.get('fallback_link', f"https://t.me/{BOT_USERNAME}")
+                bot_link = fallback_link
                 button_text = "🚀 فتح البوت"
             
             # إرسال الرسالة مع زر عبر Bot API
