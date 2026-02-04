@@ -69,62 +69,9 @@ async function checkRequiredChannels() {
 function showChannelsModal(channels) {
     console.log('📱 Showing channels modal with', channels.length, 'channels');
     
-    // Track which channels user opened
-    const channelStatus = {};
-    channels.forEach(channel => {
-        const channelId = channel.id || channel.channel_id;
-        channelStatus[channelId] = false;
-    });
-
-    const modalHTML = `
-        <div class="modal-overlay active" id="channelsModal">
-            <div class="modal-content">
-                <h2>🔒 الانضمام للقنوات الإجبارية</h2>
-                <p>يرجى الانضمام إلى القنوات التالية للمتابعة:</p>
-                
-                <div class="channels-list">
-                    ${channels.map(channel => {
-                        const channelId = channel.id || channel.channel_id;
-                        const channelName = channel.name || channel.channel_name;
-                        const channelUrl = channel.url || channel.channel_url;
-                        return `
-                        <div class="channel-item" data-channel-id="${channelId}">
-                            <div class="channel-info">
-                                <h3>${channelName}</h3>
-                                <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">${channelId}</p>
-                            </div>
-                            <div class="channel-actions">
-                                <a href="${channelUrl}" 
-                                   target="_blank" 
-                                   class="channel-link"
-                                   onclick="markChannelAsOpened('${channelId}')">
-                                    📢 اشترك هنا
-                                </a>
-                                <span class="channel-status not-subscribed" id="status-${channelId}">
-                                    <img src="/img/payment-failure.svg" alt="✗" style="width: 18px; height: 18px;">
-                                </span>
-                            </div>
-                        </div>
-                    `}).join('')}
-                </div>
-                
-                <button class="verify-btn" onclick="verifySubscriptions()">
-                    <img src="/img/payment-success.svg" style="width: 16px; height: 16px; vertical-align: middle;"> تحقق من الاشتراك
-                </button>
-            </div>
-        </div>
-    `;
-
-    // Add modal to body
-    const existingModal = document.getElementById('channelsModal');
-    if (existingModal) {
-        existingModal.remove();
-    }
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
-
-    // Store channel status globally
-    window.channelStatus = channelStatus;
-    console.log('✅ Modal displayed successfully');
+    // لا تعرض المودال الديناميكي - استخدم المودال الموجود في index.html
+    console.log('✅ Using existing channels modal from index.html');
+    return;
 }
 
 // Mark channel as opened when user clicks the link

@@ -267,16 +267,28 @@ class WheelOfFortune {
             
             const anglePerSegment = (2 * Math.PI) / this.prizes.length;
             
-            // الزاوية الحالية (مطبعة)
+            // الزاوية الحالية (منظمة)
             const currentRotation = this.rotation % (2 * Math.PI);
             
-            // حساب الزاوية المستهدفة بدقة
-            // المؤشر في الأعلى (الزاوية 0)، نريد أن يكون مركز الجائزة عند الأعلى
-            const prizeAngle = prizeIndex * anglePerSegment;
-            const targetAngle = (2 * Math.PI) - prizeAngle - (anglePerSegment / 2);
+            // 🎯 حساب الزاوية المستهدفة بدقة
+            // المؤشر في الأعلى (π/2 radians = 90 degrees)
+            // نريد أن يكون مركز الجائزة تحت المؤشر مباشرة
+            
+            // زاوية بداية الجائزة
+            const prizeStartAngle = prizeIndex * anglePerSegment;
+            
+            // مركز الجائزة = بداية الجائزة + نصف حجم القطاع
+            const prizeCenterAngle = prizeStartAngle + (anglePerSegment / 2);
+            
+            // الزاوية المستهدفة لجعل مركز الجائزة عند المؤشر (الأعلى = π/2)
+            // نحتاج إلى جعل prizeCenterAngle عند موضع المؤشر (π/2)
+            const pointerAngle = Math.PI / 2; // 90 درجة (الأعلى)
+            const targetAngle = pointerAngle - prizeCenterAngle;
             
             // حساب أقصر مسافة للوصول للهدف
             let angleDiff = targetAngle - currentRotation;
+            
+            // تطبيع الزاوية لتكون موجبة
             while (angleDiff < 0) angleDiff += 2 * Math.PI;
             while (angleDiff >= 2 * Math.PI) angleDiff -= 2 * Math.PI;
             
@@ -284,9 +296,12 @@ class WheelOfFortune {
             const extraRotations = 5 + Math.floor(Math.random() * 3);
             const totalRotation = (extraRotations * 2 * Math.PI) + angleDiff;
             
-            console.log('Spin calculation:', {
+            console.log('🎲 Spin calculation:', {
                 prizeName: prize.name,
                 prizeIndex,
+                anglePerSegment: (anglePerSegment * 180 / Math.PI).toFixed(2) + '°',
+                prizeStartAngle: (prizeStartAngle * 180 / Math.PI).toFixed(2) + '°',
+                prizeCenterAngle: (prizeCenterAngle * 180 / Math.PI).toFixed(2) + '°',
                 currentRotation: (currentRotation * 180 / Math.PI).toFixed(2) + '°',
                 targetAngle: (targetAngle * 180 / Math.PI).toFixed(2) + '°',
                 angleDiff: (angleDiff * 180 / Math.PI).toFixed(2) + '°',
