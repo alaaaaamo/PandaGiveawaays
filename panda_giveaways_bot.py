@@ -2526,7 +2526,16 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
     # ═══════════════════════════════════════════════════════════
     # 🎯 احتساب الإحالة بعد اكتمال جميع الخطوات
     # ═══════════════════════════════════════════════════════════
+    # الحصول على referrer_id من context أو من قاعدة البيانات
     referrer_id = context.user_data.get('pending_referrer_id')
+    
+    # إذا لم يكن موجود في context، نحاول الحصول عليه من قاعدة البيانات
+    if not referrer_id:
+        current_user = db.get_user(user_id)
+        if current_user and current_user.referrer_id:
+            referrer_id = current_user.referrer_id
+            logger.info(f"📎 Retrieved referrer_id from database: {referrer_id} for user {user_id}")
+    
     if referrer_id:
         # التحقق من أن المُحيل ليس محظوراً
         referrer_user = db.get_user(referrer_id)
