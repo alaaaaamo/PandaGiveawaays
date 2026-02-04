@@ -452,6 +452,11 @@ def init_database():
     except sqlite3.OperationalError:
         pass  # العمود موجود بالفعل
     
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN ban_reason TEXT")
+    except sqlite3.OperationalError:
+        pass  # العمود موجود بالفعل
+    
     conn.commit()
     conn.close()
     print("✅ Database initialized")
@@ -2293,7 +2298,9 @@ def get_all_users():
                 available_spins as spins,
                 total_referrals as referrals,
                 created_at as joined,
-                is_banned
+                is_banned,
+                ban_reason,
+                is_device_verified
             FROM users
             ORDER BY created_at DESC
         """)
@@ -2308,7 +2315,9 @@ def get_all_users():
                 'spins': row['spins'] or 0,
                 'referrals': row['referrals'] or 0,
                 'joined': row['joined'],
-                'is_banned': bool(row['is_banned'])
+                'is_banned': bool(row['is_banned']),
+                'ban_reason': row['ban_reason'] or '',
+                'is_verified': bool(row['is_device_verified'])
             })
         
         conn.close()
@@ -2326,7 +2335,102 @@ def get_all_users():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # ═══════════════════════════════════════════════════════════════
-# 👥 USER REFERRALS FOR ADMIN
+# � ADMIN ADVANCED STATISTICS
+# ═══════════════════════════════════════════════════════════════
+
+@app.route('/api/admin/advanced-stats', methods=['GET'])
+def get_advanced_stats():
+    """إحصائيات متقدمة للأدمن"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # إجمالي المستخدمين
+        cursor.execute("SELECT COUNT(*) as total FROM users")
+        total_users = cursor.fetchone()['total']
+        
+        # المستخدمين النشطين (غير محظورين)
+        cursor.execute("SELECT COUNT(*) as active FROM users WHERE is_banned = 0")
+        active_users = cursor.fetchone()['active']
+        
+        # المستخدمين المحظورين
+        cursor.execute("SELECT COUNT(*) as banned FROM users WHERE is_banned = 1")
+        banned_users = cursor.fetchone()['banned']
+        
+        # المستخدمين المتحقق منهم (بالجهاز)
+        cursor.execute("SELECT COUNT(*) as verified FROM users WHERE is_device_verified = 1")
+        verified_users = cursor.fetchone()['verified']
+        
+        # إجمالي عمليات الحظر
+        cursor.execute("SELECT COUNT(*) as total_bans FROM users WHERE is_banned = 1")
+        total_bans = cursor.fetchone()['total_bans']
+        
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'total_users': total_users,
+                'active_users': active_users,
+                'banned_users': banned_users,
+                'verified_users': verified_users,
+                'total_bans': total_bans
+            }
+        })
+        
+    except Exception as e:
+        print(f"Error getting advanced stats: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ═══════════════════════════════════════════════════════════════
+# ✅ UNBAN USER - ALLOW ACCESS WITHOUT VERIFICATION
+# ═══════════════════════════════════════════════════════════════
+
+@app.route('/api/admin/unban-user', methods=['POST'])
+def unban_user():
+    """إلغاء حظر مستخدم والسماح له بالوصول بدون تحقق"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        
+        if not user_id:
+            return jsonify({'success': False, 'error': 'User ID required'}), 400
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+        
+        # إلغاء الحظر وتعيين أنه متحقق منه لتجنب التحقق مرة أخرى
+        cursor.execute("""
+            UPDATE users 
+            SET is_banned = 0,
+                ban_reason = NULL,
+                is_device_verified = 1,
+                last_active = ?
+            WHERE user_id = ?
+        """, (now, user_id))
+        
+        # حذف سجلات التحقق القديمة
+        cursor.execute("DELETE FROM device_verifications WHERE user_id = ?", (user_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True, 
+            'message': 'تم إلغاء الحظر والسماح للمستخدم بالوصول'
+        })
+        
+    except Exception as e:
+        print(f"Error unbanning user: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ═══════════════════════════════════════════════════════════════
+# �👥 USER REFERRALS FOR ADMIN
 # ═══════════════════════════════════════════════════════════════
 
 @app.route('/api/admin/user-referrals', methods=['GET'])

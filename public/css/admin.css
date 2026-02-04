@@ -225,6 +225,34 @@
     font-size: 14px;
 }
 
+/* Advanced Statistics Grid */
+.advanced-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-xl);
+}
+
+.advanced-stats-grid .stat-card {
+    cursor: default;
+}
+
+.advanced-stats-grid .stat-card.success .stat-icon-wrapper {
+    background: linear-gradient(135deg, #3fb950, #2ea043);
+}
+
+.advanced-stats-grid .stat-card.warning .stat-icon-wrapper {
+    background: linear-gradient(135deg, #d29922, #9e6a03);
+}
+
+.advanced-stats-grid .stat-card.danger .stat-icon-wrapper {
+    background: linear-gradient(135deg, #f85149, #da3633);
+}
+
+.advanced-stats-grid .stat-card.info .stat-icon-wrapper {
+    background: linear-gradient(135deg, #58a6ff, #1f6feb);
+}
+
 /* ═══════════════════════════════════════════════════════════════
    📑 TABS NAVIGATION
    ═══════════════════════════════════════════════════════════════ */

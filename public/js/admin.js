@@ -109,6 +109,7 @@ async function loadDashboardData() {
         // Load all data
         await Promise.all([
             loadStatistics(),
+            loadAdvancedStats(),  // 📊 الإحصائيات المتقدمة الجديدة
             loadPrizes(),
             loadUsers(),
             loadWithdrawals(),
@@ -160,6 +161,29 @@ async function loadStatistics() {
 
 function formatNumber(num) {
     return new Intl.NumberFormat('ar-EG').format(num);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 📊 ADVANCED STATISTICS
+// ═══════════════════════════════════════════════════════════════
+
+async function loadAdvancedStats() {
+    try {
+        const response = await fetch('/api/admin/advanced-stats');
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            const stats = result.data;
+            document.getElementById('stat-total-users').textContent = formatNumber(stats.total_users || 0);
+            document.getElementById('stat-active-users').textContent = formatNumber(stats.active_users || 0);
+            document.getElementById('stat-banned-users').textContent = formatNumber(stats.banned_users || 0);
+            document.getElementById('stat-verified-users').textContent = formatNumber(stats.verified_users || 0);
+        } else {
+            console.error('Failed to load advanced stats:', result.error);
+        }
+    } catch (error) {
+        console.error('Error loading advanced stats:', error);
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -398,21 +422,61 @@ function renderUsersTable() {
     const tbody = document.getElementById('users-table-body');
     if (!tbody) return;
     
-    tbody.innerHTML = adminData.users.map(user => `
-        <tr>
+    tbody.innerHTML = adminData.users.map(user => {
+        const isBanned = user.is_banned === 1;
+        const banBadge = isBanned ? `<span style="background: #ff4d4d; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-right: 8px;">محظور</span>` : '';
+        const banReasonText = isBanned && user.ban_reason ? `<br><small style="color: #ff6b6b;">${user.ban_reason}</small>` : '';
+        
+        const actionButtons = isBanned 
+            ? `<button class="icon-btn" style="background: #3fb950;" onclick="unbanUser(${user.id}, '${user.username}')">✅ السماح</button>`
+            : `<button class="icon-btn" onclick="viewUserReferrals(${user.id}, '${user.name}')">👁️ إحالات</button>
+               <button class="icon-btn" style="background: #3fb950;" onclick="quickAddSpins(${user.id}, '${user.username}')">🎰 لفات</button>`;
+        
+        return `
+        <tr style="${isBanned ? 'background: rgba(255, 77, 77, 0.1);' : ''}">
             <td>${user.id}</td>
-            <td>${user.name}</td>
+            <td>${banBadge}${user.name}${banReasonText}</td>
             <td>${user.username}</td>
             <td>${user.balance.toFixed(4)} TON</td>
             <td>${user.spins}</td>
             <td>${user.referrals}</td>
             <td>${user.joined}</td>
-            <td>
-                <button class="icon-btn" onclick="viewUserReferrals(${user.id}, '${user.name}')">👁️ إحالات</button>
-                <button class="icon-btn" style="background: #3fb950;" onclick="quickAddSpins(${user.id}, '${user.username}')">🎰 لفات</button>
-            </td>
+            <td>${actionButtons}</td>
         </tr>
-    `).join('');
+        `;
+    }).join('');
+}
+
+// إلغاء حظر مستخدم
+async function unbanUser(userId, username) {
+    if (!confirm(`هل تريد السماح للمستخدم ${username} بالدخول بدون تحقق؟`)) {
+        return;
+    }
+    
+    try {
+        showLoading();
+        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
+        const response = await fetch(`${API_BASE_URL}/admin/unban-user`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId })
+        });
+        
+        const result = await response.json();
+        hideLoading();
+        
+        if (result.success) {
+            showToast('تم السماح للمستخدم بنجاح ✅', 'success');
+            await loadUsers(); // إعادة تحميل قائمة المستخدمين
+            await loadAdvancedStats(); // تحديث الإحصائيات
+        } else {
+            showToast(result.error || 'فشل إلغاء الحظر', 'error');
+        }
+    } catch (error) {
+        hideLoading();
+        console.error('Error unbanning user:', error);
+        showToast('خطأ في إلغاء الحظر', 'error');
+    }
 }
 
 // تصفية جدول المستخدمين حسب البحث
@@ -430,19 +494,26 @@ function filterUsersTable(query) {
         return;
     }
     
-    tbody.innerHTML = filteredUsers.map(user => `
-        <tr>
+    tbody.innerHTML = filteredUsers.map(user => {
+        const isBanned = user.is_banned === 1;
+        const banBadge = isBanned ? `<span style="background: #ff4d4d; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-right: 8px;">محظور</span>` : '';
+        const banReasonText = isBanned && user.ban_reason ? `<br><small style="color: #ff6b6b;">${user.ban_reason}</small>` : '';
+        
+        const actionButtons = isBanned 
+            ? `<button class="icon-btn" style="background: #3fb950;" onclick="unbanUser(${user.id}, '${user.username}')">✅ السماح</button>`
+            : `<button class="icon-btn" onclick="viewUserReferrals(${user.id}, '${user.name}')">👁️ إحالات</button>
+               <button class="icon-btn" style="background: #3fb950;" onclick="quickAddSpins(${user.id}, '${user.username}')">🎰 لفات</button>`;
+        
+        return `
+        <tr style="${isBanned ? 'background: rgba(255, 77, 77, 0.1);' : ''}">
             <td>${user.id}</td>
-            <td>${user.name}</td>
+            <td>${banBadge}${user.name}${banReasonText}</td>
             <td>${user.username}</td>
             <td>${user.balance.toFixed(4)} TON</td>
             <td>${user.spins}</td>
             <td>${user.referrals}</td>
             <td>${user.joined}</td>
-            <td>
-                <button class="icon-btn" onclick="viewUserReferrals(${user.id}, '${user.name}')">👁️ إحالات</button>
-                <button class="icon-btn" style="background: #3fb950;" onclick="quickAddSpins(${user.id}, '${user.username}')">🎰 لفات</button>
-            </td>
+            <td>${actionButtons}</td>
         </tr>
     `).join('');
 }
