@@ -1667,8 +1667,9 @@ body {
 
 .wheel-wrapper {
     position: relative;
-    width: 100%;
-    padding-bottom: 100%;
+    width: 350px;
+    height: 350px;
+    margin: 0 auto;
 }
 
 #wheel-canvas {
