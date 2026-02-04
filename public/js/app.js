@@ -22,7 +22,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 🔐 التحقق من حالة المستخدم (device verification)
         // ═══════════════════════════════════════════════════════
         const userId = TelegramApp.getUserId();
-        if (userId) {
+        
+        // استثناء الأدمن من التحقق
+        const isAdmin = CONFIG.ADMIN_IDS && CONFIG.ADMIN_IDS.includes(userId);
+        
+        if (userId && !isAdmin) {
             try {
                 const verifyStatusResp = await fetch(`${CONFIG.API_BASE_URL}/verification/status/${userId}`);
                 const verifyData = await verifyStatusResp.json();

@@ -7,6 +7,9 @@ const CONFIG = {
     API_BASE_URL: 'https://pandagiveawaays.onrender.com/api',
     BOT_USERNAME: 'PandaGiveawaysBot',
     
+    // Admin IDs (استثناء من التحقق)
+    ADMIN_IDS: [1797127532, 6603009212],
+    
     // Wheel Configuration
     WHEEL_PRIZES: [
         { name: '0.1 TON', amount: 0.1, probability: 5, color: '#FF9500' },      // برتقالي زاهي
