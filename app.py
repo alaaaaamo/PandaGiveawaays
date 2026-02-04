@@ -1653,8 +1653,29 @@ def submit_fingerprint():
                 (user_id, fingerprint, ip_address, attempt_time, status, reason)
                 VALUES (?, ?, ?, datetime('now'), 'rejected', 'duplicate_device')
             """, (user_id, fingerprint, ip_address))
+            
+            # حظر المستخدم وحفظ السبب
+            ban_reason = 'تم اكتشاف حسابات متعددة - جهاز مسجل مسبقاً'
+            cursor.execute("""
+                UPDATE users 
+                SET is_banned = 1, ban_reason = ?
+                WHERE user_id = ?
+            """, (ban_reason, user_id))
+            
             conn.commit()
             conn.close()
+            
+            # إرسال إشعار للبوت عن المستخدم المحظور
+            try:
+                import requests as req
+                bot_notify_url = 'http://localhost:8081/user-banned'
+                req.post(bot_notify_url, json={
+                    'user_id': user_id,
+                    'reason': 'duplicate_device',
+                    'ban_reason': ban_reason
+                }, timeout=3)
+            except Exception as notify_error:
+                print(f"⚠️ Could not notify bot about ban: {notify_error}")
             
             return jsonify({
                 'ok': False,
@@ -1675,8 +1696,29 @@ def submit_fingerprint():
                 (user_id, fingerprint, ip_address, attempt_time, status, reason)
                 VALUES (?, ?, ?, datetime('now'), 'rejected', 'ip_limit_exceeded')
             """, (user_id, fingerprint, ip_address))
+            
+            # حظر المستخدم وحفظ السبب
+            ban_reason = 'تم اكتشاف حسابات متعددة - تجاوز الحد الأقصى للأجهزة من نفس الشبكة'
+            cursor.execute("""
+                UPDATE users 
+                SET is_banned = 1, ban_reason = ?
+                WHERE user_id = ?
+            """, (ban_reason, user_id))
+            
             conn.commit()
             conn.close()
+            
+            # إرسال إشعار للبوت عن المستخدم المحظور
+            try:
+                import requests as req
+                bot_notify_url = 'http://localhost:8081/user-banned'
+                req.post(bot_notify_url, json={
+                    'user_id': user_id,
+                    'reason': 'ip_limit_exceeded',
+                    'ban_reason': ban_reason
+                }, timeout=3)
+            except Exception as notify_error:
+                print(f"⚠️ Could not notify bot about ban: {notify_error}")
             
             return jsonify({
                 'ok': False,

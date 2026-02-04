@@ -1746,15 +1746,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 للحفاظ على نزاهة النظام ومنع التلاعب، يجب التحقق من جهازك أولاً.
 
 <b>⚡️ هذه الخطوة تتم مرة واحدة فقط!</b>
+<b>لماذا التحقق مهم؟</b>
+• ضمان عدالة الإحالات
+• منع الحسابات المزيفة والتلاعب
 
-<b>ما الذي يتم فحصه؟</b>
-• بصمة الجهاز (Fingerprint)
-• عنوان IP
-• معلومات المتصفح
+<b>✅ النظام لا يستخدم بياناتك الشخصية</b>
 
-<b>✅ بياناتك آمنة ومحمية</b>
-
-اضغط على الزر أدناه للتحقق:
+<b>اضغط على زر تحقق من جهازك لبدأ التحقق:</b>
 """
                             
                             keyboard = [[InlineKeyboardButton(
@@ -3909,6 +3907,97 @@ def handle_device_verified():
             
     except Exception as e:
         logger.error(f"❌ Error in handle_device_verified: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@verification_app.route('/user-banned', methods=['POST'])
+def handle_user_banned():
+    """استقبال إشعار عند حظر مستخدم بسبب التعدد"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        reason = data.get('reason', 'unknown')
+        ban_reason = data.get('ban_reason', 'تم اكتشاف حسابات متعددة')
+        
+        if not user_id:
+            return jsonify({'success': False, 'error': 'Missing user_id'}), 400
+        
+        logger.info(f"🔴 User banned notification for user {user_id}, reason: {reason}")
+        
+        # إرسال رسالة للمستخدم المحظور
+        try:
+            import requests as req
+            
+            # الحصول على بيانات المستخدم
+            user = db.get_user(user_id)
+            full_name = user.full_name if user else "المستخدم"
+            
+            # تحديد نص الرسالة حسب سبب الحظر
+            if reason == 'duplicate_device':
+                ban_text = f"""
+⛔ <b>تم حظرك من البوت</b>
+
+عزيزي <b>{full_name}</b>،
+
+تم اكتشاف استخدام هذا الجهاز لحساب آخر مسبقاً.
+
+<b>السبب:</b> جهاز مسجل مسبقاً لمستخدم آخر
+<b>📌 ملاحظة:</b> كل جهاز يمكن استخدامه لحساب واحد فقط
+
+<b>🔒 حالة الحساب:</b> محظور
+
+إذا كنت تعتقد أن هذا خطأ، تواصل مع الدعم.
+"""
+            elif reason == 'ip_limit_exceeded':
+                ban_text = f"""
+⛔ <b>تم حظرك من البوت</b>
+
+عزيزي <b>{full_name}</b>،
+
+تم تجاوز الحد الأقصى للحسابات من نفس الشبكة.
+
+<b>السبب:</b> تجاوز الحد الأقصى (3 حسابات لكل شبكة)
+<b>📌 ملاحظة:</b> هذا الإجراء لضمان نزاهة النظام
+
+<b>🔒 حالة الحساب:</b> محظور
+
+إذا كنت تعتقد أن هذا خطأ، تواصل مع الدعم.
+"""
+            else:
+                ban_text = f"""
+⛔ <b>تم حظرك من البوت</b>
+
+عزيزي <b>{full_name}</b>،
+
+تم حظر حسابك من البوت.
+
+<b>السبب:</b> {ban_reason}
+<b>🔒 حالة الحساب:</b> محظور
+
+إذا كنت تعتقد أن هذا خطأ، تواصل مع الدعم.
+"""
+            
+            # إرسال الرسالة عبر Bot API
+            url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+            payload = {
+                "chat_id": user_id,
+                "text": ban_text,
+                "parse_mode": "HTML"
+            }
+            resp = req.post(url, json=payload, timeout=10)
+            
+            if resp.ok:
+                logger.info(f"✅ Ban notification sent to user {user_id}")
+            else:
+                logger.error(f"❌ Failed to send ban notification: {resp.text}")
+            
+            return jsonify({'success': True, 'message': 'Ban notification sent'})
+            
+        except Exception as bot_error:
+            logger.error(f"❌ Error sending ban notification to user {user_id}: {bot_error}")
+            return jsonify({'success': False, 'error': 'Failed to send message'}), 500
+            
+    except Exception as e:
+        logger.error(f"❌ Error in handle_user_banned: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @verification_app.route('/send-welcome', methods=['POST'])
