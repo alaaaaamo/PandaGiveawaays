@@ -315,13 +315,13 @@ class DatabaseManager:
             )
         """)
         
-        # جدول القنوات الإجبارية
+        # جدول القنوات الإجبارية (مشترك مع الموقع - required_channels)
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS mandatory_channels (
+            CREATE TABLE IF NOT EXISTS required_channels (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 channel_id TEXT NOT NULL UNIQUE,
                 channel_name TEXT NOT NULL,
-                channel_username TEXT,
+                channel_url TEXT,
                 is_active INTEGER DEFAULT 1,
                 added_by INTEGER NOT NULL,
                 added_at TEXT NOT NULL,
@@ -926,8 +926,8 @@ class DatabaseManager:
         
         try:
             cursor.execute("""
-                INSERT INTO mandatory_channels 
-                (channel_id, channel_name, channel_username, added_by, added_at)
+                INSERT INTO required_channels 
+                (channel_id, channel_name, channel_url, added_by, added_at)
                 VALUES (?, ?, ?, ?, ?)
             """, (channel_id, channel_name, channel_username, added_by, now))
             
@@ -940,12 +940,12 @@ class DatabaseManager:
             return False
     
     def get_active_mandatory_channels(self) -> List[Dict]:
-        """الحصول على القنوات الإجبارية النشطة"""
+        """الحصول على القنوات الإجبارية النشطة من جدول required_channels (مشترك مع الموقع)"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         cursor.execute("""
-            SELECT * FROM mandatory_channels 
+            SELECT * FROM required_channels 
             WHERE is_active = 1 
             ORDER BY added_at DESC
         """)
