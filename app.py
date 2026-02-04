@@ -2419,60 +2419,6 @@ def verification_settings():
 
 
 # ═══════════════════════════════════════════════════════════════
-# 👥 USER REFERRALS FOR ADMIN
-# ═══════════════════════════════════════════════════════════════
-
-@app.route('/api/admin/user-referrals', methods=['GET'])
-def get_admin_user_referrals():
-    """جلب إحالات مستخدم معين للأدمن"""
-    try:
-        user_id = request.args.get('user_id')
-        
-        if not user_id:
-            return jsonify({'success': False, 'error': 'user_id is required'}), 400
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # جلب الإحالات
-        cursor.execute("""
-            SELECT 
-                u.user_id as id,
-                u.username,
-                u.full_name as name,
-                r.created_at as joined_at,
-                r.is_valid
-            FROM referrals r
-            JOIN users u ON r.referred_id = u.user_id
-            WHERE r.referrer_id = ?
-            ORDER BY r.created_at DESC
-        """, (user_id,))
-        
-        referrals = []
-        for row in cursor.fetchall():
-            referrals.append({
-                'id': row['id'],
-                'username': f"@{row['username']}" if row['username'] else f"user_{row['id']}",
-                'name': row['name'] or 'Unknown',
-                'joined_at': row['joined_at'],
-                'is_verified': bool(row['is_valid'])
-            })
-        
-        conn.close()
-        
-        return jsonify({
-            'success': True,
-            'data': referrals,
-            'count': len(referrals)
-        })
-        
-    except Exception as e:
-        print(f"Error in get_admin_user_referrals: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-# ═══════════════════════════════════════════════════════════════
 # ═══════════════════════════════════════════════════════════════
 # ⚙️ BOT SETTINGS API
 # ═══════════════════════════════════════════════════════════════
