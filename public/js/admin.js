@@ -1093,12 +1093,28 @@ async function loadSettings() {
             document.getElementById('max-withdrawal').value = 100;
             document.getElementById('auto-withdrawal').checked = false;
         }
+        
+        // تحميل إعدادات التحقق من التعدد
+        const adminId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+        if (adminId) {
+            const verificationResponse = await fetch(`${window.CONFIG.API_BASE_URL}/admin/verification-settings?admin_id=${adminId}`);
+            const verificationResult = await verificationResponse.json();
+            
+            if (verificationResult.success) {
+                document.getElementById('verification-enabled').checked = verificationResult.verification_enabled !== false;
+                console.log('✅ Verification settings loaded:', verificationResult.verification_enabled);
+            } else {
+                document.getElementById('verification-enabled').checked = true;
+            }
+        }
+        
     } catch (error) {
         console.error('Error loading settings:', error);
         // استخدام القيم الافتراضية
         document.getElementById('min-withdrawal').value = window.CONFIG?.MIN_WITHDRAWAL_AMOUNT || 0.1;
         document.getElementById('max-withdrawal').value = 100;
         document.getElementById('auto-withdrawal').checked = false;
+        document.getElementById('verification-enabled').checked = true;
     }
     
     // باقي الإعدادات
@@ -1220,6 +1236,47 @@ function setupEventListeners() {
                 console.error('Error toggling auto-withdrawal:', error);
                 showToast('❌ خطأ في الاتصال', 'error');
                 // إرجاع الحالة السابقة
+                e.target.checked = !isEnabled;
+            }
+        });
+    }
+    
+    // Verification toggle listener
+    const verificationToggle = document.getElementById('verification-enabled');
+    if (verificationToggle) {
+        verificationToggle.addEventListener('change', async (e) => {
+            const isEnabled = e.target.checked;
+            console.log('🔄 Verification toggled:', isEnabled);
+            
+            const adminId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+            if (!adminId) {
+                showToast('❌ غير مصرح لك', 'error');
+                e.target.checked = !isEnabled;
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${window.CONFIG.API_BASE_URL}/admin/verification-settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        admin_id: adminId,
+                        enabled: isEnabled 
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    const status = isEnabled ? '✅ مفعّل' : '❌ معطّل';
+                    showToast(`التحقق من التعدد الآن ${status}`, 'success');
+                } else {
+                    showToast('❌ فشل تحديث الإعداد', 'error');
+                    e.target.checked = !isEnabled;
+                }
+            } catch (error) {
+                console.error('Error toggling verification:', error);
+                showToast('❌ خطأ في الاتصال', 'error');
                 e.target.checked = !isEnabled;
             }
         });

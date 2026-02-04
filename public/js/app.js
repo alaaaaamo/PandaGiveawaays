@@ -18,6 +18,89 @@ document.addEventListener('DOMContentLoaded', async () => {
         // عرض Loading
         showLoading(true);
         
+        // ═══════════════════════════════════════════════════════
+        // 🔐 التحقق من حالة المستخدم (device verification)
+        // ═══════════════════════════════════════════════════════
+        const userId = TelegramApp.getUserId();
+        if (userId) {
+            try {
+                const verifyStatusResp = await fetch(`${CONFIG.API_BASE_URL}/verification/status/${userId}`);
+                const verifyData = await verifyStatusResp.json();
+                
+                if (!verifyData.verified) {
+                    // المستخدم غير متحقق - توجيه تلقائي للبوت وإغلاق المينى آب
+                    showLoading(false);
+                    
+                    // فتح رابط البوت تلقائياً
+                    const botUrl = `https://t.me/${window.CONFIG?.BOT_USERNAME || 'PandaGiveawaysBot'}`;
+                    
+                    // عرض رسالة قصيرة قبل التوجيه
+                    document.body.innerHTML = `
+                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; 
+                            min-height: 100vh; background: #0d1117; padding: 20px; text-align: center;">
+                            <lottie-player src="/img/notallowed.json" 
+                                background="transparent" speed="1" 
+                                style="width: 200px; height: 200px;" 
+                                loop autoplay>
+                            </lottie-player>
+                            <img src="/img/payment-failure.svg" alt="X" 
+                                style="width: 60px; height: 60px; margin: 20px 0;">
+                            <h2 style="color: #ff4444; margin: 20px 0;">
+                                🚫 يجب التحقق من حسابك أولاً
+                            </h2>
+                            <p style="color: #8b95a1; font-size: 16px; line-height: 1.6; max-width: 400px;">
+                                جاري توجيهك للبوت للتحقق من جهازك...
+                            </p>
+                            <div style="margin-top: 20px;">
+                                <div style="width: 40px; height: 40px; border: 4px solid #ffa500; 
+                                    border-top-color: transparent; border-radius: 50%; 
+                                    animation: spin 1s linear infinite;">
+                                </div>
+                            </div>
+                            <p style="color: #666; font-size: 14px; margin-top: 20px;">
+                                Redirecting to bot...
+                            </p>
+                        </div>
+                    `;
+                    
+                    // إضافة animation للـ spinner
+                    const style = document.createElement('style');
+                    style.textContent = `
+                        @keyframes spin {
+                            0% { transform: rotate(0deg); }
+                            100% { transform: rotate(360deg); }
+                        }
+                    `;
+                    document.head.appendChild(style);
+                    
+                    // التوجيه بعد ثانية واحدة
+                    setTimeout(() => {
+                        if (window.Telegram?.WebApp) {
+                            // محاولة فتح رابط تيليجرام بطريقة داخلية
+                            try {
+                                window.Telegram.WebApp.openTelegramLink(botUrl);
+                            } catch (e) {
+                                // إذا فشل، استخدم openLink العادي
+                                window.Telegram.WebApp.openLink(botUrl);
+                            }
+                            // إغلاق المينى آب بعد فترة قصيرة
+                            setTimeout(() => {
+                                window.Telegram.WebApp.close();
+                            }, 500);
+                        } else {
+                            // في حالة عدم وجود Telegram WebApp، فتح في نافذة جديدة
+                            window.location.href = botUrl;
+                        }
+                    }, 1000);
+                    
+                    return;
+                }
+            } catch (verifyError) {
+                console.warn('⚠️ Could not check verification status:', verifyError);
+                // في حالة الخطأ، نستمر عادياً
+            }
+        }
+        
         // إرسال رسالة ترحيبية (سيظهر تليجرام "Allow bot to message you?" تلقائياً)
         await sendWelcomeMessage();
         

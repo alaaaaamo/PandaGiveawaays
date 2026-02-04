@@ -666,6 +666,14 @@
     font-weight: 600;
 }
 
+.setting-item .setting-description {
+    font-size: 12px;
+    color: #8b95a1;
+    margin-top: 6px;
+    margin-bottom: 0;
+    line-height: 1.4;
+}
+
 .setting-item input[type="number"],
 .setting-item input[type="text"] {
     width: 100%;

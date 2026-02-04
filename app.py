@@ -351,6 +351,23 @@ def init_database():
         )
     """)
     
+    # جدول إعدادات النظام - تحكم في التحقق من التعدد
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS system_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            setting_key TEXT NOT NULL UNIQUE,
+            setting_value TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            updated_by INTEGER
+        )
+    """)
+    
+    # تفعيل التحقق من التعدد افتراضياً
+    cursor.execute("""
+        INSERT OR IGNORE INTO system_settings (setting_key, setting_value, updated_at)
+        VALUES ('verification_enabled', 'true', ?)
+    """, (datetime.now().isoformat(),))
+    
     # جدول جوائز العجلة
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS wheel_prizes (
@@ -1535,10 +1552,56 @@ def submit_fingerprint():
                 'error': 'Missing required fields'
             }), 400
         
-        # التحقق من صلاحية الـ token
+        # التحقق من حالة نظام التحقق
         conn = get_db_connection()
         cursor = conn.cursor()
         
+        cursor.execute("""
+            SELECT setting_value FROM system_settings 
+            WHERE setting_key = 'verification_enabled'
+        """)
+        setting = cursor.fetchone()
+        verification_enabled = setting['setting_value'] == 'true' if setting else True
+        
+        # إذا كان التحقق معطلاً، نسمح مباشرة
+        if not verification_enabled:
+            # تسجيل المحاولة كنجاح بدون تحقق
+            cursor.execute("""
+                INSERT INTO verification_attempts 
+                (user_id, fingerprint, ip_address, attempt_time, status, reason)
+                VALUES (?, ?, ?, datetime('now'), 'bypassed', 'verification_disabled')
+            """, (user_id, fingerprint, request.remote_addr))
+            
+            cursor.execute("""
+                INSERT OR REPLACE INTO device_verifications 
+                (user_id, fingerprint, ip_address, user_agent, timezone, 
+                screen_resolution, canvas_fp, audio_fp, local_id, verified_at, last_seen)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+            """, (
+                user_id, fingerprint, request.remote_addr,
+                meta.get('user_agent'), meta.get('timezone'),
+                meta.get('resolution'), meta.get('canvas_fp'),
+                meta.get('audio_fp'), meta.get('local_id')
+            ))
+            
+            conn.commit()
+            conn.close()
+            
+            # إشعار البوت
+            try:
+                import requests as req
+                bot_notify_url = 'http://localhost:8081/device-verified'
+                req.post(bot_notify_url, json={'user_id': user_id}, timeout=3)
+            except:
+                pass
+            
+            return jsonify({
+                'ok': True,
+                'message': 'تم التحقق بنجاح (التحقق معطل)'
+            })
+        
+        # استكمال التحقق العادي إذا كان مفعلاً
+        # التحقق من صلاحية الـ token
         cursor.execute("""
             SELECT * FROM verification_tokens 
             WHERE user_id = ? AND token = ? AND used = 0
@@ -2245,6 +2308,115 @@ def get_all_users():
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+# ═══════════════════════════════════════════════════════════════
+# 👥 USER REFERRALS FOR ADMIN
+# ═══════════════════════════════════════════════════════════════
+
+@app.route('/api/admin/user-referrals', methods=['GET'])
+def get_admin_user_referrals():
+    """جلب إحالات مستخدم معين للأدمن"""
+    try:
+        user_id = request.args.get('user_id')
+        
+        if not user_id:
+            return jsonify({'success': False, 'error': 'user_id is required'}), 400
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # جلب الإحالات
+        cursor.execute("""
+            SELECT 
+                u.user_id as id,
+                u.username,
+                u.full_name as name,
+                r.created_at as joined_at,
+                r.is_valid
+            FROM referrals r
+            JOIN users u ON r.referred_id = u.user_id
+            WHERE r.referrer_id = ?
+            ORDER BY r.created_at DESC
+        """, (user_id,))
+        
+        referrals = []
+        for row in cursor.fetchall():
+            referrals.append({
+                'id': row['id'],
+                'username': f"@{row['username']}" if row['username'] else f"user_{row['id']}",
+                'name': row['name'],
+                'joined_at': row['joined_at'],
+                'is_valid': row['is_valid']
+            })
+        
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'data': referrals
+        })
+        
+    except Exception as e:
+        print(f"❌ Error in get_admin_user_referrals: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ═══════════════════════════════════════════════════════════════
+# ⚙️ SYSTEM SETTINGS - التحكم في التحقق من التعدد
+# ═══════════════════════════════════════════════════════════════
+
+@app.route('/api/admin/verification-settings', methods=['GET', 'POST'])
+def verification_settings():
+    """الحصول على/تحديث إعدادات التحقق من التعدد"""
+    try:
+        admin_id = request.args.get('admin_id') or (request.get_json() or {}).get('admin_id')
+        
+        # التحقق من صلاحية الأدمن
+        if not admin_id or int(admin_id) not in ADMIN_IDS:
+            return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        if request.method == 'GET':
+            # جلب الإعدادات الحالية
+            cursor.execute("""
+                SELECT setting_value FROM system_settings 
+                WHERE setting_key = 'verification_enabled'
+            """)
+            result = cursor.fetchone()
+            is_enabled = result['setting_value'] == 'true' if result else True
+            
+            conn.close()
+            return jsonify({
+                'success': True,
+                'verification_enabled': is_enabled
+            })
+        
+        elif request.method == 'POST':
+            # تحديث الإعدادات
+            data = request.get_json()
+            new_status = data.get('enabled', True)
+            
+            cursor.execute("""
+                INSERT OR REPLACE INTO system_settings 
+                (setting_key, setting_value, updated_at, updated_by)
+                VALUES ('verification_enabled', ?, ?, ?)
+            """, ('true' if new_status else 'false', datetime.now().isoformat(), admin_id))
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({
+                'success': True,
+                'message': f"تم {'تفعيل' if new_status else 'إيقاف'} التحقق من التعدد بنجاح",
+                'verification_enabled': new_status
+            })
+    
+    except Exception as e:
+        print(f"❌ Error in verification_settings: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 # ═══════════════════════════════════════════════════════════════
 # 👥 USER REFERRALS FOR ADMIN

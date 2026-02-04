@@ -1686,22 +1686,87 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db_user = db.create_or_update_user(user_id, username, full_name, referrer_id)
     
     # ══════════════════════════════════════════════════════════
-    # 🔐 التحقق من الجهاز للمستخدمين الجدد
+    # 🎯 التحقق من الاشتراك في القنوات الإجبارية (للجميع)
     # ══════════════════════════════════════════════════════════
-    # التحقق من حالة التحقق من الجهاز
+    # جلب القنوات الإجبارية
+    required_channels = db.get_active_mandatory_channels()
+    
+    if required_channels:
+        not_subscribed = []
+        for channel in required_channels:
+            channel_id = channel['channel_id']
+            try:
+                member = await context.bot.get_chat_member(chat_id=channel_id, user_id=user_id)
+                if member.status not in [ChatMember.MEMBER, ChatMember.ADMINISTRATOR, ChatMember.OWNER]:
+                    not_subscribed.append(channel)
+            except Exception as e:
+                logger.error(f"Error checking channel {channel_id}: {e}")
+                not_subscribed.append(channel)
+        
+        if not_subscribed:
+            # عرض أول قناة فقط
+            first_channel = not_subscribed[0]
+            
+            subscription_text = f"""
+📢 <b>اشتراك إجباري</b>
+
+عزيزي <b>{full_name}</b>، للاستمرار في استخدام البوت، يجب الاشتراك في القناة التالية:
+
+• <b>{first_channel['channel_name']}</b>
+
+بعد الاشتراك، اضغط على زر "✅ تحققت من الاشتراك" أدناه.
+"""
+            
+            keyboard = [
+                [InlineKeyboardButton(
+                    f"📢 {first_channel['channel_name']}",
+                    url=first_channel['channel_url']
+                )],
+                [InlineKeyboardButton(
+                    "✅ تحققت من الاشتراك",
+                    callback_data="check_subscription"
+                )]
+            ]
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                subscription_text,
+                parse_mode=ParseMode.HTML,
+                reply_markup=reply_markup
+            )
+            
+            db.log_activity(user_id, "subscription_required", f"Channel: {first_channel['channel_name']}")
+            return
+    
+    # ══════════════════════════════════════════════════════════
+    # 🔐 التحقق من الجهاز (إذا كان مفعلاً)
+    # ══════════════════════════════════════════════════════════
     try:
         import requests as req
-        verify_status_url = f"{API_BASE_URL}/verification/status/{user_id}"
-        verify_resp = req.get(verify_status_url, timeout=5)
         
-        if verify_resp.ok:
-            verify_data = verify_resp.json()
-            is_verified = verify_data.get('verified', False)
+        # التحقق من حالة نظام التحقق
+        settings_url = f"{API_BASE_URL}/admin/verification-settings?admin_id={user_id}"
+        settings_resp = req.get(settings_url, timeout=5)
+        
+        verification_enabled = True
+        if settings_resp.ok:
+            settings_data = settings_resp.json()
+            verification_enabled = settings_data.get('verification_enabled', True)
+        
+        # إذا كان التحقق مفعلاً، نتحقق من حالة المستخدم
+        if verification_enabled:
+            verify_status_url = f"{API_BASE_URL}/verification/status/{user_id}"
+            verify_resp = req.get(verify_status_url, timeout=5)
             
-            if not is_verified:
-                # المستخدم غير متحقق - إرسال رسالة التحقق
-                # إنشاء token للتحقق
-                token_url = f"{API_BASE_URL}/verification/create-token"
+            if verify_resp.ok:
+                verify_data = verify_resp.json()
+                is_verified = verify_data.get('verified', False)
+                
+                if not is_verified:
+                    # المستخدم غير متحقق - إرسال رسالة التحقق
+                    # إنشاء token للتحقق
+                    token_url = f"{API_BASE_URL}/verification/create-token"
                 token_resp = req.post(token_url, json={'user_id': user_id}, timeout=5)
                 
                 if token_resp.ok:
@@ -1750,56 +1815,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error checking verification status: {e}")
         # في حالة الخطأ، السماح بالمتابعة
-    
-    # ══════════════════════════════════════════════════════════
-    # 🎯 التحقق من الاشتراك في القنوات الإجبارية
-    # ══════════════════════════════════════════════════════════
-    # التحقق من اشتراك المستخدم في القنوات الإجبارية
-    not_subscribed = []
-    for channel_username in MANDATORY_CHANNELS:
-        if not await check_subscription(user_id, channel_username, update):
-            not_subscribed.append(channel_username)
-    
-    if not_subscribed:
-        # المستخدم غير مشترك في بعض القنوات
-        channels_text = "\n".join([f"• {ch}" for ch in not_subscribed])
-        
-        subscription_text = f"""
-📢 <b>اشتراك إجباري</b>
-
-عزيزي <b>{full_name}</b>، للاستمرار في استخدام البوت، يجب الاشتراك في القنوات التالية:
-
-{channels_text}
-
-بعد الاشتراك، اضغط على زر "✅ تحققت من الاشتراك" أدناه.
-"""
-        
-        # إنشاء أزرار القنوات
-        keyboard = []
-        for channel_username in not_subscribed:
-            keyboard.append([InlineKeyboardButton(
-                f"📢 {channel_username}",
-                url=f"https://t.me/{channel_username.replace('@', '')}"
-            )])
-        
-        # زر التحقق
-        keyboard.append([InlineKeyboardButton(
-            "✅ تحققت من الاشتراك",
-            callback_data="check_subscription"
-        )])
-        
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(
-            subscription_text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=reply_markup
-        )
-        
-        # تسجيل النشاط
-        db.log_activity(user_id, "subscription_required", f"Missing: {', '.join(not_subscribed)}")
-        
-        return  # إيقاف التنفيذ حتى يشترك
     
     # ══════════════════════════════════════════════════════════
     # 🎉 المستخدم متحقق ومشترك - عرض الرسالة الرئيسية
@@ -2037,6 +2052,14 @@ async def admin_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     # الحصول على إحصائيات البوت
     stats = db.get_bot_statistics()
     
+    # الحصول على حالة التحقق من التعدد
+    try:
+        response = requests.get(f"{MINI_APP_URL}/api/admin/verification-settings?admin_id={user_id}")
+        verification_data = response.json()
+        verification_enabled = verification_data.get('verification_enabled', True)
+    except:
+        verification_enabled = True
+    
     admin_text = f"""
 ⚙️ <b>لوحة المالكين - Panda Giveaways</b>
 
@@ -2054,6 +2077,9 @@ async def admin_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 ⚙️ <b>إعدادات السحب:</b>
 {'✅ السحب التلقائي مفعّل' if db.is_auto_withdrawal_enabled() else '❌ السحب التلقائي معطّل'}
 
+🔒 <b>إعدادات الأمان:</b>
+{'✅ التحقق من التعدد مفعّل' if verification_enabled else '❌ التحقق من التعدد معطّل'}
+
 <b>اختر ما تريد إدارته:</b>
 """
     
@@ -2066,6 +2092,10 @@ async def admin_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         [InlineKeyboardButton(
             f"{'❌ تعطيل' if db.is_auto_withdrawal_enabled() else '✅ تفعيل'} السحب التلقائي",
             callback_data="toggle_auto_withdrawal"
+        )],
+        [InlineKeyboardButton(
+            f"{'❌ إيقاف' if verification_enabled else '✅ تفعيل'} التحقق من التعدد",
+            callback_data="toggle_verification"
         )],
         [InlineKeyboardButton(f"{icon('back')} رجوع", callback_data="back_to_start")]
     ]
@@ -2103,6 +2133,44 @@ async def toggle_auto_withdrawal_callback(update: Update, context: ContextTypes.
     
     # تحديث لوحة الأدمن
     await admin_panel_callback(update, context)
+
+async def toggle_verification_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تبديل حالة التحقق من التعدد"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    
+    if not is_admin(user_id):
+        await query.answer("❌ غير مصرح لك!", show_alert=True)
+        return
+    
+    try:
+        # الحصول على الحالة الحالية
+        response = requests.get(f"{MINI_APP_URL}/api/admin/verification-settings?admin_id={user_id}")
+        current_data = response.json()
+        current_state = current_data.get('verification_enabled', True)
+        new_state = not current_state
+        
+        # تحديث الإعداد
+        update_response = requests.post(
+            f"{MINI_APP_URL}/api/admin/verification-settings",
+            json={'admin_id': user_id, 'enabled': new_state}
+        )
+        
+        if update_response.json().get('success'):
+            status_text = "✅ مفعّل" if new_state else "❌ معطّل"
+            await query.answer(
+                f"تم! التحقق من التعدد الآن {status_text}",
+                show_alert=True
+            )
+            # تحديث لوحة الأدمن
+            await admin_panel_callback(update, context)
+        else:
+            await query.answer("❌ حدث خطأ في تحديث الإعداد", show_alert=True)
+    except Exception as e:
+        print(f"❌ Error toggling verification: {e}")
+        await query.answer("❌ فشل الاتصال بالخادم", show_alert=True)
 
 async def admin_tasks_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """إدارة المهام والقنوات"""
@@ -2261,49 +2329,55 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
     username = user.username or f"user_{user_id}"
     full_name = user.full_name or username
     
-    # التحقق من جميع القنوات
-    not_subscribed = []
-    for channel_username in MANDATORY_CHANNELS:
-        if not await check_subscription(user_id, channel_username, update):
-            not_subscribed.append(channel_username)
+    # جلب القنوات الإجبارية من قاعدة البيانات
+    required_channels = db.get_active_mandatory_channels()
     
-    if not_subscribed:
-        # لا يزال غير مشترك في بعض القنوات
-        channels_text = "\n".join([f"• {ch}" for ch in not_subscribed])
+    if required_channels:
+        not_subscribed = []
+        for channel in required_channels:
+            channel_id = channel['channel_id']
+            try:
+                member = await context.bot.get_chat_member(chat_id=channel_id, user_id=user_id)
+                if member.status not in [ChatMember.MEMBER, ChatMember.ADMINISTRATOR, ChatMember.OWNER]:
+                    not_subscribed.append(channel)
+            except Exception as e:
+                logger.error(f"Error checking channel {channel_id}: {e}")
+                not_subscribed.append(channel)
         
-        await query.answer("⚠️ لم تشترك في جميع القنوات بعد!", show_alert=True)
-        
-        subscription_text = f"""
+        if not_subscribed:
+            # عرض أول قناة غير مشترك فيها
+            first_channel = not_subscribed[0]
+            
+            await query.answer("⚠️ يجب الاشتراك في القناة أولاً!", show_alert=True)
+            
+            subscription_text = f"""
 📢 <b>اشتراك إجباري</b>
 
-عزيزي <b>{full_name}</b>، يجب الاشتراك في القنوات التالية:
+عزيزي <b>{full_name}</b>، يجب الاشتراك في القناة التالية:
 
-{channels_text}
+• <b>{first_channel['channel_name']}</b>
 
 بعد الاشتراك، اضغط على زر "✅ تحققت من الاشتراك" مرة أخرى.
 """
-        
-        # إنشاء أزرار القنوات
-        keyboard = []
-        for channel_username in not_subscribed:
-            keyboard.append([InlineKeyboardButton(
-                f"📢 {channel_username}",
-                url=f"https://t.me/{channel_username.replace('@', '')}"
-            )])
-        
-        # زر التحقق
-        keyboard.append([InlineKeyboardButton(
-            "✅ تحققت من الاشتراك",
-            callback_data="check_subscription"
-        )])
-        
-        await query.edit_message_text(
-            subscription_text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-        
-        return
+            
+            keyboard = [
+                [InlineKeyboardButton(
+                    f"📢 {first_channel['channel_name']}",
+                    url=first_channel['channel_url']
+                )],
+                [InlineKeyboardButton(
+                    "✅ تحققت من الاشتراك",
+                    callback_data="check_subscription"
+                )]
+            ]
+            
+            await query.edit_message_text(
+                subscription_text,
+                parse_mode=ParseMode.HTML,
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            
+            return
     
     # المستخدم مشترك في جميع القنوات - عرض الرسالة الرئيسية
     await query.answer("✅ تم التحقق من الاشتراك بنجاح!", show_alert=True)
@@ -3847,6 +3921,7 @@ def main():
     application.add_handler(CallbackQueryHandler(admin_check_user_callback, pattern="^admin_check_user$"))
     application.add_handler(CallbackQueryHandler(admin_detailed_stats_callback, pattern="^admin_detailed_stats$"))
     application.add_handler(CallbackQueryHandler(toggle_auto_withdrawal_callback, pattern="^toggle_auto_withdrawal$"))
+    application.add_handler(CallbackQueryHandler(toggle_verification_callback, pattern="^toggle_verification$"))
     application.add_handler(CallbackQueryHandler(back_to_start_callback, pattern="^back_to_start$"))
     application.add_handler(CallbackQueryHandler(check_subscription_callback, pattern="^check_subscription$"))
     application.add_handler(CallbackQueryHandler(approve_withdrawal_callback, pattern="^approve_withdrawal_"))
