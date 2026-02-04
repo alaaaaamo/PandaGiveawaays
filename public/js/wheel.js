@@ -145,7 +145,8 @@ class WheelOfFortune {
         showLoading(true);
         
         try {
-            // طلب اللف من السيرفر
+            // طلب اللف من السيرفر أولاً
+            console.log('🎲 Requesting spin from server...');
             const response = await API.spinWheel(TelegramApp.getUserId());
             
             if (!response.success) {
@@ -153,16 +154,36 @@ class WheelOfFortune {
             }
             
             const { prize, new_balance, new_spins } = response.data;
+            console.log('🎁 Server response:', prize);
             
             // إخفاء Loading
             showLoading(false);
             
+            // الآن نبدأ دوران العجلة بناءً على نتيجة السيرفر
+            
+            // الآن نبدأ دوران العجلة بناءً على نتيجة السيرفر
             // حساب زاوية الدوران للجائزة
-            const prizeIndex = this.prizes.findIndex(p => p.name === prize.name);
-            if (prizeIndex === -1) {
-                console.error('Prize not found:', prize.name);
-                throw new Error('الجائزة غير موجودة في القائمة');
+            // نبحث عن الجائزة بناءً على amount بدلاً من الاسم لضمان الدقة
+            let prizeIndex = -1;
+            
+            // إذا كانت الجائزة "حظ أوفر" (amount = 0 واسم يحتوي على "حظ")
+            if (prize.amount === 0 && (prize.name.includes('حظ') || prize.name.includes('أوفر'))) {
+                prizeIndex = this.prizes.findIndex(p => p.amount === 0 && (p.name.includes('حظ') || p.name.includes('أوفر')));
+            } else {
+                // ابحث عن الجائزة بناءً على المبلغ
+                prizeIndex = this.prizes.findIndex(p => Math.abs(p.amount - prize.amount) < 0.001);
             }
+            
+            if (prizeIndex === -1) {
+                console.error('Prize not found in wheel! Prize:', prize, 'Available prizes:', this.prizes);
+                throw new Error('الجائزة غير موجودة في العجلة');
+            }
+            
+            console.log('🎯 Prize matched:', {
+                serverPrize: prize,
+                wheelPrize: this.prizes[prizeIndex],
+                prizeIndex
+            });
             
             const anglePerSegment = (2 * Math.PI) / this.prizes.length;
             
