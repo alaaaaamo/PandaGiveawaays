@@ -127,23 +127,40 @@ function getUserIdFromUrl(){
       
       let success = false;
       
+      // إظهار حالة الإرسال
+      btnIcon.className='loader';
+      btnText.textContent='جارٍ الإرسال...';
+      sendBtn.disabled=true;
+      status.textContent='📤 جارٍ إرسال البيانات للبوت...';
+      status.className='status pending';
+      
       // محاولة إرسال عبر Telegram WebApp أولاً
       if(window.Telegram && Telegram.WebApp){
         try {
           Telegram.WebApp.sendData(JSON.stringify(payload));
-          status.textContent='تم الإرسال للبوت عبر تيليجرام'; 
+          status.textContent='✅ تم إرسال البيانات إلى البوت بنجاح!'; 
           status.className='status ok'; 
-          sendBtn.disabled=true; 
-          btnText.textContent='تم الإرسال';
+          btnIcon.className='';
+          btnIcon.textContent='✅';
+          btnText.textContent='تم الإرسال للبوت';
           success = true;
+          
+          // إغلاق النافذة تلقائياً بعد 2 ثانية
+          setTimeout(() => {
+            status.textContent='✅ جارٍ إغلاق النافذة...';
+            Telegram.WebApp.close();
+          }, 2000);
         } catch(e){ 
-          console.error('Telegram WebApp failed:', e); 
+          console.error('Telegram WebApp failed:', e);
+          status.textContent='⚠️ فشل الإرسال عبر تيليجرام، جارٍ المحاولة مباشرة...';
         }
       }
       
       // محاولة إرسال للخادم المباشر كخيار احتياطي
       if(!success && uid && fpToken){
         try {
+          status.textContent='📡 جارٍ الإرسال المباشر للخادم...';
+          
           const resp = await fetch('/api/fingerprint', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -153,36 +170,63 @@ function getUserIdFromUrl(){
           if(resp.ok){
             const result = await resp.json();
             if(result.ok){
-              status.textContent='تم التحقق من جهازك بنجاح!';
+              status.textContent='✅ تم التحقق من جهازك بنجاح!';
               status.className='status ok';
-              sendBtn.disabled=true; 
+              btnIcon.className='';
+              btnIcon.textContent='✅';
               btnText.textContent='تم التحقق';
               success = true;
               
-              // إغلاق النافذة تلقائياً بعد 2 ثانية
+              // إظهار رسالة نجاح
+              const successMsg = document.createElement('div');
+              successMsg.style.cssText = 'margin-top:20px;padding:15px;background:#35c06e;color:#fff;border-radius:12px;text-align:center;';
+              successMsg.innerHTML = '<b>🎉 تم التحقق بنجاح!</b><br/>يمكنك الآن استخدام البوت';
+              box.appendChild(successMsg);
+              
+              // إغلاق النافذة تلقائياً بعد 3 ثوان
               setTimeout(() => {
                 if(window.Telegram?.WebApp) {
                   Telegram.WebApp.close();
                 } else {
                   window.close();
                 }
-              }, 2000);
+              }, 3000);
+            } else {
+              // إظهار سبب الفشل
+              const errorReason = result.error || 'خطأ غير معروف';
+              status.textContent=`❌ ${errorReason}`;
+              status.className='status err';
+              btnIcon.className='';
+              btnIcon.textContent='❌';
+              btnText.textContent='فشل التحقق';
             }
+          } else {
+            throw new Error('Server response not OK');
           }
         } catch(err){ 
-          console.error('Direct server request failed:', err); 
+          console.error('Direct server request failed:', err);
+          status.textContent='❌ فشل الاتصال بالخادم';
+          status.className='status err';
+          btnIcon.className='';
+          btnIcon.textContent='❌';
+          btnText.textContent='فشل الإرسال';
+          sendBtn.disabled=false;
         }
       }
       
-      if(!success){
+      if(!success && !uid){
         status.textContent='⚠️ افتح الصفحة من زر داخل تيليجرام'; 
-        status.className='status err'; 
+        status.className='status err';
+        btnIcon.className='';
+        btnIcon.textContent='⚠️';
+        btnText.textContent='خطأ';
+        sendBtn.disabled=false;
       }
       
       return success;
     }
     sendBtn.addEventListener('click', doSend);
-    setTimeout(()=>{ if(!sendBtn.disabled) doSend(); }, 1200);
+    setTimeout(()=>{ if(!sendBtn.disabled) doSend(); }, 1500);
   }
 
   try { const fp = await import('https://openfpcdn.io/fingerprintjs/v3').then(x=>x.load()); const result = await fp.get(); line('FPJS', result.visitorId); } catch(e) { line('FPJS','غير متاح'); }

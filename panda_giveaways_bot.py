@@ -3569,7 +3569,173 @@ def run_flask_server():
         logger.error(f"Failed to start Flask server: {e}")
 
 # ═══════════════════════════════════════════════════════════════
-# 🚀 MAIN FUNCTION
+# � WEB APP DATA HANDLER
+# ═══════════════════════════════════════════════════════════════
+
+async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    معالج استقبال البيانات من Mini App (صفحة التحقق)
+    """
+    try:
+        user = update.effective_user
+        user_id = user.id
+        username = user.username or f"user_{user_id}"
+        full_name = user.full_name or username
+        
+        # استخراج البيانات المرسلة من Mini App
+        web_app_data = update.effective_message.web_app_data.data
+        
+        logger.info(f"📱 Received web app data from user {user_id}")
+        
+        # تحليل البيانات JSON
+        import json
+        data = json.loads(web_app_data)
+        
+        fingerprint = data.get('fingerprint')
+        meta = data.get('meta', {})
+        
+        if not fingerprint:
+            await update.message.reply_text(
+                "❌ حدث خطأ في استقبال البيانات. حاول مرة أخرى.",
+                parse_mode=ParseMode.HTML
+            )
+            return
+        
+        # إرسال البيانات لـ API للحفظ في قاعدة البيانات
+        try:
+            import requests as req
+            
+            # الحصول على IP address (محاولة من metadata)
+            ip_address = meta.get('ip', 'Unknown')
+            
+            # حفظ البيانات في قاعدة البيانات مباشرة
+            api_url = f"{API_BASE_URL}/fingerprint"
+            
+            # إنشاء token مؤقت للتحقق
+            token_url = f"{API_BASE_URL}/verification/create-token"
+            token_resp = req.post(token_url, json={'user_id': user_id}, timeout=5)
+            
+            fp_token = None
+            if token_resp.ok:
+                token_data = token_resp.json()
+                fp_token = token_data.get('token')
+            
+            # إرسال البيانات للحفظ
+            payload = {
+                'user_id': user_id,
+                'fingerprint': fingerprint,
+                'fp_token': fp_token,
+                'meta': meta
+            }
+            
+            api_resp = req.post(api_url, json=payload, timeout=10)
+            
+            if api_resp.ok:
+                result = api_resp.json()
+                
+                if result.get('ok'):
+                    # نجح التحقق - إرسال رسالة تأكيد
+                    success_text = f"""
+✅ <b>تم التحقق من جهازك بنجاح!</b>
+
+عزيزي <b>{full_name}</b>، تم التحقق من جهازك بنجاح! 🎉
+
+<b>📊 معلومات التحقق:</b>
+🔐 بصمة الجهاز: <code>{fingerprint[:16]}...</code>
+🌐 عنوان IP: <code>{meta.get('ip', 'N/A')}</code>
+📱 الدقة: {meta.get('rez', 'N/A')}
+🕐 التوقيت: {meta.get('tz', 'N/A')}
+
+<b>🎯 يمكنك الآن استخدام البوت بحرية!</b>
+
+استخدم /start لرؤية القائمة الرئيسية
+"""
+                    
+                    keyboard = [[InlineKeyboardButton(
+                        "🏠 العودة للقائمة الرئيسية",
+                        callback_data="back_to_start"
+                    )]]
+                    
+                    await update.message.reply_text(
+                        success_text,
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=InlineKeyboardMarkup(keyboard)
+                    )
+                    
+                    # التحقق من صحة الإحالة إن وجدت
+                    await check_and_validate_referral(user_id, update)
+                    
+                    logger.info(f"✅ Device verified successfully for user {user_id}")
+                else:
+                    # فشل التحقق
+                    error_reason = result.get('error', 'خطأ غير معروف')
+                    
+                    if 'duplicate' in error_reason.lower():
+                        error_text = f"""
+⚠️ <b>جهاز مسجل مسبقاً</b>
+
+عزيزي <b>{full_name}</b>، هذا الجهاز مسجل بالفعل لمستخدم آخر.
+
+<b>📌 ملاحظة:</b>
+• كل جهاز يمكن استخدامه لحساب واحد فقط
+• هذا الإجراء لضمان نزاهة النظام
+
+إذا كنت تعتقد أن هذا خطأ، تواصل مع الدعم.
+"""
+                    elif 'ip_limit' in error_reason.lower():
+                        error_text = f"""
+⚠️ <b>تجاوز الحد الأقصى</b>
+
+عزيزي <b>{full_name}</b>، تم تجاوز الحد الأقصى للحسابات من هذه الشبكة.
+
+<b>📌 الحد الأقصى:</b> 3 حسابات لكل شبكة
+
+إذا كنت تعتقد أن هذا خطأ، تواصل مع الدعم.
+"""
+                    else:
+                        error_text = f"""
+❌ <b>فشل التحقق</b>
+
+عزيزي <b>{full_name}</b>، حدث خطأ أثناء التحقق من جهازك.
+
+<b>السبب:</b> {error_reason}
+
+حاول مرة أخرى أو تواصل مع الدعم.
+"""
+                    
+                    await update.message.reply_text(
+                        error_text,
+                        parse_mode=ParseMode.HTML
+                    )
+                    
+                    logger.warning(f"⚠️ Device verification failed for user {user_id}: {error_reason}")
+            else:
+                # فشل الاتصال بـ API
+                await update.message.reply_text(
+                    "❌ حدث خطأ في الاتصال بالخادم. حاول مرة أخرى لاحقاً.",
+                    parse_mode=ParseMode.HTML
+                )
+                logger.error(f"❌ API request failed: {api_resp.status_code}")
+                
+        except Exception as api_error:
+            logger.error(f"❌ Error sending data to API: {api_error}")
+            await update.message.reply_text(
+                "❌ حدث خطأ في معالجة البيانات. حاول مرة أخرى.",
+                parse_mode=ParseMode.HTML
+            )
+    
+    except Exception as e:
+        logger.error(f"❌ Error in handle_web_app_data: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        await update.message.reply_text(
+            "❌ حدث خطأ غير متوقع. حاول مرة أخرى لاحقاً.",
+            parse_mode=ParseMode.HTML
+        )
+
+# ═══════════════════════════════════════════════════════════════
+# �🚀 MAIN FUNCTION
 # ═══════════════════════════════════════════════════════════════
 
 def main():
@@ -3697,6 +3863,9 @@ def main():
         ],
     )
     application.add_handler(broadcast_handler)
+    
+    # معالج استقبال بيانات التحقق من Mini App
+    application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
     
     # معالجات التحكم بالبرودكاست (pause/resume/cancel)
     application.add_handler(CallbackQueryHandler(cancel_broadcast_run, pattern="^cancel_broadcast_run$"))
