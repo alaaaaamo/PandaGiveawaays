@@ -17,7 +17,7 @@ from flask import Flask, send_from_directory, request, jsonify
 from flask_cors import CORS
 import os
 import sys
-import sqlite3  # للتوافق مع IntegrityError في الكود القديم
+import sqlite3
 from datetime import datetime, timedelta
 import threading
 import subprocess
@@ -28,9 +28,6 @@ import requests  # لجلب سعر TON
 
 # إضافة المسار الحالي لـ 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-# استيراد مدير قاعدة البيانات الجديد (يدعم PostgreSQL & SQLite)
-from database import db_manager, get_db_connection
 
 # دالة لجلب سعر TON بالدولار
 def get_ton_price_usd():
@@ -178,87 +175,395 @@ else:
 # ═══════════════════════════════════════════════════════════════
 # 🗄️ DATABASE MANAGER
 # ═══════════════════════════════════════════════════════════════
-# تم نقل إدارة قاعدة البيانات إلى database.py
-# يدعم الآن PostgreSQL (Neon) و SQLite للتطوير المحلي
 
-print(f"📂 Using database: {'PostgreSQL (Neon)' if db_manager.use_postgres else 'SQLite (Local)'}")
+# Use absolute path on Render to ensure both bot and Flask use same database
+if os.environ.get('RENDER'):
+    DATABASE_PATH = os.getenv('DATABASE_PATH', '/opt/render/project/src/panda_giveaways.db')
+else:
+    DATABASE_PATH = os.getenv('DATABASE_PATH', 'panda_giveaways.db')
+
+print(f"📂 Using database at: {DATABASE_PATH}")
+
+def init_database():
+    """إنشاء قاعدة البيانات إذا لم تكن موجودة"""
+    conn = sqlite3.connect(DATABASE_PATH, timeout=30.0)
+    cursor = conn.cursor()
+    
+    # جدول المستخدمين
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT,
+            full_name TEXT NOT NULL,
+            balance REAL DEFAULT 0.0,
+            total_spins INTEGER DEFAULT 0,
+            available_spins INTEGER DEFAULT 0,
+            total_referrals INTEGER DEFAULT 0,
+            valid_referrals INTEGER DEFAULT 0,
+            referrer_id INTEGER,
+            created_at TEXT NOT NULL,
+            last_active TEXT,
+            is_banned INTEGER DEFAULT 0,
+            last_spin_time TEXT,
+            spin_count_today INTEGER DEFAULT 0,
+            last_withdrawal_time TEXT,
+            ton_wallet TEXT,
+            vodafone_number TEXT
+        )
+    """)
+    
+    # جدول الإحالات
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS referrals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            referrer_id INTEGER NOT NULL,
+            referred_id INTEGER NOT NULL,
+            is_valid INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            validated_at TEXT,
+            channels_checked INTEGER DEFAULT 0,
+            device_verified INTEGER DEFAULT 0,
+            UNIQUE(referrer_id, referred_id)
+        )
+    """)
+    
+    # جدول اللفات
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS spins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            prize_name TEXT NOT NULL,
+            prize_amount REAL NOT NULL,
+            spin_time TEXT NOT NULL,
+            spin_hash TEXT NOT NULL UNIQUE,
+            ip_address TEXT
+        )
+    """)
+    
+    # جدول السحوبات
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS withdrawals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            amount REAL NOT NULL,
+            withdrawal_type TEXT NOT NULL,
+            wallet_address TEXT,
+            phone_number TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            requested_at TEXT NOT NULL,
+            processed_at TEXT,
+            processed_by INTEGER,
+            tx_hash TEXT,
+            rejection_reason TEXT
+        )
+    """)
+    
+    # جدول المهام
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_type TEXT NOT NULL,
+            task_name TEXT NOT NULL,
+            task_description TEXT,
+            task_link TEXT,
+            channel_username TEXT,
+            is_pinned INTEGER DEFAULT 0,
+            is_active INTEGER DEFAULT 1,
+            added_by INTEGER NOT NULL,
+            added_at TEXT NOT NULL
+        )
+    """)
+    
+    # التحقق من الأعمدة الجديدة وإضافتها إن لم تكن موجودة
+    try:
+        cursor.execute("SELECT is_pinned FROM tasks LIMIT 1")
+    except:
+        cursor.execute("ALTER TABLE tasks ADD COLUMN is_pinned INTEGER DEFAULT 0")
+        
+    try:
+        cursor.execute("SELECT task_link FROM tasks LIMIT 1")
+    except:
+        cursor.execute("ALTER TABLE tasks ADD COLUMN task_link TEXT")
+        
+    try:
+        cursor.execute("SELECT channel_username FROM tasks LIMIT 1")
+    except:
+        cursor.execute("ALTER TABLE tasks ADD COLUMN channel_username TEXT")
+
+    
+    # جدول إنجاز المهام
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            task_id INTEGER NOT NULL,
+            completed_at TEXT NOT NULL,
+            verified INTEGER DEFAULT 0,
+            UNIQUE(user_id, task_id)
+        )
+    """)
+    
+    # جدول القنوات الإجبارية
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS required_channels (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            channel_id TEXT NOT NULL UNIQUE,
+            channel_name TEXT NOT NULL,
+            channel_url TEXT NOT NULL,
+            is_active INTEGER DEFAULT 1,
+            added_by INTEGER NOT NULL,
+            added_at TEXT NOT NULL
+        )
+    """)
+    
+    # جدول التحقق من الأجهزة - device fingerprinting
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS device_verifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL UNIQUE,
+            fingerprint TEXT NOT NULL,
+            ip_address TEXT NOT NULL,
+            user_agent TEXT,
+            timezone TEXT,
+            screen_resolution TEXT,
+            canvas_fp TEXT,
+            audio_fp TEXT,
+            local_id TEXT,
+            verified_at TEXT NOT NULL,
+            last_seen TEXT,
+            is_blocked INTEGER DEFAULT 0,
+            FOREIGN KEY (user_id) REFERENCES users(user_id)
+        )
+    """)
+    
+    # جدول سجل محاولات التحقق
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS verification_attempts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            fingerprint TEXT NOT NULL,
+            ip_address TEXT NOT NULL,
+            attempt_time TEXT NOT NULL,
+            status TEXT NOT NULL,
+            reason TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(user_id)
+        )
+    """)
+    
+    # جدول tokens التحقق المؤقتة
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS verification_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            token TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            used INTEGER DEFAULT 0,
+            FOREIGN KEY (user_id) REFERENCES users(user_id)
+        )
+    """)
+    
+    # جدول إعدادات النظام - تحكم في التحقق من التعدد
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS system_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            setting_key TEXT NOT NULL UNIQUE,
+            setting_value TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            updated_by INTEGER
+        )
+    """)
+    
+    # تفعيل التحقق من التعدد افتراضياً
+    cursor.execute("""
+        INSERT OR IGNORE INTO system_settings (setting_key, setting_value, updated_at)
+        VALUES ('verification_enabled', 'true', ?)
+    """, (datetime.now().isoformat(),))
+    
+    # جدول جوائز العجلة
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS wheel_prizes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            value REAL NOT NULL,
+            probability REAL NOT NULL,
+            color TEXT NOT NULL,
+            emoji TEXT NOT NULL,
+            is_active INTEGER DEFAULT 1,
+            position INTEGER DEFAULT 0,
+            added_at TEXT NOT NULL,
+            updated_at TEXT
+        )
+    """)
+    
+    # إضافة القنوات الإجبارية الافتراضية إذا لم تكن موجودة
+    cursor.execute("SELECT COUNT(*) FROM required_channels")
+    count = cursor.fetchone()[0]  # الوصول بالـ index وليس بالـ key
+    if count == 0:
+        now = datetime.now().isoformat()
+        default_channels = [
+            ('@PandaAdds', 'Panda Adds', 'https://t.me/PandaAdds', 1797127532),
+            ('@CRYPTO_FLASSH', 'Crypto Flash', 'https://t.me/CRYPTO_FLASSH', 1797127532)
+        ]
+        for channel_id, name, url, admin_id in default_channels:
+            cursor.execute("""
+                INSERT INTO required_channels (channel_id, channel_name, channel_url, is_active, added_by, added_at)
+                VALUES (?, ?, ?, 1, ?, ?)
+            """, (channel_id, name, url, admin_id, now))
+    
+    # إضافة الجوائز الافتراضية إذا لم تكن موجودة
+    cursor.execute("SELECT COUNT(*) FROM wheel_prizes")
+    count = cursor.fetchone()[0]
+    if count == 0:
+        now = datetime.now().isoformat()
+        # النسب الجديدة: 25% لكل من (0.01, 0.05, 0.1, حظ أوفر) و 0% للباقي
+        default_prizes = [
+            ('0.01 TON', 0.01, 25, '#9370db', '🪙', 0),
+            ('0.05 TON', 0.05, 25, '#00bfff', '💎', 1),
+            ('0.1 TON', 0.1, 25, '#ffa500', '💰', 2),
+            ('0.5 TON', 0.5, 0, '#32cd32', '🏆', 3),
+            ('1.0 TON', 1.0, 0, '#ff1493', '👑', 4),
+            ('حظ أوفر', 0, 25, '#808080', '😔', 5)
+        ]
+        for name, value, prob, color, emoji, pos in default_prizes:
+            cursor.execute("""
+                INSERT INTO wheel_prizes (name, value, probability, color, emoji, position, is_active, added_at)
+                VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+            """, (name, value, prob, color, emoji, pos, now))
+    
+    # إضافة أعمدة التحقق للجداول القديمة
+    try:
+        cursor.execute("ALTER TABLE referrals ADD COLUMN channels_checked INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass  # العمود موجود بالفعل
+    
+    try:
+        cursor.execute("ALTER TABLE referrals ADD COLUMN device_verified INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass  # العمود موجود بالفعل
+    
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN is_device_verified INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass  # العمود موجود بالفعل
+    
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN verification_required INTEGER DEFAULT 1")
+    except sqlite3.OperationalError:
+        pass  # العمود موجود بالفعل
+    
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN ban_reason TEXT")
+    except sqlite3.OperationalError:
+        pass  # العمود موجود بالفعل
+    
+    conn.commit()
+    conn.close()
+    print("✅ Database initialized")
+
+# تهيئة قاعدة البيانات عند بدء التشغيل
+init_database()
+
+def get_db_connection():
+    """إنشاء اتصال بقاعدة البيانات"""
+    conn = sqlite3.connect(DATABASE_PATH, timeout=30.0)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def get_user(user_id):
     """الحصول على بيانات مستخدم"""
-    return db_manager.execute_query(
-        "SELECT * FROM users WHERE user_id = ?",
-        (user_id,),
-        fetch='one'
-    )
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 def create_user_if_not_exists(user_id, username="", full_name="User"):
     """إنشاء مستخدم إذا لم يكن موجوداً"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
     now = datetime.now().isoformat()
     
     try:
-        if db_manager.use_postgres:
-            db_manager.execute_query("""
-                INSERT INTO users (user_id, username, full_name, created_at, last_active)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT (user_id) DO NOTHING
-            """, (user_id, username, full_name, now, now))
-        else:
-            db_manager.execute_query("""
-                INSERT OR IGNORE INTO users (user_id, username, full_name, created_at, last_active)
-                VALUES (?, ?, ?, ?, ?)
-            """, (user_id, username, full_name, now, now))
+        cursor.execute("""
+            INSERT OR IGNORE INTO users (user_id, username, full_name, created_at, last_active)
+            VALUES (?, ?, ?, ?, ?)
+        """, (user_id, username, full_name, now, now))
+        conn.commit()
     except Exception as e:
         print(f"Error creating user: {e}")
+    finally:
+        conn.close()
 
 def get_user_referrals_db(user_id):
     """الحصول على إحالات المستخدم"""
     try:
-        return db_manager.execute_query("""
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
             SELECT r.*, u.username, u.full_name, u.created_at as joined_at
             FROM referrals r
             LEFT JOIN users u ON r.referred_id = u.user_id
             WHERE r.referrer_id = ?
             ORDER BY r.created_at DESC
-        """, (user_id,), fetch='all')
+        """, (user_id,))
+        referrals = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return referrals
     except Exception as e:
         print(f"Error in get_user_referrals_db: {e}")
+        conn.close()
         return []
 
 def get_user_spins_db(user_id, limit=50):
     """الحصول على تاريخ اللفات"""
     try:
-        return db_manager.execute_query("""
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
             SELECT * FROM spins
             WHERE user_id = ?
             ORDER BY spin_time DESC
             LIMIT ?
-        """, (user_id, limit), fetch='all')
+        """, (user_id, limit))
+        spins = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return spins
     except Exception as e:
         print(f"Error in get_user_spins_db: {e}")
+        conn.close()
         return []
 
 def get_bot_stats():
     """إحصائيات البوت"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
     stats = {}
     
-    result = db_manager.execute_query("SELECT COUNT(*) as total FROM users", fetch='one')
-    stats['total_users'] = result['total'] if result else 0
+    cursor.execute("SELECT COUNT(*) as total FROM users")
+    stats['total_users'] = cursor.fetchone()['total']
     
-    result = db_manager.execute_query("SELECT COUNT(*) as total FROM referrals WHERE is_valid = 1", fetch='one')
-    stats['total_referrals'] = result['total'] if result else 0
+    cursor.execute("SELECT COUNT(*) as total FROM referrals WHERE is_valid = 1")
+    stats['total_referrals'] = cursor.fetchone()['total']
     
-    result = db_manager.execute_query("SELECT COUNT(*) as total FROM spins", fetch='one')
-    stats['total_spins'] = result['total'] if result else 0
+    cursor.execute("SELECT COUNT(*) as total FROM spins")
+    stats['total_spins'] = cursor.fetchone()['total']
     
-    result = db_manager.execute_query("SELECT SUM(prize_amount) as total FROM spins", fetch='one')
-    stats['total_distributed'] = result['total'] if result and result['total'] else 0
+    cursor.execute("SELECT SUM(prize_amount) as total FROM spins")
+    result = cursor.fetchone()
+    stats['total_distributed'] = result['total'] if result['total'] else 0
     
-    result = db_manager.execute_query("SELECT COUNT(*) as pending FROM withdrawals WHERE status = 'pending'", fetch='one')
-    stats['pending_withdrawals'] = result['pending'] if result else 0
+    cursor.execute("SELECT COUNT(*) as pending FROM withdrawals WHERE status = 'pending'")
+    stats['pending_withdrawals'] = cursor.fetchone()['pending']
     
-    result = db_manager.execute_query("SELECT SUM(amount) as total FROM withdrawals WHERE status = 'completed'", fetch='one')
-    stats['total_withdrawn'] = result['total'] if result and result['total'] else 0
+    cursor.execute("SELECT SUM(amount) as total FROM withdrawals WHERE status = 'completed'")
+    result = cursor.fetchone()
+    stats['total_withdrawn'] = result['total'] if result['total'] else 0
     
+    conn.close()
     return stats
 
 # ═══════════════════════════════════════════════════════════════
@@ -362,26 +667,33 @@ def update_user_profile(user_id):
         username = data.get('username', '')
         full_name = data.get('full_name', 'User')
         
+        conn = get_db_connection()
+        cursor = conn.cursor()
         now = datetime.now().isoformat()
         
         # التحقق من وجود المستخدم
-        existing = db_manager.execute_query("SELECT * FROM users WHERE user_id = ?", (user_id,), fetch='one')
+        cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+        existing = cursor.fetchone()
         
         if existing:
             # تحديث البيانات
-            db_manager.execute_query("""
+            cursor.execute("""
                 UPDATE users 
                 SET username = ?, full_name = ?, last_active = ?
                 WHERE user_id = ?
             """, (username, full_name, now, user_id))
+            conn.commit()
             print(f"✅ Updated user {user_id}: {username}, {full_name}")
         else:
             # إنشاء مستخدم جديد
-            db_manager.execute_query("""
+            cursor.execute("""
                 INSERT INTO users (user_id, username, full_name, created_at, last_active)
                 VALUES (?, ?, ?, ?, ?)
             """, (user_id, username, full_name, now, now))
+            conn.commit()
             print(f"✅ Created user {user_id}: {username}, {full_name}")
+        
+        conn.close()
         
         return jsonify({
             'success': True,
@@ -474,9 +786,12 @@ def perform_spin():
         spin_hash = hashlib.sha256(f"{user_id}{now}{random.random()}".encode()).hexdigest()
         
         # Update database
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
         try:
             # Add spin record
-            db_manager.execute_query("""
+            cursor.execute("""
                 INSERT INTO spins (user_id, prize_name, prize_amount, spin_time, spin_hash, ip_address)
                 VALUES (?, ?, ?, ?, ?, ?)
             """, (user_id, selected_prize['name'], selected_prize['amount'], now, spin_hash, request.remote_addr))
@@ -486,7 +801,7 @@ def perform_spin():
             new_spins = user['available_spins'] - 1
             new_total_spins = user['total_spins'] + 1
             
-            db_manager.execute_query("""
+            cursor.execute("""
                 UPDATE users 
                 SET balance = ?,
                     available_spins = ?,
@@ -495,6 +810,9 @@ def perform_spin():
                     last_active = ?
                 WHERE user_id = ?
             """, (new_balance, new_spins, new_total_spins, now, now, user_id))
+            
+            conn.commit()
+            conn.close()
             
             return jsonify({
                 'success': True,
@@ -507,6 +825,8 @@ def perform_spin():
             })
             
         except Exception as db_error:
+            conn.rollback()
+            conn.close()
             print(f"Database error in spin: {db_error}")
             return jsonify({'success': False, 'error': 'خطأ في قاعدة البيانات'}), 500
         
@@ -531,25 +851,30 @@ def get_bot_stats_route():
 def get_tasks():
     """الحصول على المهام النشطة للمستخدمين"""
     try:
-        rows = db_manager.execute_query("""
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
             SELECT id, task_type, task_name, task_description, task_link, 
                    channel_username, is_pinned
             FROM tasks 
             WHERE is_active = 1 
             ORDER BY is_pinned DESC, id DESC
-        """, fetch='all')
+        """)
         
         tasks = []
-        for row in rows:
+        for row in cursor.fetchall():
             tasks.append({
-                'id': row['id'],
-                'task_type': row['task_type'],
-                'task_name': row['task_name'],
-                'task_description': row['task_description'],
-                'task_link': row['task_link'],
-                'channel_username': row['channel_username'],
-                'is_pinned': row['is_pinned']
+                'id': row[0],
+                'task_type': row[1],
+                'task_name': row[2],
+                'task_description': row[3],
+                'task_link': row[4],
+                'channel_username': row[5],
+                'is_pinned': row[6]
             })
+        
+        conn.close()
         return jsonify({
             'success': True,
             'tasks': tasks
@@ -565,19 +890,24 @@ def get_tasks():
 def get_user_completed_tasks(user_id):
     """الحصول على المهام المكتملة للمستخدم"""
     try:
-        rows = db_manager.execute_query("""
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
             SELECT task_id, completed_at, verified
             FROM user_tasks
             WHERE user_id = ? AND verified = 1
-        """, (user_id,), fetch='all')
+        """, (user_id,))
         
         completed_tasks = []
-        for row in rows:
+        for row in cursor.fetchall():
             completed_tasks.append({
-                'task_id': row['task_id'],
-                'completed_at': row['completed_at'],
-                'verified': row['verified']
+                'task_id': row[0],
+                'completed_at': row[1],
+                'verified': row[2]
             })
+        
+        conn.close()
         return jsonify({
             'success': True,
             'completed_tasks': completed_tasks
@@ -598,25 +928,31 @@ def verify_task_completion(task_id):
             return jsonify({'success': False, 'message': 'معرف المستخدم مطلوب'}), 400
         
         # جلب بيانات المهمة
-        task = db_manager.execute_query("""
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
             SELECT task_type, channel_username
             FROM tasks
             WHERE id = ? AND is_active = 1
-        """, (task_id,), fetch='one')
+        """, (task_id,))
         
+        task = cursor.fetchone()
         if not task:
+            conn.close()
             return jsonify({'success': False, 'message': 'المهمة غير موجودة'}), 404
         
-        task_type = task['task_type']
-        channel_username = task['channel_username']
+        task_type = task[0]
+        channel_username = task[1]
         
         # التحقق من أن المستخدم لم يكمل المهمة من قبل
-        already_completed = db_manager.execute_query("""
+        cursor.execute("""
             SELECT id FROM user_tasks
             WHERE user_id = ? AND task_id = ? AND verified = 1
-        """, (user_id, task_id), fetch='one')
+        """, (user_id, task_id))
         
-        if already_completed:
+        if cursor.fetchone():
+            conn.close()
             return jsonify({'success': False, 'message': 'لقد أكملت هذه المهمة من قبل'})
         
         # إذا كانت قناة، التحقق من الاشتراك عبر البوت
@@ -633,6 +969,7 @@ def verify_task_completion(task_id):
                 verify_data = verify_response.json()
                 
                 if not verify_data.get('is_subscribed', False):
+                    conn.close()
                     return jsonify({
                         'success': False, 
                         'message': '❌ لم يتم العثور على اشتراكك! تأكد من الاشتراك في القناة أولاً'
@@ -640,6 +977,7 @@ def verify_task_completion(task_id):
                     
             except Exception as e:
                 print(f"Error verifying subscription: {e}")
+                conn.close()
                 return jsonify({
                     'success': False,
                     'message': '❌ خطأ في التحقق من الاشتراك. حاول مرة أخرى'
@@ -648,40 +986,37 @@ def verify_task_completion(task_id):
         # تسجيل إتمام المهمة
         now = datetime.now().isoformat()
         
-        if db_manager.use_postgres:
-            db_manager.execute_query("""
-                INSERT INTO user_tasks (user_id, task_id, completed_at, verified)
-                VALUES (?, ?, ?, 1)
-                ON CONFLICT (user_id, task_id) 
-                DO UPDATE SET completed_at = EXCLUDED.completed_at, verified = 1
-            """, (user_id, task_id, now))
-        else:
-            db_manager.execute_query("""
-                INSERT OR REPLACE INTO user_tasks (user_id, task_id, completed_at, verified)
-                VALUES (?, ?, ?, 1)
-            """, (user_id, task_id, now))
+        cursor.execute("""
+            INSERT OR REPLACE INTO user_tasks (user_id, task_id, completed_at, verified)
+            VALUES (?, ?, ?, 1)
+        """, (user_id, task_id, now))
         
         # التحقق من عدد المهام المكتملة
-        completed_count_row = db_manager.execute_query("""
-            SELECT COUNT(*) as count FROM user_tasks
+        cursor.execute("""
+            SELECT COUNT(*) FROM user_tasks
             WHERE user_id = ? AND verified = 1
-        """, (user_id,), fetch='one')
+        """, (user_id,))
         
-        completed_count = completed_count_row['count'] if completed_count_row else 0
+        completed_count = cursor.fetchone()[0]
         
         # كل 5 مهمات = 1 دورة
         new_spin = 0
         if completed_count % 5 == 0:
-            db_manager.execute_query("""
+            cursor.execute("""
                 UPDATE users 
                 SET available_spins = available_spins + 1
                 WHERE user_id = ?
             """, (user_id,))
             new_spin = 1
         
+        conn.commit()
+        
         # جلب الدورات الجديدة
-        result = db_manager.execute_query("SELECT available_spins FROM users WHERE user_id = ?", (user_id,), fetch='one')
-        new_spins = result['available_spins'] if result else 0
+        cursor.execute("SELECT available_spins FROM users WHERE user_id = ?", (user_id,))
+        result = cursor.fetchone()
+        new_spins = result[0] if result else 0
+        
+        conn.close()
         
         message = f'✅ تم إتمام المهمة! ({completed_count}/5)'
         if new_spin:
@@ -705,12 +1040,15 @@ def verify_task_completion(task_id):
 def get_user_withdrawals(user_id):
     """الحصول على طلبات السحب للمستخدم"""
     try:
-        rows = db_manager.execute_query("""
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
             SELECT * FROM withdrawals
             WHERE user_id = ?
             ORDER BY requested_at DESC
-        """, (user_id,), fetch='all')
-        withdrawals = [dict(row) for row in rows]
+        """, (user_id,))
+        withdrawals = [dict(row) for row in cursor.fetchall()]
+        conn.close()
         return jsonify({
             'success': True,
             'data': withdrawals
@@ -743,37 +1081,51 @@ def request_withdrawal():
                 'error': f'الحد الأدنى للسحب {min_withdrawal} TON'
             }), 400
         
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
         # التحقق من رصيد المستخدم
-        user = db_manager.execute_query('SELECT balance, username, full_name FROM users WHERE user_id = ?', (user_id,), fetch='one')
+        cursor.execute('SELECT balance, username, full_name FROM users WHERE user_id = ?', (user_id,))
+        user = cursor.fetchone()
         
         if not user:
+            conn.close()
             return jsonify({'success': False, 'error': 'مستخدم غير موجود'}), 404
             
         if user['balance'] < amount:
+            conn.close()
             return jsonify({'success': False, 'error': 'رصيد غير كافٍ'}), 400
         
         # إنشاء طلب السحب
-        db_manager.execute_query("""
+        cursor.execute("""
             INSERT INTO withdrawals (user_id, amount, withdrawal_type, wallet_address, phone_number, status, requested_at)
             VALUES (?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP)
         """, (user_id, amount, withdrawal_type, wallet_address, phone_number))
         
-        withdrawal_id = db_manager.get_last_row_id()
+        withdrawal_id = cursor.lastrowid
         
         # خصم المبلغ من رصيد المستخدم
-        db_manager.execute_query("""
+        cursor.execute("""
             UPDATE users 
             SET balance = balance - ?,
                 last_withdrawal_time = CURRENT_TIMESTAMP
             WHERE user_id = ?
         """, (amount, user_id))
         
+        conn.commit()
+        
         # الحصول على الرصيد الجديد
-        new_balance_row = db_manager.execute_query('SELECT balance FROM users WHERE user_id = ?', (user_id,), fetch='one')
-        new_balance = new_balance_row['balance']
+        cursor.execute('SELECT balance FROM users WHERE user_id = ?', (user_id,))
+        new_balance = cursor.fetchone()['balance']
+        
+        conn.close()
         
         # التحقق من تفعيل السحب التلقائي
-        auto_withdrawal_row = db_manager.execute_query("SELECT setting_value FROM bot_settings WHERE setting_key = 'auto_withdrawal_enabled'", fetch='one')
+        conn_check = get_db_connection()
+        cursor_check = conn_check.cursor()
+        cursor_check.execute("SELECT setting_value FROM bot_settings WHERE setting_key = 'auto_withdrawal_enabled'")
+        auto_withdrawal_row = cursor_check.fetchone()
+        conn_check.close()
         
         auto_withdrawal_enabled = auto_withdrawal_row and auto_withdrawal_row['setting_value'] == 'true' if auto_withdrawal_row else False
         
@@ -832,8 +1184,11 @@ def get_all_withdrawals():
     try:
         status = request.args.get('status', 'all')  # all, pending, completed, rejected
         
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
         if status == 'all':
-            rows = db_manager.execute_query("""
+            cursor.execute("""
                 SELECT 
                     w.*,
                     u.full_name as user_name,
@@ -841,9 +1196,9 @@ def get_all_withdrawals():
                 FROM withdrawals w
                 JOIN users u ON w.user_id = u.user_id
                 ORDER BY w.requested_at DESC
-            """, fetch='all')
+            """)
         else:
-            rows = db_manager.execute_query("""
+            cursor.execute("""
                 SELECT 
                     w.*,
                     u.full_name as user_name,
@@ -852,9 +1207,10 @@ def get_all_withdrawals():
                 JOIN users u ON w.user_id = u.user_id
                 WHERE w.status = ?
                 ORDER BY w.requested_at DESC
-            """, (status,), fetch='all')
+            """, (status,))
         
-        withdrawals = [dict(row) for row in rows]
+        withdrawals = [dict(row) for row in cursor.fetchall()]
+        conn.close()
         
         return jsonify({
             'success': True,
@@ -879,8 +1235,11 @@ def approve_withdrawal():
         if not withdrawal_id:
             return jsonify({'success': False, 'error': 'withdrawal_id is required'}), 400
         
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
         # تحديث حالة الطلب
-        db_manager.execute_query("""
+        cursor.execute("""
             UPDATE withdrawals 
             SET status = 'completed',
                 processed_at = CURRENT_TIMESTAMP,
@@ -888,6 +1247,9 @@ def approve_withdrawal():
                 tx_hash = ?
             WHERE id = ?
         """, (admin_id, tx_hash, withdrawal_id))
+        
+        conn.commit()
+        conn.close()
         
         return jsonify({
             'success': True,
@@ -912,21 +1274,26 @@ def reject_withdrawal():
         if not withdrawal_id:
             return jsonify({'success': False, 'error': 'withdrawal_id is required'}), 400
         
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
         # الحصول على معلومات الطلب
-        withdrawal = db_manager.execute_query('SELECT user_id, amount FROM withdrawals WHERE id = ?', (withdrawal_id,), fetch='one')
+        cursor.execute('SELECT user_id, amount FROM withdrawals WHERE id = ?', (withdrawal_id,))
+        withdrawal = cursor.fetchone()
         
         if not withdrawal:
+            conn.close()
             return jsonify({'success': False, 'error': 'طلب السحب غير موجود'}), 404
         
         # إرجاع المبلغ للمستخدم
-        db_manager.execute_query("""
+        cursor.execute("""
             UPDATE users 
             SET balance = balance + ?
             WHERE user_id = ?
         """, (withdrawal['amount'], withdrawal['user_id']))
         
         # تحديث حالة الطلب
-        db_manager.execute_query("""
+        cursor.execute("""
             UPDATE withdrawals 
             SET status = 'rejected',
                 processed_at = CURRENT_TIMESTAMP,
@@ -934,6 +1301,9 @@ def reject_withdrawal():
                 rejection_reason = ?
             WHERE id = ?
         """, (admin_id, reason, withdrawal_id))
+        
+        conn.commit()
+        conn.close()
         
         return jsonify({
             'success': True,
@@ -961,17 +1331,19 @@ def register_referral():
         if referrer_id == referred_id:
             return jsonify({'success': False, 'error': 'Cannot refer yourself'}), 400
         
+        conn = get_db_connection()
+        cursor = conn.cursor()
         now = datetime.now().isoformat()
         
         try:
             # تسجيل الإحالة
-            db_manager.execute_query("""
+            cursor.execute("""
                 INSERT INTO referrals (referrer_id, referred_id, is_valid, created_at, validated_at)
                 VALUES (?, ?, 1, ?, ?)
             """, (referrer_id, referred_id, now, now))
             
             # تحديث عدد الإحالات للـ referrer
-            db_manager.execute_query("""
+            cursor.execute("""
                 UPDATE users 
                 SET total_referrals = total_referrals + 1,
                     valid_referrals = valid_referrals + 1
@@ -979,19 +1351,24 @@ def register_referral():
             """, (referrer_id,))
             
             # إضافة لفة مجانية كل 5 إحالات
-            result = db_manager.execute_query("SELECT valid_referrals FROM users WHERE user_id = ?", (referrer_id,), fetch='one')
+            cursor.execute("SELECT valid_referrals FROM users WHERE user_id = ?", (referrer_id,))
+            result = cursor.fetchone()
             if result and result['valid_referrals'] % 5 == 0:
-                db_manager.execute_query("""
+                cursor.execute("""
                     UPDATE users 
                     SET available_spins = available_spins + 1
                     WHERE user_id = ?
                 """, (referrer_id,))
+            
+            conn.commit()
+            conn.close()
             
             return jsonify({
                 'success': True,
                 'message': 'Referral registered successfully'
             })
         except sqlite3.IntegrityError:
+            conn.close()
             return jsonify({
                 'success': False,
                 'error': 'Referral already exists'
@@ -1012,41 +1389,48 @@ def complete_task():
         if not user_id or not task_id:
             return jsonify({'success': False, 'error': 'Missing parameters'}), 400
         
+        conn = get_db_connection()
+        cursor = conn.cursor()
         now = datetime.now().isoformat()
         
         try:
             # التحقق من أن المهمة موجودة ونشطة
-            task = db_manager.execute_query("SELECT * FROM tasks WHERE id = ? AND is_active = 1", (task_id,), fetch='one')
+            cursor.execute("SELECT * FROM tasks WHERE id = ? AND is_active = 1", (task_id,))
+            task = cursor.fetchone()
             
             if not task:
+                conn.close()
                 return jsonify({'success': False, 'error': 'Task not found'}), 404
             
             # تسجيل إنجاز المهمة
-            db_manager.execute_query("""
+            cursor.execute("""
                 INSERT INTO user_tasks (user_id, task_id, completed_at, verified)
                 VALUES (?, ?, ?, 1)
             """, (user_id, task_id, now))
             
             # إضافة المكافأة للرصيد
-            db_manager.execute_query("""
+            cursor.execute("""
                 UPDATE users 
                 SET balance = balance + ?
                 WHERE user_id = ?
             """, (task['reward_amount'], user_id))
             
             # التحقق من عدد المهام المكتملة
-            tasks_count_row = db_manager.execute_query("""
+            cursor.execute("""
                 SELECT COUNT(*) as count FROM user_tasks WHERE user_id = ?
-            """, (user_id,), fetch='one')
-            tasks_count = tasks_count_row['count']
+            """, (user_id,))
+            tasks_count = cursor.fetchone()['count']
             
             # كل 5 مهمات = لفة إضافية
             if tasks_count % 5 == 0:
-                db_manager.execute_query("""
+                cursor.execute("""
                     UPDATE users 
                     SET available_spins = available_spins + 1
                     WHERE user_id = ?
                 """, (user_id,))
+            
+            conn.commit()
+            conn.close()
             
             return jsonify({
                 'success': True,
@@ -1055,6 +1439,7 @@ def complete_task():
             })
             
         except sqlite3.IntegrityError:
+            conn.close()
             return jsonify({'success': False, 'error': 'Task already completed'}), 400
             
     except Exception as e:
@@ -1065,21 +1450,26 @@ def complete_task():
 def get_required_channels():
     """الحصول على القنوات الإجبارية النشطة للمستخدمين"""
     try:
-        rows = db_manager.execute_query("""
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
             SELECT id, channel_id, channel_name, channel_url
             FROM required_channels 
             WHERE is_active = 1 
             ORDER BY added_at DESC
-        """, fetch='all')
+        """)
         
         channels = []
-        for row in rows:
+        for row in cursor.fetchall():
             channels.append({
-                'id': row['id'],
-                'channel_id': row['channel_id'],
-                'channel_name': row['channel_name'],
-                'channel_url': row['channel_url']
+                'id': row[0],
+                'channel_id': row[1],
+                'channel_name': row[2],
+                'channel_url': row[3]
             })
+        
+        conn.close()
         return jsonify({
             'success': True,
             'channels': channels
@@ -1100,11 +1490,17 @@ def verify_all_channels():
             return jsonify({'success': False, 'message': 'معرف المستخدم مطلوب'}), 400
         
         # جلب القنوات النشطة
-        channels = db_manager.execute_query("""
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
             SELECT channel_id, channel_name
             FROM required_channels 
             WHERE is_active = 1
-        """, fetch='all')
+        """)
+        
+        channels = cursor.fetchall()
+        conn.close()
         
         if not channels:
             return jsonify({
@@ -1117,8 +1513,8 @@ def verify_all_channels():
         not_subscribed = []
         
         for channel in channels:
-            channel_id = channel['channel_id']
-            channel_name = channel['channel_name']
+            channel_id = channel[0]
+            channel_name = channel[1]
             
             try:
                 import requests as req
@@ -1174,50 +1570,39 @@ def submit_fingerprint():
             }), 400
         
         # التحقق من حالة نظام التحقق
-        setting = db_manager.execute_query("""
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
             SELECT setting_value FROM system_settings 
             WHERE setting_key = 'verification_enabled'
-        """, fetch='one')
+        """)
+        setting = cursor.fetchone()
         verification_enabled = setting['setting_value'] == 'true' if setting else True
         
         # إذا كان التحقق معطلاً، نسمح مباشرة
         if not verification_enabled:
             # تسجيل المحاولة كنجاح بدون تحقق
-            now_str = datetime.now().isoformat()
-            db_manager.execute_query("""
+            cursor.execute("""
                 INSERT INTO verification_attempts 
                 (user_id, fingerprint, ip_address, attempt_time, status, reason)
-                VALUES (?, ?, ?, ?, 'bypassed', 'verification_disabled')
-            """, (user_id, fingerprint, request.remote_addr, now_str))
+                VALUES (?, ?, ?, datetime('now'), 'bypassed', 'verification_disabled')
+            """, (user_id, fingerprint, request.remote_addr))
             
-            if db_manager.use_postgres:
-                db_manager.execute_query("""
-                    INSERT INTO device_verifications 
-                    (user_id, fingerprint, ip_address, user_agent, timezone, 
-                    screen_resolution, canvas_fp, audio_fp, local_id, verified_at, last_seen)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-                    ON CONFLICT (user_id) DO UPDATE SET
-                        fingerprint = EXCLUDED.fingerprint,
-                        ip_address = EXCLUDED.ip_address,
-                        last_seen = NOW()
-                """, (
-                    user_id, fingerprint, request.remote_addr,
-                    meta.get('user_agent'), meta.get('timezone'),
-                    meta.get('resolution'), meta.get('canvas_fp'),
-                    meta.get('audio_fp'), meta.get('local_id')
-                ))
-            else:
-                db_manager.execute_query("""
-                    INSERT OR REPLACE INTO device_verifications 
-                    (user_id, fingerprint, ip_address, user_agent, timezone, 
-                    screen_resolution, canvas_fp, audio_fp, local_id, verified_at, last_seen)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-                """, (
-                    user_id, fingerprint, request.remote_addr,
-                    meta.get('user_agent'), meta.get('timezone'),
-                    meta.get('resolution'), meta.get('canvas_fp'),
-                    meta.get('audio_fp'), meta.get('local_id')
-                ))
+            cursor.execute("""
+                INSERT OR REPLACE INTO device_verifications 
+                (user_id, fingerprint, ip_address, user_agent, timezone, 
+                screen_resolution, canvas_fp, audio_fp, local_id, verified_at, last_seen)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+            """, (
+                user_id, fingerprint, request.remote_addr,
+                meta.get('user_agent'), meta.get('timezone'),
+                meta.get('resolution'), meta.get('canvas_fp'),
+                meta.get('audio_fp'), meta.get('local_id')
+            ))
+            
+            conn.commit()
+            conn.close()
             
             # إشعار البوت
             try:
@@ -1234,13 +1619,15 @@ def submit_fingerprint():
         
         # استكمال التحقق العادي إذا كان مفعلاً
         # التحقق من صلاحية الـ token
-        token_row = db_manager.execute_query("""
+        cursor.execute("""
             SELECT * FROM verification_tokens 
             WHERE user_id = ? AND token = ? AND used = 0
             AND datetime(expires_at) > datetime('now')
-        """, (user_id, fp_token), fetch='one')
+        """, (user_id, fp_token))
         
+        token_row = cursor.fetchone()
         if not token_row:
+            conn.close()
             return jsonify({
                 'ok': False,
                 'error': 'Invalid or expired token'
@@ -1253,27 +1640,30 @@ def submit_fingerprint():
             ip_address = request.remote_addr
         
         # التحقق من عدم وجود جهاز آخر بنفس البصمة
-        duplicate_device = db_manager.execute_query("""
+        cursor.execute("""
             SELECT user_id FROM device_verifications 
             WHERE fingerprint = ? AND user_id != ?
-        """, (fingerprint, user_id), fetch='one')
+        """, (fingerprint, user_id))
         
+        duplicate_device = cursor.fetchone()
         if duplicate_device:
             # تسجيل المحاولة الفاشلة
-            now_str = datetime.now().isoformat()
-            db_manager.execute_query("""
+            cursor.execute("""
                 INSERT INTO verification_attempts 
                 (user_id, fingerprint, ip_address, attempt_time, status, reason)
-                VALUES (?, ?, ?, ?, 'rejected', 'duplicate_device')
-            """, (user_id, fingerprint, ip_address, now_str))
+                VALUES (?, ?, ?, datetime('now'), 'rejected', 'duplicate_device')
+            """, (user_id, fingerprint, ip_address))
             
             # حظر المستخدم وحفظ السبب
             ban_reason = 'تم اكتشاف حسابات متعددة - جهاز مسجل مسبقاً'
-            db_manager.execute_query("""
+            cursor.execute("""
                 UPDATE users 
                 SET is_banned = 1, ban_reason = ?
                 WHERE user_id = ?
             """, (ban_reason, user_id))
+            
+            conn.commit()
+            conn.close()
             
             # إرسال إشعار للبوت عن المستخدم المحظور
             try:
@@ -1294,27 +1684,29 @@ def submit_fingerprint():
             }), 403
         
         # التحقق من عدم وجود IP address مكرر (اختياري - يمكن تعطيله)
-        ip_count_row = db_manager.execute_query("""
-            SELECT COUNT(*) as count FROM device_verifications 
+        cursor.execute("""
+            SELECT COUNT(*) FROM device_verifications 
             WHERE ip_address = ? AND user_id != ?
-        """, (ip_address, user_id), fetch='one')
+        """, (ip_address, user_id))
         
-        ip_count = ip_count_row['count'] if ip_count_row else 0
+        ip_count = cursor.fetchone()[0]
         if ip_count >= 3:  # السماح بـ 3 أجهزة كحد أقصى من نفس الـ IP
-            now_str = datetime.now().isoformat()
-            db_manager.execute_query("""
+            cursor.execute("""
                 INSERT INTO verification_attempts 
                 (user_id, fingerprint, ip_address, attempt_time, status, reason)
-                VALUES (?, ?, ?, ?, 'rejected', 'ip_limit_exceeded')
-            """, (user_id, fingerprint, ip_address, now_str))
+                VALUES (?, ?, ?, datetime('now'), 'rejected', 'ip_limit_exceeded')
+            """, (user_id, fingerprint, ip_address))
             
             # حظر المستخدم وحفظ السبب
             ban_reason = 'تم اكتشاف حسابات متعددة - تجاوز الحد الأقصى للأجهزة من نفس الشبكة'
-            db_manager.execute_query("""
+            cursor.execute("""
                 UPDATE users 
                 SET is_banned = 1, ban_reason = ?
                 WHERE user_id = ?
             """, (ban_reason, user_id))
+            
+            conn.commit()
+            conn.close()
             
             # إرسال إشعار للبوت عن المستخدم المحظور
             try:
@@ -1336,75 +1728,45 @@ def submit_fingerprint():
         
         # حفظ بيانات التحقق
         now = datetime.now().isoformat()
-        
-        if db_manager.use_postgres:
-            # PostgreSQL: استخدام INSERT ... ON CONFLICT
-            db_manager.execute_query("""
-                INSERT INTO device_verifications 
-                (user_id, fingerprint, ip_address, user_agent, timezone, 
-                 screen_resolution, canvas_fp, audio_fp, local_id, verified_at, last_seen)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (user_id) 
-                DO UPDATE SET 
-                    fingerprint = EXCLUDED.fingerprint,
-                    ip_address = EXCLUDED.ip_address,
-                    user_agent = EXCLUDED.user_agent,
-                    timezone = EXCLUDED.timezone,
-                    screen_resolution = EXCLUDED.screen_resolution,
-                    canvas_fp = EXCLUDED.canvas_fp,
-                    audio_fp = EXCLUDED.audio_fp,
-                    local_id = EXCLUDED.local_id,
-                    verified_at = EXCLUDED.verified_at,
-                    last_seen = EXCLUDED.last_seen
-            """, (
-                user_id, fingerprint, ip_address,
-                meta.get('ua', ''),
-                meta.get('tz', ''),
-                meta.get('rez', ''),
-                meta.get('cfp', ''),
-                meta.get('afp', ''),
-                meta.get('lid', ''),
-                now, now
-            ))
-        else:
-            # SQLite: استخدام INSERT OR REPLACE
-            db_manager.execute_query("""
-                INSERT OR REPLACE INTO device_verifications 
-                (user_id, fingerprint, ip_address, user_agent, timezone, 
-                 screen_resolution, canvas_fp, audio_fp, local_id, verified_at, last_seen)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                user_id, fingerprint, ip_address,
-                meta.get('ua', ''),
-                meta.get('tz', ''),
-                meta.get('rez', ''),
-                meta.get('cfp', ''),
-                meta.get('afp', ''),
-                meta.get('lid', ''),
-                now, now
-            ))
+        cursor.execute("""
+            INSERT OR REPLACE INTO device_verifications 
+            (user_id, fingerprint, ip_address, user_agent, timezone, 
+             screen_resolution, canvas_fp, audio_fp, local_id, verified_at, last_seen)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            user_id, fingerprint, ip_address,
+            meta.get('ua', ''),
+            meta.get('tz', ''),
+            meta.get('rez', ''),
+            meta.get('cfp', ''),
+            meta.get('afp', ''),
+            meta.get('lid', ''),
+            now, now
+        ))
         
         # تحديث حالة المستخدم
-        db_manager.execute_query("""
+        cursor.execute("""
             UPDATE users 
             SET is_device_verified = 1, verification_required = 0
             WHERE user_id = ?
         """, (user_id,))
         
         # تحديث حالة الـ token
-        db_manager.execute_query("""
+        cursor.execute("""
             UPDATE verification_tokens 
             SET used = 1 
             WHERE user_id = ? AND token = ?
         """, (user_id, fp_token))
         
         # تسجيل المحاولة الناجحة
-        now_str = datetime.now().isoformat()
-        db_manager.execute_query("""
+        cursor.execute("""
             INSERT INTO verification_attempts 
             (user_id, fingerprint, ip_address, attempt_time, status, reason)
-            VALUES (?, ?, ?, ?, 'success', 'verified')
-        """, (user_id, fingerprint, ip_address, now_str))
+            VALUES (?, ?, ?, datetime('now'), 'success', 'verified')
+        """, (user_id, fingerprint, ip_address))
+        
+        conn.commit()
+        conn.close()
         
         print(f"✅ Device verified for user {user_id}")
         
@@ -1443,16 +1805,22 @@ def create_verification_token():
                 'error': 'User ID required'
             }), 400
         
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
         # إنشاء token عشوائي
         token = secrets.token_urlsafe(32)
         now = datetime.now()
         expires_at = (now + timedelta(minutes=15)).isoformat()
         
-        db_manager.execute_query("""
+        cursor.execute("""
             INSERT INTO verification_tokens 
             (user_id, token, created_at, expires_at, used)
             VALUES (?, ?, ?, ?, 0)
         """, (user_id, token, now.isoformat(), expires_at))
+        
+        conn.commit()
+        conn.close()
         
         return jsonify({
             'success': True,
@@ -1471,11 +1839,16 @@ def create_verification_token():
 def get_verification_status(user_id):
     """التحقق من حالة تحقق المستخدم"""
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
         # التحقق من وجود تحقق للمستخدم
-        verification = db_manager.execute_query("""
+        cursor.execute("""
             SELECT * FROM device_verifications 
             WHERE user_id = ?
-        """, (user_id,), fetch='one')
+        """, (user_id,))
+        
+        verification = cursor.fetchone()
         
         if verification:
             result = {
@@ -1493,6 +1866,8 @@ def get_verification_status(user_id):
                 'verified_at': None,
                 'is_blocked': False
             }
+        
+        conn.close()
         
         return jsonify({
             'success': True,
@@ -1512,12 +1887,15 @@ def manage_channels():
     try:
         if request.method == 'GET':
             # Get all required channels
-            rows = db_manager.execute_query("""
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
                 SELECT * FROM required_channels 
                 WHERE is_active = 1 
                 ORDER BY added_at DESC
-            """, fetch='all')
-            channels = [dict(row) for row in rows]
+            """)
+            channels = [dict(row) for row in cursor.fetchall()]
+            conn.close()
             return jsonify({'success': True, 'channels': channels})
         
         elif request.method == 'POST':
@@ -1552,16 +1930,22 @@ def manage_channels():
                 # نكمل حتى لو فشل التحقق
                 pass
             
+            conn = get_db_connection()
+            cursor = conn.cursor()
             now = datetime.now().isoformat()
             
             try:
-                db_manager.execute_query("""
+                cursor.execute("""
                     INSERT INTO required_channels (channel_id, channel_name, channel_url, added_by, added_at, is_active)
                     VALUES (?, ?, ?, ?, ?, ?)
                 """, (channel_id, channel_name, channel_url, admin_id, now, is_active))
                 
+                conn.commit()
+                conn.close()
+                
                 return jsonify({'success': True, 'message': 'تم إضافة القناة بنجاح'})
             except sqlite3.IntegrityError:
+                conn.close()
                 return jsonify({'success': False, 'message': 'القناة موجودة بالفعل'}), 400
         
         elif request.method == 'DELETE':
@@ -1570,11 +1954,15 @@ def manage_channels():
             if not channel_id:
                 return jsonify({'success': False, 'message': 'معرف القناة مطلوب'}), 400
             
-            db_manager.execute_query("""
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
                 UPDATE required_channels 
                 SET is_active = 0 
                 WHERE channel_id = ?
             """, (channel_id,))
+            conn.commit()
+            conn.close()
             
             return jsonify({'success': True, 'message': 'تم حذف القناة بنجاح'})
             
@@ -1588,27 +1976,31 @@ def manage_tasks():
     try:
         if request.method == 'GET':
             # جلب جميع المهام للإدمن
-            rows = db_manager.execute_query("""
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
                 SELECT id, task_type, task_name, task_description, task_link, 
                        channel_username, is_pinned, is_active, added_at
                 FROM tasks
                 ORDER BY is_pinned DESC, added_at DESC
-            """, fetch='all')
+            """)
             
             tasks = []
-            for row in rows:
+            for row in cursor.fetchall():
                 tasks.append({
-                    'id': row['id'],
-                    'task_type': row['task_type'],
-                    'task_name': row['task_name'],
-                    'task_description': row['task_description'],
-                    'task_link': row['task_link'],
-                    'channel_username': row['channel_username'],
-                    'is_pinned': row['is_pinned'],
-                    'is_active': row['is_active'],
-                    'added_at': row['added_at']
+                    'id': row[0],
+                    'task_type': row[1],
+                    'task_name': row[2],
+                    'task_description': row[3],
+                    'task_link': row[4],
+                    'channel_username': row[5],
+                    'is_pinned': row[6],
+                    'is_active': row[7],
+                    'added_at': row[8]
                 })
             
+            conn.close()
             return jsonify({'success': True, 'tasks': tasks})
             
         elif request.method == 'POST':
@@ -1651,44 +2043,29 @@ def manage_tasks():
                     # نكمل حتى لو فشل التحقق
                     pass
             
+            conn = get_db_connection()
+            cursor = conn.cursor()
             now = datetime.now().isoformat()
             
             # افتراض admin_id = 1797127532 (يمكن تحديثه من Telegram WebApp)
             admin_id = 1797127532
             
-            # استخدام RETURNING id للحصول على آخر ID
-            if db_manager.use_postgres:
-                result = db_manager.execute_query("""
-                    INSERT INTO tasks (
-                        task_type, task_name, task_description, task_link, 
-                        channel_username, is_pinned, is_active, 
-                        added_by, added_at
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    RETURNING id
-                """, (
-                    task_type, task_name, task_description, task_link,
-                    channel_username, is_pinned, is_active,
-                    admin_id, now
-                ), fetch='one')
-                task_id = result['id'] if result else None
-            else:
-                # SQLite
-                db_manager.execute_query("""
-                    INSERT INTO tasks (
-                        task_type, task_name, task_description, task_link, 
-                        channel_username, is_pinned, is_active, 
-                        added_by, added_at
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    task_type, task_name, task_description, task_link,
-                    channel_username, is_pinned, is_active,
-                    admin_id, now
-                ))
-                # الحصول على آخر ID
-                result = db_manager.execute_query("SELECT last_insert_rowid() as id", fetch='one')
-                task_id = result['id'] if result else None
+            cursor.execute("""
+                INSERT INTO tasks (
+                    task_type, task_name, task_description, task_link, 
+                    channel_username, is_pinned, is_active, 
+                    added_by, added_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                task_type, task_name, task_description, task_link,
+                channel_username, is_pinned, is_active,
+                admin_id, now
+            ))
+            
+            task_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
             
             return jsonify({
                 'success': True, 
@@ -1740,7 +2117,10 @@ def manage_tasks():
                     # نكمل حتى لو فشل التحقق
                     pass
             
-            db_manager.execute_query("""
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
                 UPDATE tasks 
                 SET task_type = ?, task_name = ?, task_description = ?, 
                     task_link = ?, channel_username = ?, is_pinned = ?, is_active = ?
@@ -1749,6 +2129,9 @@ def manage_tasks():
                 task_type, task_name, task_description, task_link,
                 channel_username, is_pinned, is_active, task_id
             ))
+            
+            conn.commit()
+            conn.close()
             
             return jsonify({
                 'success': True, 
@@ -1761,12 +2144,18 @@ def manage_tasks():
             if not task_id:
                 return jsonify({'success': False, 'message': 'معرف المهمة مطلوب'}), 400
             
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
             # تعطيل المهمة بدلاً من حذفها
-            db_manager.execute_query("""
+            cursor.execute("""
                 UPDATE tasks 
                 SET is_active = 0 
                 WHERE id = ?
             """, (task_id,))
+            
+            conn.commit()
+            conn.close()
             
             return jsonify({'success': True, 'message': 'تم تعطيل المهمة'})
             
@@ -1786,12 +2175,15 @@ def manage_prizes():
     try:
         if request.method == 'GET':
             # Get all active prizes
-            rows = db_manager.execute_query("""
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
                 SELECT * FROM wheel_prizes 
                 WHERE is_active = 1 
                 ORDER BY position ASC
-            """, fetch='all')
-            prizes = [dict(row) for row in rows]
+            """)
+            prizes = [dict(row) for row in cursor.fetchall()]
+            conn.close()
             return jsonify({'success': True, 'data': prizes})
         
         elif request.method == 'POST':
@@ -1809,12 +2201,17 @@ def manage_prizes():
             if not all([name, value is not None, probability is not None]):
                 return jsonify({'success': False, 'error': 'Missing parameters'}), 400
             
+            conn = get_db_connection()
+            cursor = conn.cursor()
             now = datetime.now().isoformat()
             
-            db_manager.execute_query("""
+            cursor.execute("""
                 INSERT INTO wheel_prizes (name, value, probability, color, emoji, position, is_active, added_at)
                 VALUES (?, ?, ?, ?, ?, ?, 1, ?)
             """, (name, value, probability, color, emoji, position, now))
+            
+            conn.commit()
+            conn.close()
             
             return jsonify({'success': True, 'message': 'Prize added successfully'})
         
@@ -1834,13 +2231,18 @@ def manage_prizes():
             if not prize_id:
                 return jsonify({'success': False, 'error': 'Prize ID required'}), 400
             
+            conn = get_db_connection()
+            cursor = conn.cursor()
             now = datetime.now().isoformat()
             
-            db_manager.execute_query("""
+            cursor.execute("""
                 UPDATE wheel_prizes 
                 SET name = ?, value = ?, probability = ?, color = ?, emoji = ?, position = ?, updated_at = ?
                 WHERE id = ?
             """, (name, value, probability, color, emoji, position, now, prize_id))
+            
+            conn.commit()
+            conn.close()
             
             return jsonify({'success': True, 'message': 'Prize updated successfully'})
         
@@ -1850,11 +2252,15 @@ def manage_prizes():
             if not prize_id:
                 return jsonify({'success': False, 'error': 'Prize ID required'}), 400
             
-            db_manager.execute_query("""
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
                 UPDATE wheel_prizes 
                 SET is_active = 0 
                 WHERE id = ?
             """, (prize_id,))
+            conn.commit()
+            conn.close()
             
             return jsonify({'success': True, 'message': 'Prize removed'})
             
@@ -1881,20 +2287,28 @@ def add_spins_to_user():
         # Remove @ if present
         username = username.replace('@', '')
         
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
         # Find user by username
-        user = db_manager.execute_query("SELECT user_id, username FROM users WHERE username = ?", (username,), fetch='one')
+        cursor.execute("SELECT user_id, username FROM users WHERE username = ?", (username,))
+        user = cursor.fetchone()
         
         if not user:
+            conn.close()
             return jsonify({'success': False, 'error': 'User not found'}), 404
         
         user_id = user['user_id']
         
         # Add spins
-        db_manager.execute_query("""
+        cursor.execute("""
             UPDATE users 
             SET available_spins = available_spins + ?
             WHERE user_id = ?
         """, (spins_count, user_id))
+        
+        conn.commit()
+        conn.close()
         
         return jsonify({
             'success': True, 
@@ -1914,7 +2328,10 @@ def add_spins_to_user():
 def get_all_users():
     """جلب جميع المستخدمين للأدمن"""
     try:
-        rows = db_manager.execute_query("""
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
             SELECT 
                 user_id,
                 username,
@@ -1928,10 +2345,10 @@ def get_all_users():
                 is_device_verified
             FROM users
             ORDER BY created_at DESC
-        """, fetch='all')
+        """)
         
         users = []
-        for row in rows:
+        for row in cursor.fetchall():
             users.append({
                 'id': row['user_id'],
                 'name': row['full_name'] or 'Unknown',
@@ -1944,6 +2361,8 @@ def get_all_users():
                 'ban_reason': row['ban_reason'] or '',
                 'is_verified': bool(row['is_device_verified'])
             })
+        
+        conn.close()
         
         return jsonify({
             'success': True,
@@ -1965,25 +2384,30 @@ def get_all_users():
 def get_advanced_stats():
     """إحصائيات متقدمة للأدمن"""
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
         # إجمالي المستخدمين
-        total_users_row = db_manager.execute_query("SELECT COUNT(*) as total FROM users", fetch='one')
-        total_users = total_users_row['total']
+        cursor.execute("SELECT COUNT(*) as total FROM users")
+        total_users = cursor.fetchone()['total']
         
         # المستخدمين النشطين (غير محظورين)
-        active_users_row = db_manager.execute_query("SELECT COUNT(*) as active FROM users WHERE is_banned = 0", fetch='one')
-        active_users = active_users_row['active']
+        cursor.execute("SELECT COUNT(*) as active FROM users WHERE is_banned = 0")
+        active_users = cursor.fetchone()['active']
         
         # المستخدمين المحظورين
-        banned_users_row = db_manager.execute_query("SELECT COUNT(*) as banned FROM users WHERE is_banned = 1", fetch='one')
-        banned_users = banned_users_row['banned']
+        cursor.execute("SELECT COUNT(*) as banned FROM users WHERE is_banned = 1")
+        banned_users = cursor.fetchone()['banned']
         
         # المستخدمين المتحقق منهم (بالجهاز)
-        verified_users_row = db_manager.execute_query("SELECT COUNT(*) as verified FROM users WHERE is_device_verified = 1", fetch='one')
-        verified_users = verified_users_row['verified']
+        cursor.execute("SELECT COUNT(*) as verified FROM users WHERE is_device_verified = 1")
+        verified_users = cursor.fetchone()['verified']
         
         # إجمالي عمليات الحظر
-        total_bans_row = db_manager.execute_query("SELECT COUNT(*) as total_bans FROM users WHERE is_banned = 1", fetch='one')
-        total_bans = total_bans_row['total_bans']
+        cursor.execute("SELECT COUNT(*) as total_bans FROM users WHERE is_banned = 1")
+        total_bans = cursor.fetchone()['total_bans']
+        
+        conn.close()
         
         return jsonify({
             'success': True,
@@ -2016,10 +2440,12 @@ def unban_user():
         if not user_id:
             return jsonify({'success': False, 'error': 'User ID required'}), 400
         
+        conn = get_db_connection()
+        cursor = conn.cursor()
         now = datetime.now().isoformat()
         
         # إلغاء الحظر وتعيين أنه متحقق منه لتجنب التحقق مرة أخرى
-        db_manager.execute_query("""
+        cursor.execute("""
             UPDATE users 
             SET is_banned = 0,
                 ban_reason = NULL,
@@ -2029,7 +2455,10 @@ def unban_user():
         """, (now, user_id))
         
         # حذف سجلات التحقق القديمة
-        db_manager.execute_query("DELETE FROM device_verifications WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM device_verifications WHERE user_id = ?", (user_id,))
+        
+        conn.commit()
+        conn.close()
         
         return jsonify({
             'success': True, 
@@ -2055,8 +2484,11 @@ def get_admin_user_referrals():
         if not user_id:
             return jsonify({'success': False, 'error': 'user_id is required'}), 400
         
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
         # جلب الإحالات
-        rows = db_manager.execute_query("""
+        cursor.execute("""
             SELECT 
                 u.user_id as id,
                 u.username,
@@ -2067,10 +2499,10 @@ def get_admin_user_referrals():
             JOIN users u ON r.referred_id = u.user_id
             WHERE r.referrer_id = ?
             ORDER BY r.created_at DESC
-        """, (user_id,), fetch='all')
+        """, (user_id,))
         
         referrals = []
-        for row in rows:
+        for row in cursor.fetchall():
             referrals.append({
                 'id': row['id'],
                 'username': f"@{row['username']}" if row['username'] else f"user_{row['id']}",
@@ -2078,6 +2510,8 @@ def get_admin_user_referrals():
                 'joined_at': row['joined_at'],
                 'is_valid': row['is_valid']
             })
+        
+        conn.close()
         
         return jsonify({
             'success': True,
@@ -2103,14 +2537,19 @@ def verification_settings():
         if not admin_id or int(admin_id) not in ADMIN_IDS:
             return jsonify({'success': False, 'error': 'Unauthorized'}), 403
         
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
         if request.method == 'GET':
             # جلب الإعدادات الحالية
-            result = db_manager.execute_query("""
+            cursor.execute("""
                 SELECT setting_value FROM system_settings 
                 WHERE setting_key = 'verification_enabled'
-            """, fetch='one')
+            """)
+            result = cursor.fetchone()
             is_enabled = result['setting_value'] == 'true' if result else True
             
+            conn.close()
             return jsonify({
                 'success': True,
                 'verification_enabled': is_enabled
@@ -2121,22 +2560,14 @@ def verification_settings():
             data = request.get_json()
             new_status = data.get('enabled', True)
             
-            if db_manager.use_postgres:
-                db_manager.execute_query("""
-                    INSERT INTO system_settings 
-                    (setting_key, setting_value, updated_at, updated_by)
-                    VALUES ('verification_enabled', ?, ?, ?)
-                    ON CONFLICT (setting_key) DO UPDATE SET
-                        setting_value = EXCLUDED.setting_value,
-                        updated_at = EXCLUDED.updated_at,
-                        updated_by = EXCLUDED.updated_by
-                """, ('true' if new_status else 'false', datetime.now().isoformat(), admin_id))
-            else:
-                db_manager.execute_query("""
-                    INSERT OR REPLACE INTO system_settings 
-                    (setting_key, setting_value, updated_at, updated_by)
-                    VALUES ('verification_enabled', ?, ?, ?)
-                """, ('true' if new_status else 'false', datetime.now().isoformat(), admin_id))
+            cursor.execute("""
+                INSERT OR REPLACE INTO system_settings 
+                (setting_key, setting_value, updated_at, updated_by)
+                VALUES ('verification_enabled', ?, ?, ?)
+            """, ('true' if new_status else 'false', datetime.now().isoformat(), admin_id))
+            
+            conn.commit()
+            conn.close()
             
             return jsonify({
                 'success': True,
@@ -2158,12 +2589,18 @@ def verification_settings():
 def get_settings():
     """الحصول على إعدادات البوت"""
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
         # جلب جميع الإعدادات
-        settings_rows = db_manager.execute_query("SELECT setting_key, setting_value FROM bot_settings", fetch='all')
+        cursor.execute("SELECT setting_key, setting_value FROM bot_settings")
+        settings_rows = cursor.fetchall()
         
         settings = {}
         for row in settings_rows:
             settings[row['setting_key']] = row['setting_value']
+        
+        conn.close()
         
         # إضافة قيم افتراضية للإعدادات الأخرى
         return jsonify({
@@ -2185,24 +2622,20 @@ def update_settings():
     try:
         data = request.get_json()
         
+        conn = get_db_connection()
+        cursor = conn.cursor()
         now = datetime.now().isoformat()
         
         # تحديث السحب التلقائي
         if 'auto_withdrawal_enabled' in data:
             auto_withdrawal = 'true' if data['auto_withdrawal_enabled'] else 'false'
-            if db_manager.use_postgres:
-                db_manager.execute_query("""
-                    INSERT INTO bot_settings (setting_key, setting_value, updated_at)
-                    VALUES ('auto_withdrawal_enabled', ?, ?)
-                    ON CONFLICT (setting_key) DO UPDATE SET
-                        setting_value = EXCLUDED.setting_value,
-                        updated_at = EXCLUDED.updated_at
-                """, (auto_withdrawal, now))
-            else:
-                db_manager.execute_query("""
-                    INSERT OR REPLACE INTO bot_settings (setting_key, setting_value, updated_at)
-                    VALUES ('auto_withdrawal_enabled', ?, ?)
-                """, (auto_withdrawal, now))
+            cursor.execute("""
+                INSERT OR REPLACE INTO bot_settings (setting_key, setting_value, updated_at)
+                VALUES ('auto_withdrawal_enabled', ?, ?)
+            """, (auto_withdrawal, now))
+        
+        conn.commit()
+        conn.close()
         
         print(f"✅ Settings updated: {data}")
         

@@ -4,8 +4,9 @@
 python-telegram-bot==20.3
 python-dotenv==1.0.0
 
-# Database - PostgreSQL (use psycopg2 if psycopg2-binary fails)
-psycopg2>=2.9.6,<3.0.0
+# Database
+psycopg2-binary==2.9.9  # PostgreSQL
+
 
 # TON SDK
 tonsdk==1.0.13

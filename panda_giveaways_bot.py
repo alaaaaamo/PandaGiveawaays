@@ -27,11 +27,12 @@ import hashlib
 import random
 import secrets
 import time
-import sqlite3
+import shutil
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Set
 from dataclasses import dataclass
 from enum import Enum
+import sqlite3
 
 # ═══════════════════════════════════════════════════════════════
 # 📦 IMPORTS
@@ -70,11 +71,6 @@ from telegram.ext import (
 from telegram.constants import ParseMode
 from telegram.error import RetryAfter, TimedOut, NetworkError, Forbidden, BadRequest
 import re
-
-# استيراد مدير قاعدة البيانات الجديد (يدعم PostgreSQL & SQLite)
-import sys
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from database import db_manager, get_db_connection
 
 # استيراد نظام الأيقونات المودرن
 try:
@@ -136,9 +132,14 @@ TON_API_KEY = os.getenv("TON_API_KEY", "")
 SECRET_KEY = os.getenv("SECRET_KEY", secrets.token_hex(32))
 
 # 📊 إعدادات قاعدة البيانات
-# تم نقل إدارة قاعدة البيانات إلى database.py
-# يدعم الآن PostgreSQL (Neon) و SQLite للتطوير المحلي
-print(f"📂 Bot using database: {'PostgreSQL (Neon)' if db_manager.use_postgres else 'SQLite (Local)'}")
+DATABASE_URL = os.getenv("DATABASE_URL", "")  # PostgreSQL
+# Use absolute path on Render to ensure consistency with Flask app
+if os.environ.get('RENDER'):
+    DATABASE_PATH = os.getenv("DATABASE_PATH", "/opt/render/project/src/panda_giveaways.db")
+else:
+    DATABASE_PATH = os.getenv("DATABASE_PATH", "panda_giveaways.db")
+
+print(f"📂 Bot using database at: {DATABASE_PATH}")
 
 # 🌐 API Configuration
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:5000/api")
@@ -156,7 +157,8 @@ BROADCAST_PRUNE_BLOCKED = True  # حذف المستخدمين المحظورين
     BROADCAST_BUTTON_NAME, 
     BROADCAST_BUTTON_URL,
     ADD_CHANNEL_LINK,  # جديد: لإضافة قناة
-) = range(5)
+    RESTORE_BACKUP,  # جديد: لاستعادة النسخة الاحتياطية
+) = range(6)
 
 # ═══════════════════════════════════════════════════════════════
 # 🔧 LOGGING
@@ -213,23 +215,205 @@ class User:
 # ═══════════════════════════════════════════════════════════════
 # 🗄️ DATABASE MANAGER
 # ═══════════════════════════════════════════════════════════════
-# تم نقل إدارة قاعدة البيانات إلى database.py
-# يدعم الآن PostgreSQL (Neon) و SQLite للتطوير المحلي
 
-class DatabaseManagerBot:
-    """إدارة قاعدة البيانات للبوت - wrapper حول db_manager من database.py"""
+class DatabaseManager:
+    """إدارة قاعدة البيانات بشكل آمن"""
     
-    def __init__(self):
-        self.db_manager = db_manager
-        logger.info("✅ Bot Database Manager initialized")
+    def __init__(self, db_path: str = DATABASE_PATH):
+        self.db_path = db_path
+        logger.info("🗄️ Initializing Panda Giveaways Database...")
+        self.init_database()
+        logger.info("✅ Database initialized successfully")
     
     def get_connection(self):
         """إنشاء اتصال آمن بقاعدة البيانات"""
-        return get_db_connection()
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.row_factory = sqlite3.Row
+        return conn
     
     def init_database(self):
-        """قاعدة البيانات مُهيأة بالفعل من database.py"""
-        pass
+        """إنشاء جداول قاعدة البيانات"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # جدول المستخدمين
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY,
+                username TEXT,
+                full_name TEXT NOT NULL,
+                balance REAL DEFAULT 0.0,
+                total_spins INTEGER DEFAULT 0,
+                available_spins INTEGER DEFAULT 0,
+                tickets INTEGER DEFAULT 0,
+                total_referrals INTEGER DEFAULT 0,
+                valid_referrals INTEGER DEFAULT 0,
+                referrer_id INTEGER,
+                created_at TEXT NOT NULL,
+                last_active TEXT,
+                is_banned INTEGER DEFAULT 0,
+                last_spin_time TEXT,
+                spin_count_today INTEGER DEFAULT 0,
+                last_withdrawal_time TEXT,
+                ton_wallet TEXT,
+                vodafone_number TEXT,
+                FOREIGN KEY (referrer_id) REFERENCES users(user_id)
+            )
+        """)
+        
+        # إضافة عمود tickets للمستخدمين القدامى
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN tickets INTEGER DEFAULT 0")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # العمود موجود بالفعل
+        
+        # جدول الإحالات
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS referrals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                referrer_id INTEGER NOT NULL,
+                referred_id INTEGER NOT NULL,
+                is_valid INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL,
+                validated_at TEXT,
+                FOREIGN KEY (referrer_id) REFERENCES users(user_id),
+                FOREIGN KEY (referred_id) REFERENCES users(user_id),
+                UNIQUE(referrer_id, referred_id)
+            )
+        """)
+        
+        # جدول لفات العجلة
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS spins (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                prize_name TEXT NOT NULL,
+                prize_amount REAL NOT NULL,
+                spin_time TEXT NOT NULL,
+                spin_hash TEXT NOT NULL UNIQUE,
+                ip_address TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+        
+        # جدول طلبات السحب
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS withdrawals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                amount REAL NOT NULL,
+                withdrawal_type TEXT NOT NULL,
+                wallet_address TEXT,
+                phone_number TEXT,
+                status TEXT NOT NULL DEFAULT 'pending',
+                requested_at TEXT NOT NULL,
+                processed_at TEXT,
+                processed_by INTEGER,
+                tx_hash TEXT,
+                rejection_reason TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(user_id),
+                FOREIGN KEY (processed_by) REFERENCES users(user_id)
+            )
+        """)
+        
+        # جدول القنوات الإجبارية (مشترك مع الموقع - required_channels)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS required_channels (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                channel_id TEXT NOT NULL UNIQUE,
+                channel_name TEXT NOT NULL,
+                channel_url TEXT,
+                is_active INTEGER DEFAULT 1,
+                added_by INTEGER NOT NULL,
+                added_at TEXT NOT NULL,
+                FOREIGN KEY (added_by) REFERENCES users(user_id)
+            )
+        """)
+        
+        # جدول المهام
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_type TEXT NOT NULL,
+                task_name TEXT NOT NULL,
+                task_description TEXT,
+                channel_id TEXT,
+                link_url TEXT,
+                reward_amount REAL DEFAULT 0,
+                is_active INTEGER DEFAULT 1,
+                added_by INTEGER NOT NULL,
+                added_at TEXT NOT NULL,
+                FOREIGN KEY (added_by) REFERENCES users(user_id)
+            )
+        """)
+        
+        # جدول إنجاز المهام
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                task_id INTEGER NOT NULL,
+                completed_at TEXT NOT NULL,
+                verified INTEGER DEFAULT 0,
+                FOREIGN KEY (user_id) REFERENCES users(user_id),
+                FOREIGN KEY (task_id) REFERENCES tasks(id),
+                UNIQUE(user_id, task_id)
+            )
+        """)
+        
+        # جدول السجلات (للأمان والمراقبة)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS activity_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                details TEXT,
+                ip_address TEXT,
+                timestamp TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+        
+        # جدول الجلسات النشطة (منع التلاعب)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS active_sessions (
+                session_id TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                is_valid INTEGER DEFAULT 1,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+        
+        # جدول إعدادات البوت
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bot_settings (
+                setting_key TEXT PRIMARY KEY,
+                setting_value TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                updated_by INTEGER
+            )
+        """)
+        
+        # إضافة الإعدادات الافتراضية
+        cursor.execute("""
+            INSERT OR IGNORE INTO bot_settings (setting_key, setting_value, updated_at)
+            VALUES ('auto_withdrawal_enabled', 'false', ?)
+        """, (datetime.now().isoformat(),))
+        
+        # إنشاء indexes لتحسين الأداء
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_spins_user ON spins(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_withdrawals_user ON withdrawals(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_withdrawals_status ON withdrawals(status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_tasks ON user_tasks(user_id, task_id)")
+        
+        conn.commit()
+        conn.close()
+        logger.info("✅ All database tables created successfully")
     
     # ═══════════════════════════════════════════════════════════
     # 👤 USER OPERATIONS
@@ -238,25 +422,22 @@ class DatabaseManagerBot:
     def create_or_update_user(self, user_id: int, username: str, full_name: str, 
                             referrer_id: Optional[int] = None) -> User:
         """إنشاء أو تحديث مستخدم"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
         now = datetime.now().isoformat()
         
         # التحقق من وجود المستخدم
-        existing = self.db_manager.execute_query(
-            "SELECT * FROM users WHERE user_id = ?",
-            (user_id,),
-            fetch='one'
-        )
+        cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+        existing = cursor.fetchone()
         
         if existing:
             # تحديث المستخدم الموجود
-            self.db_manager.execute_query(
-                """
+            cursor.execute("""
                 UPDATE users 
                 SET username = ?, full_name = ?, last_active = ?
                 WHERE user_id = ?
-                """,
-                (username, full_name, now, user_id)
-            )
+            """, (username, full_name, now, user_id))
+            conn.commit()
             
             user = User(
                 user_id=existing['user_id'],
@@ -273,13 +454,11 @@ class DatabaseManagerBot:
             )
         else:
             # إنشاء مستخدم جديد
-            self.db_manager.execute_query(
-                """
+            cursor.execute("""
                 INSERT INTO users (user_id, username, full_name, referrer_id, created_at, last_active)
                 VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (user_id, username, full_name, referrer_id, now, now)
-            )
+            """, (user_id, username, full_name, referrer_id, now, now))
+            conn.commit()
             
             # ملاحظة: لا نسجل الإحالة هنا - سيتم تسجيلها في check_subscription_callback
             # بعد التحقق من الاشتراك في القنوات والتحقق من الجهاز
@@ -295,15 +474,17 @@ class DatabaseManagerBot:
                 last_active=now
             )
         
+        conn.close()
         return user
     
     def get_user(self, user_id: int) -> Optional[User]:
         """الحصول على بيانات مستخدم"""
-        row = self.db_manager.execute_query(
-            "SELECT * FROM users WHERE user_id = ?",
-            (user_id,),
-            fetch='one'
-        )
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+        row = cursor.fetchone()
+        conn.close()
         
         if row:
             # التحقق من وجود عمود ban_reason
@@ -332,56 +513,59 @@ class DatabaseManagerBot:
     
     def update_user_balance(self, user_id: int, amount: float, add: bool = True):
         """تحديث رصيد المستخدم"""
-        if add:
-            self.db_manager.execute_query(
-                "UPDATE users SET balance = balance + ? WHERE user_id = ?",
-                (amount, user_id)
-            )
-        else:
-            self.db_manager.execute_query(
-                "UPDATE users SET balance = balance - ? WHERE user_id = ?",
-                (amount, user_id)
-            )
+        conn = self.get_connection()
+        cursor = conn.cursor()
         
+        if add:
+            cursor.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", 
+                         (amount, user_id))
+        else:
+            cursor.execute("UPDATE users SET balance = balance - ? WHERE user_id = ?", 
+                         (amount, user_id))
+        
+        conn.commit()
+        conn.close()
         logger.info(f"💰 Balance updated for user {user_id}: {'+'if add else '-'}{amount}")
     
     def add_spins(self, user_id: int, spins: int):
         """إضافة لفات للمستخدم"""
-        self.db_manager.execute_query(
-            """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
             UPDATE users 
             SET available_spins = available_spins + ? 
             WHERE user_id = ?
-            """,
-            (spins, user_id)
-        )
+        """, (spins, user_id))
         
+        conn.commit()
+        conn.close()
         logger.info(f"🎰 Added {spins} spin(s) to user {user_id}")
     
     def use_spin(self, user_id: int) -> bool:
         """استخدام لفة واحدة"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
         # التحقق من وجود لفات متاحة
-        result = self.db_manager.execute_query(
-            "SELECT available_spins FROM users WHERE user_id = ?",
-            (user_id,),
-            fetch='one'
-        )
+        cursor.execute("SELECT available_spins FROM users WHERE user_id = ?", (user_id,))
+        result = cursor.fetchone()
         
         if result and result['available_spins'] > 0:
-            self.db_manager.execute_query(
-                """
+            cursor.execute("""
                 UPDATE users 
                 SET available_spins = available_spins - 1,
                     total_spins = total_spins + 1,
                     spin_count_today = spin_count_today + 1,
                     last_spin_time = ?
                 WHERE user_id = ?
-                """,
-                (datetime.now().isoformat(), user_id)
-            )
+            """, (datetime.now().isoformat(), user_id))
             
+            conn.commit()
+            conn.close()
             return True
         
+        conn.close()
         return False
     
     # ═══════════════════════════════════════════════════════════
@@ -391,6 +575,8 @@ class DatabaseManagerBot:
     def record_spin(self, user_id: int, prize_name: str, prize_amount: float, 
                    ip_address: Optional[str] = None) -> str:
         """تسجيل لفة في قاعدة البيانات"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
         now = datetime.now().isoformat()
         
         # توليد hash فريد للتأكد من عدم التكرار
@@ -398,30 +584,32 @@ class DatabaseManagerBot:
             f"{user_id}{now}{prize_name}{random.random()}{SECRET_KEY}".encode()
         ).hexdigest()
         
-        self.db_manager.execute_query(
-            """
+        cursor.execute("""
             INSERT INTO spins (user_id, prize_name, prize_amount, spin_time, spin_hash, ip_address)
             VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (user_id, prize_name, prize_amount, now, spin_hash, ip_address)
-        )
+        """, (user_id, prize_name, prize_amount, now, spin_hash, ip_address))
+        
+        conn.commit()
+        conn.close()
         
         logger.info(f"🎰 Spin recorded: User {user_id} won {prize_name}")
         return spin_hash
     
     def get_user_spins_history(self, user_id: int, limit: int = 50) -> List[Dict]:
         """الحصول على سجل اللفات"""
-        rows = self.db_manager.execute_query(
-            """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
             SELECT prize_name, prize_amount, spin_time 
             FROM spins 
             WHERE user_id = ? 
             ORDER BY spin_time DESC 
             LIMIT ?
-            """,
-            (user_id, limit),
-            fetch='all'
-        )
+        """, (user_id, limit))
+        
+        rows = cursor.fetchall()
+        conn.close()
         
         return [dict(row) for row in rows]
     
@@ -438,94 +626,84 @@ class DatabaseManagerBot:
             channels_checked: هل تم التحقق من اشتراك المستخدم في القنوات الإجبارية
             device_verified: هل تم التحقق من جهاز المستخدم
         """
+        conn = self.get_connection()
+        cursor = conn.cursor()
         now = datetime.now().isoformat()
         
         # التحقق من استيفاء جميع الشروط
         if not (channels_checked and device_verified):
             logger.warning(f"⚠️ Referral validation pending for user {referred_id}: channels={channels_checked}, device={device_verified}")
             
-            # تحديث حالة التحقف
-            self.db_manager.execute_query(
-                """
+            # تحديث حالة التحقق
+            cursor.execute("""
                 UPDATE referrals 
                 SET channels_checked = ?, device_verified = ?
                 WHERE referred_id = ?
-                """,
-                (1 if channels_checked else 0, 1 if device_verified else 0, referred_id)
-            )
+            """, (1 if channels_checked else 0, 1 if device_verified else 0, referred_id))
             
+            conn.commit()
+            conn.close()
             return False
         
         # تحديث حالة الإحالة كصحيحة
-        rowcount = self.db_manager.execute_query(
-            """
+        cursor.execute("""
             UPDATE referrals 
             SET is_valid = 1, validated_at = ?, channels_checked = 1, device_verified = 1
             WHERE referred_id = ? AND is_valid = 0
-            """,
-            (now, referred_id)
-        )
+        """, (now, referred_id))
         
-        if rowcount and rowcount > 0:
+        if cursor.rowcount > 0:
             # الحصول على الـ referrer
-            row = self.db_manager.execute_query(
-                "SELECT referrer_id FROM referrals WHERE referred_id = ?",
-                (referred_id,),
-                fetch='one'
-            )
+            cursor.execute("SELECT referrer_id FROM referrals WHERE referred_id = ?", (referred_id,))
+            row = cursor.fetchone()
             
             if row:
                 referrer_id = row['referrer_id']
                 
                 # تحديث عدد الإحالات الصحيحة
-                self.db_manager.execute_query(
-                    """
+                cursor.execute("""
                     UPDATE users 
                     SET total_referrals = total_referrals + 1,
                         valid_referrals = valid_referrals + 1
                     WHERE user_id = ?
-                    """,
-                    (referrer_id,)
-                )
+                """, (referrer_id,))
                 
                 # التحقق من استحقاق لفة جديدة
-                valid_refs_row = self.db_manager.execute_query(
-                    "SELECT valid_referrals FROM users WHERE user_id = ?",
-                    (referrer_id,),
-                    fetch='one'
-                )
-                valid_refs = valid_refs_row['valid_referrals']
+                cursor.execute("SELECT valid_referrals FROM users WHERE user_id = ?", (referrer_id,))
+                valid_refs = cursor.fetchone()['valid_referrals']
                 
                 # كل 5 إحالات = لفة واحدة
                 if valid_refs % SPINS_PER_REFERRALS == 0:
-                    self.db_manager.execute_query(
-                        """
+                    cursor.execute("""
                         UPDATE users 
                         SET available_spins = available_spins + 1 
                         WHERE user_id = ?
-                        """,
-                        (referrer_id,)
-                    )
+                    """, (referrer_id,))
                     logger.info(f"🎁 User {referrer_id} earned a spin from referrals!")
                 
+                conn.commit()
+                conn.close()
                 logger.info(f"✅ Referral validated successfully for user {referred_id}")
                 return True
         
+        conn.close()
         return False
     
     def get_user_referrals(self, user_id: int) -> List[Dict]:
         """الحصول على قائمة المدعوين"""
-        rows = self.db_manager.execute_query(
-            """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
             SELECT u.username, u.full_name, r.created_at, r.is_valid
             FROM referrals r
             JOIN users u ON r.referred_id = u.user_id
             WHERE r.referrer_id = ?
             ORDER BY r.created_at DESC
-            """,
-            (user_id,),
-            fetch='all'
-        )
+        """, (user_id,))
+        
+        rows = cursor.fetchall()
+        conn.close()
         
         return [dict(row) for row in rows]
     
@@ -537,24 +715,24 @@ class DatabaseManagerBot:
                                  withdrawal_type: str, wallet_address: Optional[str] = None,
                                  phone_number: Optional[str] = None) -> int:
         """إنشاء طلب سحب جديد"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
         now = datetime.now().isoformat()
         
-        result = self.db_manager.execute_query(
-            """
+        cursor.execute("""
             INSERT INTO withdrawals 
             (user_id, amount, withdrawal_type, wallet_address, phone_number, status, requested_at)
             VALUES (?, ?, ?, ?, ?, 'pending', ?)
-            """,
-            (user_id, amount, withdrawal_type, wallet_address, phone_number, now)
-        )
+        """, (user_id, amount, withdrawal_type, wallet_address, phone_number, now))
         
-        withdrawal_id = result['lastrowid']
+        withdrawal_id = cursor.lastrowid
         
         # خصم المبلغ من رصيد المستخدم مؤقتاً
-        self.db_manager.execute_query(
-            "UPDATE users SET balance = balance - ? WHERE user_id = ?",
-            (amount, user_id)
-        )
+        cursor.execute("UPDATE users SET balance = balance - ? WHERE user_id = ?", 
+                      (amount, user_id))
+        
+        conn.commit()
+        conn.close()
         
         logger.info(f"💸 Withdrawal request created: ID {withdrawal_id}, User {user_id}, Amount {amount}")
         return withdrawal_id
@@ -563,16 +741,18 @@ class DatabaseManagerBot:
         """معالجة السحب التلقائي"""
         try:
             # الحصول على معلومات السحب
-            withdrawal = self.db_manager.execute_query(
-                """
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
                 SELECT w.*, u.username, u.full_name
                 FROM withdrawals w
                 JOIN users u ON w.user_id = u.user_id
                 WHERE w.id = ? AND w.status = 'pending'
-                """,
-                (withdrawal_id,),
-                fetch='one'
-            )
+            """, (withdrawal_id,))
+            
+            withdrawal = cursor.fetchone()
+            conn.close()
             
             if not withdrawal:
                 logger.error(f"❌ Withdrawal {withdrawal_id} not found or not pending")
@@ -644,92 +824,95 @@ class DatabaseManagerBot:
     
     def get_pending_withdrawals(self) -> List[Dict]:
         """الحصول على طلبات السحب المعلقة"""
-        rows = self.db_manager.execute_query(
-            """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
             SELECT w.*, u.username, u.full_name
             FROM withdrawals w
             JOIN users u ON w.user_id = u.user_id
             WHERE w.status = 'pending'
             ORDER BY w.requested_at ASC
-            """,
-            (),
-            fetch='all'
-        )
+        """, ())
+        
+        rows = cursor.fetchall()
+        conn.close()
         
         return [dict(row) for row in rows]
     
     def approve_withdrawal(self, withdrawal_id: int, admin_id: int, tx_hash: Optional[str] = None):
         """الموافقة على طلب سحب"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
         now = datetime.now().isoformat()
         
-        self.db_manager.execute_query(
-            """
+        cursor.execute("""
             UPDATE withdrawals 
             SET status = 'completed', processed_at = ?, processed_by = ?, tx_hash = ?
             WHERE id = ?
-            """,
-            (now, admin_id, tx_hash, withdrawal_id)
-        )
+        """, (now, admin_id, tx_hash, withdrawal_id))
         
+        conn.commit()
+        conn.close()
         logger.info(f"✅ Withdrawal {withdrawal_id} approved by admin {admin_id}")
     
     def reject_withdrawal(self, withdrawal_id: int, admin_id: int, reason: str):
         """رفض طلب سحب وإعادة المبلغ"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
         now = datetime.now().isoformat()
         
         # الحصول على معلومات الطلب
-        row = self.db_manager.execute_query(
-            "SELECT user_id, amount FROM withdrawals WHERE id = ?",
-            (withdrawal_id,),
-            fetch='one'
-        )
+        cursor.execute("SELECT user_id, amount FROM withdrawals WHERE id = ?", (withdrawal_id,))
+        row = cursor.fetchone()
         
         if row:
             user_id = row['user_id']
             amount = row['amount']
             
             # رفض الطلب
-            self.db_manager.execute_query(
-                """
+            cursor.execute("""
                 UPDATE withdrawals 
                 SET status = 'rejected', processed_at = ?, processed_by = ?, rejection_reason = ?
                 WHERE id = ?
-                """,
-                (now, admin_id, reason, withdrawal_id)
-            )
+            """, (now, admin_id, reason, withdrawal_id))
             
             # إعادة المبلغ للمستخدم
-            self.db_manager.execute_query(
-                "UPDATE users SET balance = balance + ? WHERE user_id = ?",
-                (amount, user_id)
-            )
+            cursor.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", 
+                          (amount, user_id))
             
+            conn.commit()
+            conn.close()
             logger.info(f"❌ Withdrawal {withdrawal_id} rejected by admin {admin_id}. Amount returned.")
     
     def complete_withdrawal(self, withdrawal_id: int, tx_hash: str):
         """تأكيد اكتمال السحب"""
-        self.db_manager.execute_query(
-            """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
             UPDATE withdrawals 
             SET status = 'completed', tx_hash = ?
             WHERE id = ?
-            """,
-            (tx_hash, withdrawal_id)
-        )
+        """, (tx_hash, withdrawal_id))
         
+        conn.commit()
+        conn.close()
         logger.info(f"✅ Withdrawal {withdrawal_id} completed with tx_hash: {tx_hash}")
     
     def get_user_withdrawals(self, user_id: int) -> List[Dict]:
         """الحصول على سجل سحوبات المستخدم"""
-        rows = self.db_manager.execute_query(
-            """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
             SELECT * FROM withdrawals 
             WHERE user_id = ? 
             ORDER BY requested_at DESC
-            """,
-            (user_id,),
-            fetch='all'
-        )
+        """, (user_id,))
+        
+        rows = cursor.fetchall()
+        conn.close()
         
         return [dict(row) for row in rows]
     
@@ -740,34 +923,38 @@ class DatabaseManagerBot:
     def add_mandatory_channel(self, channel_id: str, channel_name: str, 
                             channel_username: str, added_by: int):
         """إضافة قناة إجبارية"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
         now = datetime.now().isoformat()
         
         try:
-            self.db_manager.execute_query(
-                """
+            cursor.execute("""
                 INSERT INTO required_channels 
                 (channel_id, channel_name, channel_url, added_by, added_at)
                 VALUES (?, ?, ?, ?, ?)
-                """,
-                (channel_id, channel_name, channel_username, added_by, now)
-            )
+            """, (channel_id, channel_name, channel_username, added_by, now))
             
+            conn.commit()
+            conn.close()
             logger.info(f"📢 Added mandatory channel: {channel_name}")
             return True
         except sqlite3.IntegrityError:
+            conn.close()
             return False
     
     def get_active_mandatory_channels(self) -> List[Dict]:
         """الحصول على القنوات الإجبارية النشطة من جدول required_channels (مشترك مع الموقع)"""
-        rows = self.db_manager.execute_query(
-            """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
             SELECT * FROM required_channels 
             WHERE is_active = 1 
             ORDER BY added_at DESC
-            """,
-            (),
-            fetch='all'
-        )
+        """)
+        
+        rows = cursor.fetchall()
+        conn.close()
         
         return [dict(row) for row in rows]
     
@@ -775,57 +962,62 @@ class DatabaseManagerBot:
                 channel_id: Optional[str] = None, link_url: Optional[str] = None,
                 reward_amount: float = 0, added_by: int = 0):
         """إضافة مهمة جديدة"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
         now = datetime.now().isoformat()
         
-        result = self.db_manager.execute_query(
-            """
+        cursor.execute("""
             INSERT INTO tasks 
             (task_type, task_name, task_description, channel_id, link_url, reward_amount, added_by, added_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (task_type, task_name, task_description, channel_id, link_url, reward_amount, added_by, now)
-        )
+        """, (task_type, task_name, task_description, channel_id, link_url, reward_amount, added_by, now))
         
-        task_id = result['lastrowid']
+        conn.commit()
+        task_id = cursor.lastrowid
+        conn.close()
         
         logger.info(f"✅ Task added: {task_name} (ID: {task_id})")
         return task_id
     
     def get_active_tasks(self) -> List[Dict]:
         """الحصول على المهام النشطة"""
-        rows = self.db_manager.execute_query(
-            "SELECT * FROM tasks WHERE is_active = 1 ORDER BY added_at DESC",
-            (),
-            fetch='all'
-        )
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT * FROM tasks WHERE is_active = 1 ORDER BY added_at DESC")
+        rows = cursor.fetchall()
+        conn.close()
         
         return [dict(row) for row in rows]
     
     def mark_task_completed(self, user_id: int, task_id: int):
         """تسجيل إكمال مهمة"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
         now = datetime.now().isoformat()
         
         try:
-            self.db_manager.execute_query(
-                """
+            cursor.execute("""
                 INSERT INTO user_tasks (user_id, task_id, completed_at, verified)
                 VALUES (?, ?, ?, 1)
-                """,
-                (user_id, task_id, now)
-            )
+            """, (user_id, task_id, now))
             
+            conn.commit()
+            conn.close()
             logger.info(f"✅ Task {task_id} completed by user {user_id}")
             return True
         except sqlite3.IntegrityError:
+            conn.close()
             return False
     
     def get_user_completed_tasks(self, user_id: int) -> List[int]:
         """الحصول على المهام المكتملة للمستخدم"""
-        rows = self.db_manager.execute_query(
-            "SELECT task_id FROM user_tasks WHERE user_id = ?",
-            (user_id,),
-            fetch='all'
-        )
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT task_id FROM user_tasks WHERE user_id = ?", (user_id,))
+        rows = cursor.fetchall()
+        conn.close()
         
         return [row['task_id'] for row in rows]
     
@@ -835,11 +1027,11 @@ class DatabaseManagerBot:
     
     def get_setting(self, key: str, default: str = None) -> Optional[str]:
         """الحصول على قيمة إعداد"""
-        row = self.db_manager.execute_query(
-            "SELECT setting_value FROM bot_settings WHERE setting_key = ?",
-            (key,),
-            fetch='one'
-        )
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT setting_value FROM bot_settings WHERE setting_key = ?", (key,))
+        row = cursor.fetchone()
+        conn.close()
         
         if row:
             return row['setting_value']
@@ -847,29 +1039,17 @@ class DatabaseManagerBot:
     
     def set_setting(self, key: str, value: str, admin_id: int):
         """تعيين قيمة إعداد"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
         now = datetime.now().isoformat()
         
-        if self.db_manager.use_postgres:
-            self.db_manager.execute_query(
-                """
-                INSERT INTO bot_settings (setting_key, setting_value, updated_at, updated_by)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT (setting_key) DO UPDATE SET
-                    setting_value = EXCLUDED.setting_value,
-                    updated_at = EXCLUDED.updated_at,
-                    updated_by = EXCLUDED.updated_by
-                """,
-                (key, value, now, admin_id)
-            )
-        else:
-            self.db_manager.execute_query(
-                """
-                INSERT OR REPLACE INTO bot_settings (setting_key, setting_value, updated_at, updated_by)
-                VALUES (?, ?, ?, ?)
-                """,
-                (key, value, now, admin_id)
-            )
+        cursor.execute("""
+            INSERT OR REPLACE INTO bot_settings (setting_key, setting_value, updated_at, updated_by)
+            VALUES (?, ?, ?, ?)
+        """, (key, value, now, admin_id))
         
+        conn.commit()
+        conn.close()
         logger.info(f"⚙️ Setting {key} = {value} by admin {admin_id}")
     
     def is_auto_withdrawal_enabled(self) -> bool:
@@ -883,71 +1063,56 @@ class DatabaseManagerBot:
     
     def get_all_users(self) -> List[Dict]:
         """الحصول على جميع المستخدمين للبرودكاست"""
-        users = self.db_manager.execute_query(
-            "SELECT user_id as telegram_id FROM users WHERE is_banned = 0",
-            (),
-            fetch='all'
-        )
-        return [dict(row) for row in users]
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id as telegram_id FROM users WHERE is_banned = 0")
+        users = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return users
     
     def delete_user(self, user_id: int):
         """حذف مستخدم (للمحظورين)"""
-        self.db_manager.execute_query(
-            "UPDATE users SET is_banned = 1 WHERE user_id = ?",
-            (user_id,)
-        )
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET is_banned = 1 WHERE user_id = ?", (user_id,))
+        conn.commit()
+        conn.close()
     
     def get_bot_statistics(self) -> Dict:
         """إحصائيات البوت الكاملة"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
         # عدد المستخدمين
-        total_users = self.db_manager.execute_query(
-            "SELECT COUNT(*) as total FROM users",
-            (),
-            fetch='one'
-        )['total']
+        cursor.execute("SELECT COUNT(*) as total FROM users")
+        total_users = cursor.fetchone()['total']
         
         # عدد المستخدمين النشطين (آخر 7 أيام)
         week_ago = (datetime.now() - timedelta(days=7)).isoformat()
-        active_users = self.db_manager.execute_query(
-            "SELECT COUNT(*) as active FROM users WHERE last_active > ?",
-            (week_ago,),
-            fetch='one'
-        )['active']
+        cursor.execute("SELECT COUNT(*) as active FROM users WHERE last_active > ?", (week_ago,))
+        active_users = cursor.fetchone()['active']
         
         # إجمالي الإحالات
-        total_referrals = self.db_manager.execute_query(
-            "SELECT COUNT(*) as total FROM referrals WHERE is_valid = 1",
-            (),
-            fetch='one'
-        )['total']
+        cursor.execute("SELECT COUNT(*) as total FROM referrals WHERE is_valid = 1")
+        total_referrals = cursor.fetchone()['total']
         
         # إجمالي اللفات
-        total_spins = self.db_manager.execute_query(
-            "SELECT COUNT(*) as total FROM spins",
-            (),
-            fetch='one'
-        )['total']
+        cursor.execute("SELECT COUNT(*) as total FROM spins")
+        total_spins = cursor.fetchone()['total']
         
         # إجمالي المبالغ الموزعة
-        total_distributed = self.db_manager.execute_query(
-            "SELECT SUM(prize_amount) as total FROM spins",
-            (),
-            fetch='one'
-        )['total'] or 0
+        cursor.execute("SELECT SUM(prize_amount) as total FROM spins")
+        total_distributed = cursor.fetchone()['total'] or 0
         
         # طلبات السحب المعلقة
-        pending_withdrawals = self.db_manager.execute_query(
-            "SELECT COUNT(*) as pending FROM withdrawals WHERE status = 'pending'",
-            (),
-            fetch='one'
-        )['pending']
+        cursor.execute("SELECT COUNT(*) as pending FROM withdrawals WHERE status = 'pending'")
+        pending_withdrawals = cursor.fetchone()['pending']
         
         # إجمالي السحوبات المكتملة
-        total_withdrawn = self.db_manager.execute_query(
-            "SELECT SUM(amount) as total FROM withdrawals WHERE status = 'completed'",
-            (),
-            fetch='one'
-        )['total'] or 0
+        cursor.execute("SELECT SUM(amount) as total FROM withdrawals WHERE status = 'completed'")
+        total_withdrawn = cursor.fetchone()['total'] or 0
+        
+        conn.close()
         
         return {
             'total_users': total_users,
@@ -962,15 +1127,17 @@ class DatabaseManagerBot:
     def log_activity(self, user_id: int, action: str, details: Optional[str] = None,
                     ip_address: Optional[str] = None):
         """تسجيل نشاط المستخدم (للأمان)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
         now = datetime.now().isoformat()
         
-        self.db_manager.execute_query(
-            """
+        cursor.execute("""
             INSERT INTO activity_logs (user_id, action, details, ip_address, timestamp)
             VALUES (?, ?, ?, ?, ?)
-            """,
-            (user_id, action, details, ip_address, now)
-        )
+        """, (user_id, action, details, ip_address, now))
+        
+        conn.commit()
+        conn.close()
 
 # ═══════════════════════════════════════════════════════════════
 # 🎰 WHEEL OF FORTUNE LOGIC
@@ -1360,7 +1527,7 @@ class TONWalletManager:
 # ═══════════════════════════════════════════════════════════════
 
 # Initialize global objects
-db = DatabaseManagerBot()
+db = DatabaseManager()
 
 # ═══════════════════════════════════════════════════════════════
 # 🔐 REFERRAL VALIDATION HELPERS
@@ -1722,23 +1889,22 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 new_user = db.get_user(user_id)
                 if new_user and not new_user.is_banned:
                     # التحقق من عدم وجود إحالة مسجلة مسبقاً
-                    existing_ref = db_manager.execute_query(
-                        "SELECT * FROM referrals WHERE referred_id = ?",
-                        (user_id,),
-                        fetch='one'
-                    )
+                    conn = db.get_connection()
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT * FROM referrals WHERE referred_id = ?", (user_id,))
+                    existing_ref = cursor.fetchone()
                     
                     if not existing_ref:
                         # تسجيل الإحالة
                         now = datetime.now().isoformat()
                         try:
-                            db_manager.execute_query("""
+                            cursor.execute("""
                                 INSERT INTO referrals (referrer_id, referred_id, created_at, channels_checked, device_verified, is_valid)
                                 VALUES (?, ?, ?, 1, 1, 1)
                             """, (final_referrer, user_id, now))
                             
                             # تحديث عدد الإحالات للداعي
-                            db_manager.execute_query("""
+                            cursor.execute("""
                                 UPDATE users 
                                 SET total_referrals = total_referrals + 1,
                                     valid_referrals = valid_referrals + 1
@@ -1746,18 +1912,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             """, (final_referrer,))
                             
                             # التحقق من استحقاق لفة جديدة
-                            ref_data = db_manager.execute_query(
-                                "SELECT valid_referrals, available_spins FROM users WHERE user_id = ?",
-                                (final_referrer,),
-                                fetch='one'
-                            )
+                            cursor.execute("SELECT valid_referrals, available_spins FROM users WHERE user_id = ?", (final_referrer,))
+                            ref_data = cursor.fetchone()
                             if ref_data:
                                 valid_refs = ref_data['valid_referrals']
                                 current_spins = ref_data['available_spins']
                                 
                                 # كل 5 إحالات = لفة واحدة
                                 if valid_refs % SPINS_PER_REFERRALS == 0:
-                                    db_manager.execute_query("""
+                                    cursor.execute("""
                                         UPDATE users 
                                         SET available_spins = available_spins + 1 
                                         WHERE user_id = ?
@@ -1806,10 +1969,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                     except Exception as e:
                                         logger.error(f"Failed to send referral notification: {e}")
                             
+                            conn.commit()
                             logger.info(f"✅ Referral validated and counted: {final_referrer} -> {user_id}")
                             
                         except sqlite3.IntegrityError:
                             logger.warning(f"⚠️ Referral already exists: {final_referrer} -> {user_id}")
+                    
+                    conn.close()
                     
                     # مسح البيانات المؤقتة
                     if 'pending_referrer_id' in context.user_data:
@@ -2096,6 +2262,10 @@ async def admin_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         [InlineKeyboardButton(f"{icon('tasks')} إدارة المهام", callback_data="admin_tasks")],
         [InlineKeyboardButton(f"{icon('view')} فحص مستخدم", callback_data="admin_check_user")],
         [InlineKeyboardButton(f"{icon('chart')} إحصائيات تفصيلية", callback_data="admin_detailed_stats")],
+        [
+            InlineKeyboardButton("💾 نسخة احتياطية", callback_data="create_backup"),
+            InlineKeyboardButton("📥 استعادة نسخة", callback_data="restore_backup_start")
+        ],
         [InlineKeyboardButton(
             f"{'❌ تعطيل' if db.is_auto_withdrawal_enabled() else '✅ تفعيل'} السحب التلقائي",
             callback_data="toggle_auto_withdrawal"
@@ -2265,6 +2435,261 @@ async def admin_detailed_stats_callback(update: Update, context: ContextTypes.DE
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")]])
     )
 
+# ═══════════════════════════════════════════════════════════════
+# 💾 DATABASE BACKUP & RESTORE
+# ═══════════════════════════════════════════════════════════════
+
+async def create_backup_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """إنشاء نسخة احتياطية من قاعدة البيانات"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    
+    if not is_admin(user_id):
+        await query.answer("❌ غير مصرح لك!", show_alert=True)
+        return
+    
+    try:
+        await query.edit_message_text(
+            "⏳ <b>جاري إنشاء النسخة الاحتياطية...</b>\n\n"
+            "📦 يتم نسخ قاعدة البيانات الآن، الرجاء الانتظار...",
+            parse_mode=ParseMode.HTML
+        )
+        
+        # إنشاء اسم الملف مع التاريخ والوقت
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_filename = f"panda_backup_{timestamp}.db"
+        backup_path = os.path.join(os.path.dirname(DATABASE_PATH), backup_filename)
+        
+        # نسخ قاعدة البيانات
+        shutil.copy2(DATABASE_PATH, backup_path)
+        
+        # التحقق من حجم الملف
+        file_size = os.path.getsize(backup_path)
+        file_size_mb = file_size / (1024 * 1024)
+        
+        # إرسال الملف للأدمن
+        with open(backup_path, 'rb') as backup_file:
+            await context.bot.send_document(
+                chat_id=user_id,
+                document=backup_file,
+                filename=backup_filename,
+                caption=f"""
+✅ <b>تم إنشاء النسخة الاحتياطية بنجاح!</b>
+
+📦 <b>معلومات النسخة:</b>
+📅 التاريخ: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+📊 حجم الملف: {file_size_mb:.2f} MB
+💾 اسم الملف: <code>{backup_filename}</code>
+
+⚠️ <b>تعليمات مهمة:</b>
+• احفظ هذا الملف في مكان آمن
+• يمكنك استعادة البيانات من هذا الملف في أي وقت
+• لا تشارك هذا الملف مع أحد (يحتوي على بيانات حساسة)
+
+💡 لاستعادة النسخة: استخدم زر "استعادة نسخة احتياطية"
+""",
+                parse_mode=ParseMode.HTML
+            )
+        
+        # حذف الملف المؤقت
+        try:
+            os.remove(backup_path)
+        except:
+            pass
+        
+        # العودة للوحة التحكم
+        await query.edit_message_text(
+            "✅ <b>تم إرسال النسخة الاحتياطية بنجاح!</b>\n\n"
+            "تم إرسال الملف في رسالة منفصلة، تحقق من الرسائل أعلاه.",
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 رجوع للوحة التحكم", callback_data="admin_panel")
+            ]])
+        )
+        
+        logger.info(f"✅ Backup created successfully by admin {user_id}")
+        
+    except Exception as e:
+        logger.error(f"❌ Error creating backup: {e}")
+        await query.edit_message_text(
+            f"❌ <b>فشل إنشاء النسخة الاحتياطية</b>\n\n"
+            f"الخطأ: {str(e)}",
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")
+            ]])
+        )
+
+async def restore_backup_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """بدء عملية استعادة النسخة الاحتياطية"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    
+    if not is_admin(user_id):
+        await query.answer("❌ غير مصرح لك!", show_alert=True)
+        return
+    
+    await query.edit_message_text(
+        """
+⚠️ <b>استعادة نسخة احتياطية</b>
+
+📋 <b>تعليمات مهمة:</b>
+1️⃣ أرسل ملف النسخة الاحتياطية (.db)
+2️⃣ سيتم استبدال قاعدة البيانات الحالية بالكامل
+3️⃣ تأكد من أن الملف من نفس النظام
+
+⚠️ <b>تحذير:</b>
+• سيتم حذف جميع البيانات الحالية
+• تأكد من عمل نسخة احتياطية قبل الاستعادة
+• هذه العملية لا يمكن التراجع عنها
+
+📤 <b>أرسل الملف الآن أو اضغط إلغاء</b>
+""",
+        parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("❌ إلغاء", callback_data="admin_panel")
+        ]])
+    )
+    
+    return RESTORE_BACKUP
+
+async def restore_backup_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """معالج استعادة النسخة الاحتياطية"""
+    user_id = update.effective_user.id
+    
+    if not is_admin(user_id):
+        await update.message.reply_text("❌ غير مصرح لك!")
+        return ConversationHandler.END
+    
+    if not update.message.document:
+        await update.message.reply_text(
+            "❌ <b>خطأ: لم يتم إرسال ملف</b>\n\n"
+            "الرجاء إرسال ملف قاعدة البيانات (.db)",
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")
+            ]])
+        )
+        return RESTORE_BACKUP
+    
+    document = update.message.document
+    
+    # التحقق من امتداد الملف
+    if not document.file_name.endswith('.db'):
+        await update.message.reply_text(
+            "❌ <b>خطأ: نوع ملف غير صحيح</b>\n\n"
+            "الرجاء إرسال ملف قاعدة بيانات بامتداد .db",
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")
+            ]])
+        )
+        return RESTORE_BACKUP
+    
+    try:
+        # إرسال رسالة الانتظار
+        wait_msg = await update.message.reply_text(
+            "⏳ <b>جاري استعادة النسخة الاحتياطية...</b>\n\n"
+            "📦 يتم معالجة الملف، الرجاء الانتظار...",
+            parse_mode=ParseMode.HTML
+        )
+        
+        # تحميل الملف
+        file = await context.bot.get_file(document.file_id)
+        temp_backup_path = os.path.join(os.path.dirname(DATABASE_PATH), f"temp_restore_{user_id}.db")
+        await file.download_to_drive(temp_backup_path)
+        
+        # التحقق من صحة الملف
+        try:
+            conn = sqlite3.connect(temp_backup_path)
+            cursor = conn.cursor()
+            # التحقق من وجود الجداول الأساسية
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [row[0] for row in cursor.fetchall()]
+            conn.close()
+            
+            required_tables = ['users', 'referrals', 'spins', 'withdrawals']
+            if not all(table in tables for table in required_tables):
+                raise Exception("ملف قاعدة البيانات غير صحيح أو تالف")
+                
+        except Exception as validation_error:
+            os.remove(temp_backup_path)
+            await wait_msg.edit_text(
+                f"❌ <b>فشل التحقق من الملف</b>\n\n"
+                f"الخطأ: {str(validation_error)}\n\n"
+                f"تأكد من أن الملف نسخة احتياطية صحيحة من نفس النظام.",
+                parse_mode=ParseMode.HTML,
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")
+                ]])
+            )
+            return ConversationHandler.END
+        
+        # إنشاء نسخة احتياطية من قاعدة البيانات الحالية قبل الاستبدال
+        current_backup = f"{DATABASE_PATH}.before_restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        shutil.copy2(DATABASE_PATH, current_backup)
+        
+        # استبدال قاعدة البيانات
+        shutil.copy2(temp_backup_path, DATABASE_PATH)
+        
+        # حذف الملف المؤقت
+        os.remove(temp_backup_path)
+        
+        await wait_msg.edit_text(
+            f"""
+✅ <b>تم استعادة النسخة الاحتياطية بنجاح!</b>
+
+📦 <b>معلومات العملية:</b>
+📅 التاريخ: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+👤 بواسطة: {update.effective_user.full_name}
+💾 اسم الملف: {document.file_name}
+
+✅ <b>تم بنجاح:</b>
+• استعادة قاعدة البيانات
+• حفظ نسخة من البيانات القديمة
+• تحديث النظام
+
+⚠️ <b>ملاحظة:</b>
+تم حفظ نسخة من البيانات القديمة في:
+<code>{os.path.basename(current_backup)}</code>
+
+🔄 يُنصح بإعادة تشغيل البوت لتطبيق التغييرات بشكل كامل.
+""",
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 رجوع للوحة التحكم", callback_data="admin_panel")
+            ]])
+        )
+        
+        logger.info(f"✅ Database restored successfully by admin {user_id} from file {document.file_name}")
+        
+        return ConversationHandler.END
+        
+    except Exception as e:
+        logger.error(f"❌ Error restoring backup: {e}")
+        
+        # حذف الملف المؤقت في حالة الخطأ
+        try:
+            if os.path.exists(temp_backup_path):
+                os.remove(temp_backup_path)
+        except:
+            pass
+        
+        await update.message.reply_text(
+            f"❌ <b>فشلت استعادة النسخة الاحتياطية</b>\n\n"
+            f"الخطأ: {str(e)}",
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")
+            ]])
+        )
+        
+        return ConversationHandler.END
+
 async def back_to_start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """العودة للبداية"""
     query = update.callback_query
@@ -2415,26 +2840,26 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
             new_user = db.get_user(user_id)
             if new_user and not new_user.is_banned:
                 # التحقق من عدم وجود إحالة مسجلة مسبقاً
-                existing_ref = db_manager.execute_query(
-                    "SELECT * FROM referrals WHERE referred_id = ?",
-                    (user_id,),
-                    fetch='one'
-                )
+                conn = db.get_connection()
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM referrals WHERE referred_id = ?", (user_id,))
+                existing_ref = cursor.fetchone()
                 
                 if existing_ref:
                     logger.warning(f"⚠️ Referral already exists for user {user_id}, skipping")
+                    conn.close()
                 else:
                     logger.info(f"✨ Creating new referral record: {referrer_id} -> {user_id}")
                     # تسجيل الإحالة
                     now = datetime.now().isoformat()
                     try:
-                        db_manager.execute_query("""
+                        cursor.execute("""
                             INSERT INTO referrals (referrer_id, referred_id, created_at, channels_checked, device_verified, is_valid)
                             VALUES (?, ?, ?, 1, 1, 1)
                         """, (referrer_id, user_id, now))
                         
                         # تحديث عدد الإحالات للداعي
-                        db_manager.execute_query("""
+                        cursor.execute("""
                             UPDATE users 
                             SET total_referrals = total_referrals + 1,
                                 valid_referrals = valid_referrals + 1
@@ -2442,11 +2867,8 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
                         """, (referrer_id,))
                         
                         # التحقق من استحقاق لفة جديدة
-                        ref_data = db_manager.execute_query(
-                            "SELECT valid_referrals, available_spins FROM users WHERE user_id = ?",
-                            (referrer_id,),
-                            fetch='one'
-                        )
+                        cursor.execute("SELECT valid_referrals, available_spins FROM users WHERE user_id = ?", (referrer_id,))
+                        ref_data = cursor.fetchone()
                         if ref_data:
                             valid_refs = ref_data['valid_referrals']
                             current_spins = ref_data['available_spins']
@@ -2455,7 +2877,7 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
                             
                             # كل 5 إحالات = لفة واحدة
                             if valid_refs % SPINS_PER_REFERRALS == 0:
-                                db_manager.execute_query("""
+                                cursor.execute("""
                                     UPDATE users 
                                     SET available_spins = available_spins + 1 
                                     WHERE user_id = ?
@@ -2508,10 +2930,13 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
                                 except Exception as e:
                                     logger.error(f"Failed to send referral notification: {e}")
                         
+                        conn.commit()
                         logger.info(f"✅ Referral validated and counted after subscription check: {referrer_id} -> {user_id}")
                         
                     except sqlite3.IntegrityError:
                         logger.warning(f"⚠️ Referral already exists: {referrer_id} -> {user_id}")
+                    
+                    conn.close()
             else:
                 logger.warning(f"⚠️ New user {user_id} is banned, referral not counted")
         else:
@@ -2866,25 +3291,34 @@ async def add_tx_hash_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         tx_hash = context.args[1]
         
         # الحصول على معلومات السحب
-        withdrawal = db_manager.execute_query("""
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
             SELECT w.*, u.username, u.full_name
             FROM withdrawals w
             JOIN users u ON w.user_id = u.user_id
             WHERE w.id = ? AND w.status = 'completed'
-        """, (withdrawal_id,), fetch='one')
+        """, (withdrawal_id,))
+        
+        withdrawal = cursor.fetchone()
         
         if not withdrawal:
             await update.message.reply_text(f"❌ لم يتم العثور على سحب مكتمل برقم #{withdrawal_id}")
+            conn.close()
             return
         
         withdrawal_dict = dict(withdrawal)
         
         # تحديث tx_hash في قاعدة البيانات
-        db_manager.execute_query("""
+        cursor.execute("""
             UPDATE withdrawals 
             SET tx_hash = ?
             WHERE id = ?
         """, (tx_hash, withdrawal_id))
+        
+        conn.commit()
+        conn.close()
         
         # نشر إثبات الدفع في القناة
         await send_payment_proof_to_channel(
@@ -4113,23 +4547,22 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
                             new_user = db.get_user(user_id)
                             if new_user and not new_user.is_banned:
                                 # التحقق من عدم وجود إحالة مسجلة مسبقاً
-                                existing_ref = db_manager.execute_query(
-                                    "SELECT * FROM referrals WHERE referred_id = ?",
-                                    (user_id,),
-                                    fetch='one'
-                                )
+                                conn = db.get_connection()
+                                cursor = conn.cursor()
+                                cursor.execute("SELECT * FROM referrals WHERE referred_id = ?", (user_id,))
+                                existing_ref = cursor.fetchone()
                                 
                                 if not existing_ref:
                                     # تسجيل الإحالة
                                     now = datetime.now().isoformat()
                                     try:
-                                        db_manager.execute_query("""
+                                        cursor.execute("""
                                             INSERT INTO referrals (referrer_id, referred_id, created_at, channels_checked, device_verified, is_valid)
                                             VALUES (?, ?, ?, 1, 1, 1)
                                         """, (referrer_id, user_id, now))
                                         
                                         # تحديث عدد الإحالات للداعي
-                                        db_manager.execute_query("""
+                                        cursor.execute("""
                                             UPDATE users 
                                             SET total_referrals = total_referrals + 1,
                                                 valid_referrals = valid_referrals + 1
@@ -4137,18 +4570,15 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
                                         """, (referrer_id,))
                                         
                                         # التحقق من استحقاق لفة جديدة
-                                        ref_data = db_manager.execute_query(
-                                            "SELECT valid_referrals, available_spins FROM users WHERE user_id = ?",
-                                            (referrer_id,),
-                                            fetch='one'
-                                        )
+                                        cursor.execute("SELECT valid_referrals, available_spins FROM users WHERE user_id = ?", (referrer_id,))
+                                        ref_data = cursor.fetchone()
                                         if ref_data:
                                             valid_refs = ref_data['valid_referrals']
                                             current_spins = ref_data['available_spins']
                                             
                                             # كل 5 إحالات = لفة واحدة
                                             if valid_refs % SPINS_PER_REFERRALS == 0:
-                                                db_manager.execute_query("""
+                                                cursor.execute("""
                                                     UPDATE users 
                                                     SET available_spins = available_spins + 1 
                                                     WHERE user_id = ?
@@ -4197,10 +4627,13 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
                                                 except Exception as e:
                                                     logger.error(f"Failed to send referral notification: {e}")
                                         
+                                        conn.commit()
                                         logger.info(f"✅ Referral validated and counted after device verification: {referrer_id} -> {user_id}")
                                         
                                     except sqlite3.IntegrityError:
                                         logger.warning(f"⚠️ Referral already exists: {referrer_id} -> {user_id}")
+                                
+                                conn.close()
                                 
                                 # مسح البيانات المؤقتة
                                 if 'pending_referrer_id' in context.user_data:
@@ -4324,6 +4757,23 @@ def main():
     application.add_handler(CallbackQueryHandler(toggle_auto_withdrawal_callback, pattern="^toggle_auto_withdrawal$"))
     application.add_handler(CallbackQueryHandler(toggle_verification_callback, pattern="^toggle_verification$"))
     application.add_handler(CallbackQueryHandler(back_to_start_callback, pattern="^back_to_start$"))
+    
+    # معالجات النسخ الاحتياطي
+    application.add_handler(CallbackQueryHandler(create_backup_callback, pattern="^create_backup$"))
+    
+    # ConversationHandler لاستعادة النسخة الاحتياطية
+    restore_backup_conv_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(restore_backup_start, pattern="^restore_backup_start$")],
+        states={
+            RESTORE_BACKUP: [MessageHandler(filters.Document.ALL, restore_backup_handler)],
+        },
+        fallbacks=[
+            CallbackQueryHandler(admin_panel_callback, pattern="^admin_panel$"),
+            CommandHandler("cancel", lambda u, c: ConversationHandler.END)
+        ],
+        allow_reentry=True
+    )
+    application.add_handler(restore_backup_conv_handler)
     application.add_handler(CallbackQueryHandler(check_subscription_callback, pattern="^check_subscription$"))
     application.add_handler(CallbackQueryHandler(approve_withdrawal_callback, pattern="^approve_withdrawal_"))
     application.add_handler(CallbackQueryHandler(reject_withdrawal_callback, pattern="^reject_withdrawal_"))
