@@ -27,11 +27,11 @@ import hashlib
 import random
 import secrets
 import time
+import sqlite3
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Set
 from dataclasses import dataclass
 from enum import Enum
-import sqlite3
 
 # ═══════════════════════════════════════════════════════════════
 # 📦 IMPORTS
@@ -70,6 +70,11 @@ from telegram.ext import (
 from telegram.constants import ParseMode
 from telegram.error import RetryAfter, TimedOut, NetworkError, Forbidden, BadRequest
 import re
+
+# استيراد مدير قاعدة البيانات الجديد (يدعم PostgreSQL & SQLite)
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from database import db_manager, get_db_connection
 
 # استيراد نظام الأيقونات المودرن
 try:
@@ -131,14 +136,9 @@ TON_API_KEY = os.getenv("TON_API_KEY", "")
 SECRET_KEY = os.getenv("SECRET_KEY", secrets.token_hex(32))
 
 # 📊 إعدادات قاعدة البيانات
-DATABASE_URL = os.getenv("DATABASE_URL", "")  # PostgreSQL
-# Use absolute path on Render to ensure consistency with Flask app
-if os.environ.get('RENDER'):
-    DATABASE_PATH = os.getenv("DATABASE_PATH", "/opt/render/project/src/panda_giveaways.db")
-else:
-    DATABASE_PATH = os.getenv("DATABASE_PATH", "panda_giveaways.db")
-
-print(f"📂 Bot using database at: {DATABASE_PATH}")
+# تم نقل إدارة قاعدة البيانات إلى database.py
+# يدعم الآن PostgreSQL (Neon) و SQLite للتطوير المحلي
+print(f"📂 Bot using database: {'PostgreSQL (Neon)' if db_manager.use_postgres else 'SQLite (Local)'}")
 
 # 🌐 API Configuration
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:5000/api")
@@ -213,205 +213,23 @@ class User:
 # ═══════════════════════════════════════════════════════════════
 # 🗄️ DATABASE MANAGER
 # ═══════════════════════════════════════════════════════════════
+# تم نقل إدارة قاعدة البيانات إلى database.py
+# يدعم الآن PostgreSQL (Neon) و SQLite للتطوير المحلي
 
-class DatabaseManager:
-    """إدارة قاعدة البيانات بشكل آمن"""
+class DatabaseManagerBot:
+    """إدارة قاعدة البيانات للبوت - wrapper حول db_manager من database.py"""
     
-    def __init__(self, db_path: str = DATABASE_PATH):
-        self.db_path = db_path
-        logger.info("🗄️ Initializing Panda Giveaways Database...")
-        self.init_database()
-        logger.info("✅ Database initialized successfully")
+    def __init__(self):
+        self.db_manager = db_manager
+        logger.info("✅ Bot Database Manager initialized")
     
     def get_connection(self):
         """إنشاء اتصال آمن بقاعدة البيانات"""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.row_factory = sqlite3.Row
-        return conn
+        return get_db_connection()
     
     def init_database(self):
-        """إنشاء جداول قاعدة البيانات"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # جدول المستخدمين
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                user_id INTEGER PRIMARY KEY,
-                username TEXT,
-                full_name TEXT NOT NULL,
-                balance REAL DEFAULT 0.0,
-                total_spins INTEGER DEFAULT 0,
-                available_spins INTEGER DEFAULT 0,
-                tickets INTEGER DEFAULT 0,
-                total_referrals INTEGER DEFAULT 0,
-                valid_referrals INTEGER DEFAULT 0,
-                referrer_id INTEGER,
-                created_at TEXT NOT NULL,
-                last_active TEXT,
-                is_banned INTEGER DEFAULT 0,
-                last_spin_time TEXT,
-                spin_count_today INTEGER DEFAULT 0,
-                last_withdrawal_time TEXT,
-                ton_wallet TEXT,
-                vodafone_number TEXT,
-                FOREIGN KEY (referrer_id) REFERENCES users(user_id)
-            )
-        """)
-        
-        # إضافة عمود tickets للمستخدمين القدامى
-        try:
-            cursor.execute("ALTER TABLE users ADD COLUMN tickets INTEGER DEFAULT 0")
-            conn.commit()
-        except sqlite3.OperationalError:
-            pass  # العمود موجود بالفعل
-        
-        # جدول الإحالات
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS referrals (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                referrer_id INTEGER NOT NULL,
-                referred_id INTEGER NOT NULL,
-                is_valid INTEGER DEFAULT 0,
-                created_at TEXT NOT NULL,
-                validated_at TEXT,
-                FOREIGN KEY (referrer_id) REFERENCES users(user_id),
-                FOREIGN KEY (referred_id) REFERENCES users(user_id),
-                UNIQUE(referrer_id, referred_id)
-            )
-        """)
-        
-        # جدول لفات العجلة
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS spins (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                prize_name TEXT NOT NULL,
-                prize_amount REAL NOT NULL,
-                spin_time TEXT NOT NULL,
-                spin_hash TEXT NOT NULL UNIQUE,
-                ip_address TEXT,
-                FOREIGN KEY (user_id) REFERENCES users(user_id)
-            )
-        """)
-        
-        # جدول طلبات السحب
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS withdrawals (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                amount REAL NOT NULL,
-                withdrawal_type TEXT NOT NULL,
-                wallet_address TEXT,
-                phone_number TEXT,
-                status TEXT NOT NULL DEFAULT 'pending',
-                requested_at TEXT NOT NULL,
-                processed_at TEXT,
-                processed_by INTEGER,
-                tx_hash TEXT,
-                rejection_reason TEXT,
-                FOREIGN KEY (user_id) REFERENCES users(user_id),
-                FOREIGN KEY (processed_by) REFERENCES users(user_id)
-            )
-        """)
-        
-        # جدول القنوات الإجبارية (مشترك مع الموقع - required_channels)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS required_channels (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                channel_id TEXT NOT NULL UNIQUE,
-                channel_name TEXT NOT NULL,
-                channel_url TEXT,
-                is_active INTEGER DEFAULT 1,
-                added_by INTEGER NOT NULL,
-                added_at TEXT NOT NULL,
-                FOREIGN KEY (added_by) REFERENCES users(user_id)
-            )
-        """)
-        
-        # جدول المهام
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS tasks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                task_type TEXT NOT NULL,
-                task_name TEXT NOT NULL,
-                task_description TEXT,
-                channel_id TEXT,
-                link_url TEXT,
-                reward_amount REAL DEFAULT 0,
-                is_active INTEGER DEFAULT 1,
-                added_by INTEGER NOT NULL,
-                added_at TEXT NOT NULL,
-                FOREIGN KEY (added_by) REFERENCES users(user_id)
-            )
-        """)
-        
-        # جدول إنجاز المهام
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS user_tasks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                task_id INTEGER NOT NULL,
-                completed_at TEXT NOT NULL,
-                verified INTEGER DEFAULT 0,
-                FOREIGN KEY (user_id) REFERENCES users(user_id),
-                FOREIGN KEY (task_id) REFERENCES tasks(id),
-                UNIQUE(user_id, task_id)
-            )
-        """)
-        
-        # جدول السجلات (للأمان والمراقبة)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS activity_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                action TEXT NOT NULL,
-                details TEXT,
-                ip_address TEXT,
-                timestamp TEXT NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES users(user_id)
-            )
-        """)
-        
-        # جدول الجلسات النشطة (منع التلاعب)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS active_sessions (
-                session_id TEXT PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                created_at TEXT NOT NULL,
-                expires_at TEXT NOT NULL,
-                is_valid INTEGER DEFAULT 1,
-                FOREIGN KEY (user_id) REFERENCES users(user_id)
-            )
-        """)
-        
-        # جدول إعدادات البوت
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS bot_settings (
-                setting_key TEXT PRIMARY KEY,
-                setting_value TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                updated_by INTEGER
-            )
-        """)
-        
-        # إضافة الإعدادات الافتراضية
-        cursor.execute("""
-            INSERT OR IGNORE INTO bot_settings (setting_key, setting_value, updated_at)
-            VALUES ('auto_withdrawal_enabled', 'false', ?)
-        """, (datetime.now().isoformat(),))
-        
-        # إنشاء indexes لتحسين الأداء
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_spins_user ON spins(user_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_withdrawals_user ON withdrawals(user_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_withdrawals_status ON withdrawals(status)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_tasks ON user_tasks(user_id, task_id)")
-        
-        conn.commit()
-        conn.close()
-        logger.info("✅ All database tables created successfully")
+        """قاعدة البيانات مُهيأة بالفعل من database.py"""
+        pass
     
     # ═══════════════════════════════════════════════════════════
     # 👤 USER OPERATIONS
@@ -1525,7 +1343,7 @@ class TONWalletManager:
 # ═══════════════════════════════════════════════════════════════
 
 # Initialize global objects
-db = DatabaseManager()
+db = DatabaseManagerBot()
 
 # ═══════════════════════════════════════════════════════════════
 # 🔐 REFERRAL VALIDATION HELPERS

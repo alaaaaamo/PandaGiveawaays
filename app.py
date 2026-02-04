@@ -17,7 +17,7 @@ from flask import Flask, send_from_directory, request, jsonify
 from flask_cors import CORS
 import os
 import sys
-import sqlite3
+import sqlite3  # للتوافق مع IntegrityError في الكود القديم
 from datetime import datetime, timedelta
 import threading
 import subprocess
@@ -28,6 +28,9 @@ import requests  # لجلب سعر TON
 
 # إضافة المسار الحالي لـ 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# استيراد مدير قاعدة البيانات الجديد (يدعم PostgreSQL & SQLite)
+from database import db_manager, get_db_connection
 
 # دالة لجلب سعر TON بالدولار
 def get_ton_price_usd():
@@ -175,395 +178,87 @@ else:
 # ═══════════════════════════════════════════════════════════════
 # 🗄️ DATABASE MANAGER
 # ═══════════════════════════════════════════════════════════════
+# تم نقل إدارة قاعدة البيانات إلى database.py
+# يدعم الآن PostgreSQL (Neon) و SQLite للتطوير المحلي
 
-# Use absolute path on Render to ensure both bot and Flask use same database
-if os.environ.get('RENDER'):
-    DATABASE_PATH = os.getenv('DATABASE_PATH', '/opt/render/project/src/panda_giveaways.db')
-else:
-    DATABASE_PATH = os.getenv('DATABASE_PATH', 'panda_giveaways.db')
-
-print(f"📂 Using database at: {DATABASE_PATH}")
-
-def init_database():
-    """إنشاء قاعدة البيانات إذا لم تكن موجودة"""
-    conn = sqlite3.connect(DATABASE_PATH, timeout=30.0)
-    cursor = conn.cursor()
-    
-    # جدول المستخدمين
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            user_id INTEGER PRIMARY KEY,
-            username TEXT,
-            full_name TEXT NOT NULL,
-            balance REAL DEFAULT 0.0,
-            total_spins INTEGER DEFAULT 0,
-            available_spins INTEGER DEFAULT 0,
-            total_referrals INTEGER DEFAULT 0,
-            valid_referrals INTEGER DEFAULT 0,
-            referrer_id INTEGER,
-            created_at TEXT NOT NULL,
-            last_active TEXT,
-            is_banned INTEGER DEFAULT 0,
-            last_spin_time TEXT,
-            spin_count_today INTEGER DEFAULT 0,
-            last_withdrawal_time TEXT,
-            ton_wallet TEXT,
-            vodafone_number TEXT
-        )
-    """)
-    
-    # جدول الإحالات
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS referrals (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            referrer_id INTEGER NOT NULL,
-            referred_id INTEGER NOT NULL,
-            is_valid INTEGER DEFAULT 0,
-            created_at TEXT NOT NULL,
-            validated_at TEXT,
-            channels_checked INTEGER DEFAULT 0,
-            device_verified INTEGER DEFAULT 0,
-            UNIQUE(referrer_id, referred_id)
-        )
-    """)
-    
-    # جدول اللفات
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS spins (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            prize_name TEXT NOT NULL,
-            prize_amount REAL NOT NULL,
-            spin_time TEXT NOT NULL,
-            spin_hash TEXT NOT NULL UNIQUE,
-            ip_address TEXT
-        )
-    """)
-    
-    # جدول السحوبات
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS withdrawals (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            amount REAL NOT NULL,
-            withdrawal_type TEXT NOT NULL,
-            wallet_address TEXT,
-            phone_number TEXT,
-            status TEXT NOT NULL DEFAULT 'pending',
-            requested_at TEXT NOT NULL,
-            processed_at TEXT,
-            processed_by INTEGER,
-            tx_hash TEXT,
-            rejection_reason TEXT
-        )
-    """)
-    
-    # جدول المهام
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS tasks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            task_type TEXT NOT NULL,
-            task_name TEXT NOT NULL,
-            task_description TEXT,
-            task_link TEXT,
-            channel_username TEXT,
-            is_pinned INTEGER DEFAULT 0,
-            is_active INTEGER DEFAULT 1,
-            added_by INTEGER NOT NULL,
-            added_at TEXT NOT NULL
-        )
-    """)
-    
-    # التحقق من الأعمدة الجديدة وإضافتها إن لم تكن موجودة
-    try:
-        cursor.execute("SELECT is_pinned FROM tasks LIMIT 1")
-    except:
-        cursor.execute("ALTER TABLE tasks ADD COLUMN is_pinned INTEGER DEFAULT 0")
-        
-    try:
-        cursor.execute("SELECT task_link FROM tasks LIMIT 1")
-    except:
-        cursor.execute("ALTER TABLE tasks ADD COLUMN task_link TEXT")
-        
-    try:
-        cursor.execute("SELECT channel_username FROM tasks LIMIT 1")
-    except:
-        cursor.execute("ALTER TABLE tasks ADD COLUMN channel_username TEXT")
-
-    
-    # جدول إنجاز المهام
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS user_tasks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            task_id INTEGER NOT NULL,
-            completed_at TEXT NOT NULL,
-            verified INTEGER DEFAULT 0,
-            UNIQUE(user_id, task_id)
-        )
-    """)
-    
-    # جدول القنوات الإجبارية
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS required_channels (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            channel_id TEXT NOT NULL UNIQUE,
-            channel_name TEXT NOT NULL,
-            channel_url TEXT NOT NULL,
-            is_active INTEGER DEFAULT 1,
-            added_by INTEGER NOT NULL,
-            added_at TEXT NOT NULL
-        )
-    """)
-    
-    # جدول التحقق من الأجهزة - device fingerprinting
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS device_verifications (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL UNIQUE,
-            fingerprint TEXT NOT NULL,
-            ip_address TEXT NOT NULL,
-            user_agent TEXT,
-            timezone TEXT,
-            screen_resolution TEXT,
-            canvas_fp TEXT,
-            audio_fp TEXT,
-            local_id TEXT,
-            verified_at TEXT NOT NULL,
-            last_seen TEXT,
-            is_blocked INTEGER DEFAULT 0,
-            FOREIGN KEY (user_id) REFERENCES users(user_id)
-        )
-    """)
-    
-    # جدول سجل محاولات التحقق
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS verification_attempts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            fingerprint TEXT NOT NULL,
-            ip_address TEXT NOT NULL,
-            attempt_time TEXT NOT NULL,
-            status TEXT NOT NULL,
-            reason TEXT,
-            FOREIGN KEY (user_id) REFERENCES users(user_id)
-        )
-    """)
-    
-    # جدول tokens التحقق المؤقتة
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS verification_tokens (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            token TEXT NOT NULL UNIQUE,
-            created_at TEXT NOT NULL,
-            expires_at TEXT NOT NULL,
-            used INTEGER DEFAULT 0,
-            FOREIGN KEY (user_id) REFERENCES users(user_id)
-        )
-    """)
-    
-    # جدول إعدادات النظام - تحكم في التحقق من التعدد
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS system_settings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            setting_key TEXT NOT NULL UNIQUE,
-            setting_value TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            updated_by INTEGER
-        )
-    """)
-    
-    # تفعيل التحقق من التعدد افتراضياً
-    cursor.execute("""
-        INSERT OR IGNORE INTO system_settings (setting_key, setting_value, updated_at)
-        VALUES ('verification_enabled', 'true', ?)
-    """, (datetime.now().isoformat(),))
-    
-    # جدول جوائز العجلة
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS wheel_prizes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            value REAL NOT NULL,
-            probability REAL NOT NULL,
-            color TEXT NOT NULL,
-            emoji TEXT NOT NULL,
-            is_active INTEGER DEFAULT 1,
-            position INTEGER DEFAULT 0,
-            added_at TEXT NOT NULL,
-            updated_at TEXT
-        )
-    """)
-    
-    # إضافة القنوات الإجبارية الافتراضية إذا لم تكن موجودة
-    cursor.execute("SELECT COUNT(*) FROM required_channels")
-    count = cursor.fetchone()[0]  # الوصول بالـ index وليس بالـ key
-    if count == 0:
-        now = datetime.now().isoformat()
-        default_channels = [
-            ('@PandaAdds', 'Panda Adds', 'https://t.me/PandaAdds', 1797127532),
-            ('@CRYPTO_FLASSH', 'Crypto Flash', 'https://t.me/CRYPTO_FLASSH', 1797127532)
-        ]
-        for channel_id, name, url, admin_id in default_channels:
-            cursor.execute("""
-                INSERT INTO required_channels (channel_id, channel_name, channel_url, is_active, added_by, added_at)
-                VALUES (?, ?, ?, 1, ?, ?)
-            """, (channel_id, name, url, admin_id, now))
-    
-    # إضافة الجوائز الافتراضية إذا لم تكن موجودة
-    cursor.execute("SELECT COUNT(*) FROM wheel_prizes")
-    count = cursor.fetchone()[0]
-    if count == 0:
-        now = datetime.now().isoformat()
-        # النسب الجديدة: 25% لكل من (0.01, 0.05, 0.1, حظ أوفر) و 0% للباقي
-        default_prizes = [
-            ('0.01 TON', 0.01, 25, '#9370db', '🪙', 0),
-            ('0.05 TON', 0.05, 25, '#00bfff', '💎', 1),
-            ('0.1 TON', 0.1, 25, '#ffa500', '💰', 2),
-            ('0.5 TON', 0.5, 0, '#32cd32', '🏆', 3),
-            ('1.0 TON', 1.0, 0, '#ff1493', '👑', 4),
-            ('حظ أوفر', 0, 25, '#808080', '😔', 5)
-        ]
-        for name, value, prob, color, emoji, pos in default_prizes:
-            cursor.execute("""
-                INSERT INTO wheel_prizes (name, value, probability, color, emoji, position, is_active, added_at)
-                VALUES (?, ?, ?, ?, ?, ?, 1, ?)
-            """, (name, value, prob, color, emoji, pos, now))
-    
-    # إضافة أعمدة التحقق للجداول القديمة
-    try:
-        cursor.execute("ALTER TABLE referrals ADD COLUMN channels_checked INTEGER DEFAULT 0")
-    except sqlite3.OperationalError:
-        pass  # العمود موجود بالفعل
-    
-    try:
-        cursor.execute("ALTER TABLE referrals ADD COLUMN device_verified INTEGER DEFAULT 0")
-    except sqlite3.OperationalError:
-        pass  # العمود موجود بالفعل
-    
-    try:
-        cursor.execute("ALTER TABLE users ADD COLUMN is_device_verified INTEGER DEFAULT 0")
-    except sqlite3.OperationalError:
-        pass  # العمود موجود بالفعل
-    
-    try:
-        cursor.execute("ALTER TABLE users ADD COLUMN verification_required INTEGER DEFAULT 1")
-    except sqlite3.OperationalError:
-        pass  # العمود موجود بالفعل
-    
-    try:
-        cursor.execute("ALTER TABLE users ADD COLUMN ban_reason TEXT")
-    except sqlite3.OperationalError:
-        pass  # العمود موجود بالفعل
-    
-    conn.commit()
-    conn.close()
-    print("✅ Database initialized")
-
-# تهيئة قاعدة البيانات عند بدء التشغيل
-init_database()
-
-def get_db_connection():
-    """إنشاء اتصال بقاعدة البيانات"""
-    conn = sqlite3.connect(DATABASE_PATH, timeout=30.0)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.row_factory = sqlite3.Row
-    return conn
+print(f"📂 Using database: {'PostgreSQL (Neon)' if db_manager.use_postgres else 'SQLite (Local)'}")
 
 def get_user(user_id):
     """الحصول على بيانات مستخدم"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
-    row = cursor.fetchone()
-    conn.close()
-    return dict(row) if row else None
+    return db_manager.execute_query(
+        "SELECT * FROM users WHERE user_id = ?",
+        (user_id,),
+        fetch='one'
+    )
 
 def create_user_if_not_exists(user_id, username="", full_name="User"):
     """إنشاء مستخدم إذا لم يكن موجوداً"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
     now = datetime.now().isoformat()
     
     try:
-        cursor.execute("""
-            INSERT OR IGNORE INTO users (user_id, username, full_name, created_at, last_active)
-            VALUES (?, ?, ?, ?, ?)
-        """, (user_id, username, full_name, now, now))
-        conn.commit()
+        if db_manager.use_postgres:
+            db_manager.execute_query("""
+                INSERT INTO users (user_id, username, full_name, created_at, last_active)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (user_id) DO NOTHING
+            """, (user_id, username, full_name, now, now))
+        else:
+            db_manager.execute_query("""
+                INSERT OR IGNORE INTO users (user_id, username, full_name, created_at, last_active)
+                VALUES (?, ?, ?, ?, ?)
+            """, (user_id, username, full_name, now, now))
     except Exception as e:
         print(f"Error creating user: {e}")
-    finally:
-        conn.close()
 
 def get_user_referrals_db(user_id):
     """الحصول على إحالات المستخدم"""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
+        return db_manager.execute_query("""
             SELECT r.*, u.username, u.full_name, u.created_at as joined_at
             FROM referrals r
             LEFT JOIN users u ON r.referred_id = u.user_id
             WHERE r.referrer_id = ?
             ORDER BY r.created_at DESC
-        """, (user_id,))
-        referrals = [dict(row) for row in cursor.fetchall()]
-        conn.close()
-        return referrals
+        """, (user_id,), fetch='all')
     except Exception as e:
         print(f"Error in get_user_referrals_db: {e}")
-        conn.close()
         return []
 
 def get_user_spins_db(user_id, limit=50):
     """الحصول على تاريخ اللفات"""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
+        return db_manager.execute_query("""
             SELECT * FROM spins
             WHERE user_id = ?
             ORDER BY spin_time DESC
             LIMIT ?
-        """, (user_id, limit))
-        spins = [dict(row) for row in cursor.fetchall()]
-        conn.close()
-        return spins
+        """, (user_id, limit), fetch='all')
     except Exception as e:
         print(f"Error in get_user_spins_db: {e}")
-        conn.close()
         return []
 
 def get_bot_stats():
     """إحصائيات البوت"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
     stats = {}
     
-    cursor.execute("SELECT COUNT(*) as total FROM users")
-    stats['total_users'] = cursor.fetchone()['total']
+    result = db_manager.execute_query("SELECT COUNT(*) as total FROM users", fetch='one')
+    stats['total_users'] = result['total'] if result else 0
     
-    cursor.execute("SELECT COUNT(*) as total FROM referrals WHERE is_valid = 1")
-    stats['total_referrals'] = cursor.fetchone()['total']
+    result = db_manager.execute_query("SELECT COUNT(*) as total FROM referrals WHERE is_valid = 1", fetch='one')
+    stats['total_referrals'] = result['total'] if result else 0
     
-    cursor.execute("SELECT COUNT(*) as total FROM spins")
-    stats['total_spins'] = cursor.fetchone()['total']
+    result = db_manager.execute_query("SELECT COUNT(*) as total FROM spins", fetch='one')
+    stats['total_spins'] = result['total'] if result else 0
     
-    cursor.execute("SELECT SUM(prize_amount) as total FROM spins")
-    result = cursor.fetchone()
-    stats['total_distributed'] = result['total'] if result['total'] else 0
+    result = db_manager.execute_query("SELECT SUM(prize_amount) as total FROM spins", fetch='one')
+    stats['total_distributed'] = result['total'] if result and result['total'] else 0
     
-    cursor.execute("SELECT COUNT(*) as pending FROM withdrawals WHERE status = 'pending'")
-    stats['pending_withdrawals'] = cursor.fetchone()['pending']
+    result = db_manager.execute_query("SELECT COUNT(*) as pending FROM withdrawals WHERE status = 'pending'", fetch='one')
+    stats['pending_withdrawals'] = result['pending'] if result else 0
     
-    cursor.execute("SELECT SUM(amount) as total FROM withdrawals WHERE status = 'completed'")
-    result = cursor.fetchone()
-    stats['total_withdrawn'] = result['total'] if result['total'] else 0
+    result = db_manager.execute_query("SELECT SUM(amount) as total FROM withdrawals WHERE status = 'completed'", fetch='one')
+    stats['total_withdrawn'] = result['total'] if result and result['total'] else 0
     
-    conn.close()
     return stats
 
 # ═══════════════════════════════════════════════════════════════
