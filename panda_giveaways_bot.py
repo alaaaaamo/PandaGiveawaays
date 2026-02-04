@@ -3816,22 +3816,39 @@ def handle_device_verified():
             user = db.get_user(user_id)
             full_name = user.full_name if user else "المستخدم"
             
+            # التحقق من وجود referrer_id
+            referrer_id = user.referrer_id if user else None
+            
             success_text = f"""
 ✅ تم التحقق من جهازك بنجاح!
 
-عزيزي {full_name}، تم التحقق من جهازك بنجاح! 🎉
+عزيزي {full_name} تم التحقق من جهازك بنجاح! 🎉
 
 🎯 يمكنك الآن استخدام البوت بحرية!
-
-استخدم /start لرؤية القائمة الرئيسية
 """
             
-            # إرسال الرسالة عبر Bot API
+            # إنشاء رابط البوت (مع الإحالة إذا وجدت)
+            if referrer_id:
+                bot_link = f"https://t.me/{BOT_USERNAME}?start=ref_{referrer_id}"
+                button_text = "🚀 متابعة للبوت"
+            else:
+                bot_link = f"https://t.me/{BOT_USERNAME}"
+                button_text = "🚀 فتح البوت"
+            
+            # إرسال الرسالة مع زر عبر Bot API
             url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
             payload = {
                 "chat_id": user_id,
                 "text": success_text,
-                "parse_mode": "HTML"
+                "parse_mode": "HTML",
+                "reply_markup": {
+                    "inline_keyboard": [[
+                        {
+                            "text": button_text,
+                            "url": bot_link
+                        }
+                    ]]
+                }
             }
             resp = req.post(url, json=payload, timeout=10)
             
