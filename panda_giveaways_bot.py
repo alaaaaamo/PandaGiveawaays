@@ -2528,6 +2528,7 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
     # ═══════════════════════════════════════════════════════════
     # الحصول على referrer_id من context أو من قاعدة البيانات
     referrer_id = context.user_data.get('pending_referrer_id')
+    logger.info(f"🔍 Checking referral for user {user_id}, context referrer: {referrer_id}")
     
     # إذا لم يكن موجود في context، نحاول الحصول عليه من قاعدة البيانات
     if not referrer_id:
@@ -2537,6 +2538,7 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
             logger.info(f"📎 Retrieved referrer_id from database: {referrer_id} for user {user_id}")
     
     if referrer_id:
+        logger.info(f"🎯 Processing referral: {referrer_id} -> {user_id}")
         # التحقق من أن المُحيل ليس محظوراً
         referrer_user = db.get_user(referrer_id)
         if referrer_user and not referrer_user.is_banned:
@@ -2549,7 +2551,11 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
                 cursor.execute("SELECT * FROM referrals WHERE referred_id = ?", (user_id,))
                 existing_ref = cursor.fetchone()
                 
-                if not existing_ref:
+                if existing_ref:
+                    logger.warning(f"⚠️ Referral already exists for user {user_id}, skipping")
+                    conn.close()
+                else:
+                    logger.info(f"✨ Creating new referral record: {referrer_id} -> {user_id}")
                     # تسجيل الإحالة
                     now = datetime.now().isoformat()
                     try:
@@ -2573,6 +2579,8 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
                             valid_refs = ref_data['valid_referrals']
                             current_spins = ref_data['available_spins']
                             
+                            logger.info(f"📊 Referrer stats: {valid_refs} referrals, {current_spins} spins")
+                            
                             # كل 5 إحالات = لفة واحدة
                             if valid_refs % SPINS_PER_REFERRALS == 0:
                                 cursor.execute("""
@@ -2580,6 +2588,8 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
                                     SET available_spins = available_spins + 1 
                                     WHERE user_id = ?
                                 """, (referrer_id,))
+                                
+                                logger.info(f"🎁 Awarding spin to referrer {referrer_id}")
                                 
                                 # إرسال إشعار للداعي
                                 remaining_for_next = SPINS_PER_REFERRALS
@@ -2601,6 +2611,7 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
 """,
                                         parse_mode=ParseMode.HTML
                                     )
+                                    logger.info(f"✅ Spin notification sent to {referrer_id}")
                                 except Exception as e:
                                     logger.error(f"Failed to send referral notification: {e}")
                             else:
@@ -2621,6 +2632,7 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
 """,
                                         parse_mode=ParseMode.HTML
                                     )
+                                    logger.info(f"✅ Referral notification sent to {referrer_id}")
                                 except Exception as e:
                                     logger.error(f"Failed to send referral notification: {e}")
                         
@@ -2629,12 +2641,18 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
                         
                     except sqlite3.IntegrityError:
                         logger.warning(f"⚠️ Referral already exists: {referrer_id} -> {user_id}")
+                    
+                    conn.close()
+            else:
+                logger.warning(f"⚠️ New user {user_id} is banned, referral not counted")
+        else:
+            logger.warning(f"⚠️ Referrer {referrer_id} is banned or not found, referral not counted")
                 
-                conn.close()
-                
-                # مسح البيانات المؤقتة
-                if 'pending_referrer_id' in context.user_data:
-                    del context.user_data['pending_referrer_id']
+        # مسح البيانات المؤقتة
+        if 'pending_referrer_id' in context.user_data:
+            del context.user_data['pending_referrer_id']
+    else:
+        logger.info(f"ℹ️ No referrer_id found for user {user_id}, skipping referral count")
     
     # الحصول على بيانات المستخدم المحدثة
     db_user = db.get_user(user_id)
