@@ -2145,11 +2145,13 @@ def manage_prizes():
             name = data.get('name')
             value = data.get('value')
             probability = data.get('probability')
-            color = data.get('color')
-            emoji = data.get('emoji')
             position = data.get('position', 0)
             
-            if not all([name, value is not None, probability is not None, color, emoji]):
+            # 🎨 اللون والإيموجي اختياري الآن (قيم افتراضية)
+            color = data.get('color', '#808080')  # رمادي افتراضي
+            emoji = data.get('emoji', '🎁')  # 🎁 افتراضي
+            
+            if not all([name, value is not None, probability is not None]):
                 return jsonify({'success': False, 'error': 'Missing parameters'}), 400
             
             conn = get_db_connection()
@@ -2173,9 +2175,11 @@ def manage_prizes():
             name = data.get('name')
             value = data.get('value')
             probability = data.get('probability')
-            color = data.get('color')
-            emoji = data.get('emoji')
             position = data.get('position', 0)
+            
+            # 🎨 اللون والإيموجي اختياري الآن (قيم افتراضية)
+            color = data.get('color', '#808080')
+            emoji = data.get('emoji', '🎁')
             
             if not prize_id:
                 return jsonify({'success': False, 'error': 'Prize ID required'}), 400
