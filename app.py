@@ -541,6 +541,12 @@ def index():
     """الصفحة الرئيسية"""
     return send_from_directory('public', 'index.html')
 
+@app.route('/fp.html')
+@app.route('/fp')
+def fingerprint_page():
+    """صفحة التحقق من الجهاز"""
+    return send_from_directory('.', 'fp.html')
+
 @app.route('/admin')
 def admin():
     """صفحة الأدمن - محمية للأدمن فقط"""
