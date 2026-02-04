@@ -245,14 +245,26 @@
                 // Update stats from user data
                 if (userData.success && userData.data) {
                     const user = userData.data;
-                    $('#available-spins').text(user.available_spins || 0);
+                    const availableSpins = user.available_spins || 0;
+                    $('#available-spins').text(availableSpins);
                     
-                    // Use total_referrals from API response (not referral_count)
-                    const referralCount = user.total_referrals || 0;
+                    // حساب العدد من الإحالات المُرجعة فعلياً (أكثر دقة)
+                    const referralCount = (referralsData.success && referralsData.data) 
+                        ? referralsData.data.length 
+                        : (user.total_referrals || 0);
+                    
                     const remainingForNext = referralCount === 0 ? 5 : (5 - (referralCount % 5));
                     
                     $('#total-referrals').text(referralCount);
                     $('#next-spin-in').text(remainingForNext);
+                    
+                    console.log('Stats updated:', {
+                        referralCount,
+                        availableSpins,
+                        remainingForNext
+                    });
+                } else {
+                    console.error('Failed to load user data:', userData);
                 }
                 
                 // Load referrals list

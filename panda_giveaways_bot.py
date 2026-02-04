@@ -2107,11 +2107,17 @@ async def referrals_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     referrals = db.get_user_referrals(user_id)
     
+    # حساب الإحصائيات من قاعدة البيانات مباشرة
+    total_refs = len(referrals)
+    valid_refs = sum(1 for r in referrals if r['is_valid'])
+    
     ref_text = f"""
 👥 <b>قائمة المدعوين</b>
 
-📊 <b>إجمالي الإحالات:</b> {len(referrals)}
-✅ <b>الإحالات الصحيحة:</b> {sum(1 for r in referrals if r['is_valid'])}
+📊 <b>إجمالي الإحالات:</b> {total_refs}
+✅ <b>الإحالات الصحيحة:</b> {valid_refs}
+🎰 <b>لفاتك المتاحة:</b> {user.available_spins}
+⏳ <b>متبقي للفة القادمة:</b> {SPINS_PER_REFERRALS - (valid_refs % SPINS_PER_REFERRALS) if valid_refs > 0 else SPINS_PER_REFERRALS}
 
 """
     
