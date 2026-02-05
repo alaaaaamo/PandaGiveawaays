@@ -5,14 +5,29 @@
 let wheel = null;
 
 // ═══════════════════════════════════════════════════════════════
-// 🚀 APP INITIALIZATION
+// � VISUAL DEBUGGING & LOADING MESSAGES
+// ═══════════════════════════════════════════════════════════════
+
+function showLoadingWithMessage(message) {
+    const loadingOverlay = document.getElementById('loading-overlay');
+    if (loadingOverlay) {
+        const loadingText = loadingOverlay.querySelector('.loading-text');
+        if (loadingText) {
+            loadingText.textContent = message;
+        }
+    }
+    console.log('📱 Status:', message);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// �🚀 APP INITIALIZATION
 // ═══════════════════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🐼 Panda Giveaways Starting...');
     
     // إضافة timeout للتحميل لمنع التحميل اللا نهائي
-    const LOADING_TIMEOUT = 30000; // 30 ثانية
+    const LOADING_TIMEOUT = 60000; // 60 ثانية
     const timeoutId = setTimeout(() => {
         console.error('⏰ Loading timeout reached');
         showLoading(false);
@@ -20,12 +35,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; 
                 min-height: 100vh; background: #0d1117; padding: 20px; text-align: center;">
                 <h2 style="color: #ff4444; margin: 20px 0;">⏰ انتهت مهلة التحميل</h2>
-                <p style="color: #8b95a1; font-size: 16px;">يرجى المحاولة مرة أخرى</p>
+                <p style="color: #8b95a1; font-size: 16px;">قد تكون المشكلة في الاتصال بالسيرفر</p>
                 <button onclick="window.location.reload()" 
                     style="padding: 12px 24px; background: #ffa500; color: #000; border: none; 
                     border-radius: 8px; font-size: 16px; font-weight: bold; margin-top: 20px; cursor: pointer;">
                     إعادة المحاولة
                 </button>
+                <p style="color: #666; font-size: 14px; margin-top: 20px;">
+                    إذا استمرت المشكلة، تواصل مع الدعم
+                </p>
             </div>
         `;
     }, LOADING_TIMEOUT);
@@ -85,7 +103,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         console.log('✅ Valid Telegram session - proceeding with app initialization');
         
-        // عرض Loading
+        // عرض Loading مع رسالة تبين التقدم
+        showLoadingWithMessage('🔄 جاري التهيئة...');
         showLoading(true);
         
         // ═══════════════════════════════════════════════════════
@@ -95,6 +114,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         if (!isAdmin) {
             try {
+                showLoadingWithMessage('🔎 جاري التحقق من حالة البوت...');
                 const botStatusResp = await fetch(`${CONFIG.API_BASE_URL}/bot/status`);
                 const botStatusData = await botStatusResp.json();
                 
@@ -156,6 +176,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         if (userId && !isAdmin) {
             try {
+                showLoadingWithMessage('🔐 جاري التحقق من الحساب...');
                 const verifyStatusResp = await fetch(`${CONFIG.API_BASE_URL}/verification/status/${userId}`);
                 const verifyData = await verifyStatusResp.json();
                 
@@ -215,6 +236,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         // إرسال رسالة ترحيبية (سيظهر تليجرام "Allow bot to message you?" تلقائياً)
+        showLoadingWithMessage('📩 جاري إعداد الاتصال...');
         await sendWelcomeMessage();
         
         // حفظ referrer_id مؤقتاً إذا موجود (سيتم تسجيله بعد التحقق من القنوات)
@@ -222,38 +244,75 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // Check required channels FIRST before loading anything
         console.log('🔄 Starting checkRequiredChannels...');
-        const channelsVerified = await checkRequiredChannels();
+        showLoadingWithMessage('📺 جاري التحقق من اشتراكك في القنوات...');
+        const channelsVerified = await Promise.race([
+            checkRequiredChannels(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('checkRequiredChannels timeout')), 15000))
+        ]);
         console.log('📋 Channels verification result:', channelsVerified);
         
         if (!channelsVerified) {
             // Hide loading - channels modal will be shown
+            clearTimeout(timeoutId);
             showLoading(false);
             console.log('⏸️ Waiting for channel verification...');
             return;
         }
         console.log('✅ Channels verified - continuing...');
+        showLoadingWithMessage('✅ تم التحقق من القنوات!');
         
         // بعد التحقق من القنوات، نسجل الإحالة
         await registerPendingReferral();
         
         // تحميل بيانات المستخدم
         console.log('🔄 Starting loadUserData...');
-        await loadUserData();
+        showLoadingWithMessage('📊 جاري تحميل بياناتك...');
+        await Promise.race([
+            loadUserData(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('loadUserData timeout')), 15000))
+        ]);
         console.log('✅ loadUserData completed');
+        showLoadingWithMessage('✅ تم تحميل بياناتك!');
         
         // تحميل جوائز العجلة من API
         console.log('🔄 Starting loadWheelPrizes...');
-        await loadWheelPrizes();
+        showLoadingWithMessage('🎁 جاري تحميل جوائز العجلة...');
+        await Promise.race([
+            loadWheelPrizes(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('loadWheelPrizes timeout')), 8000))
+        ]);
         console.log('✅ loadWheelPrizes completed');
+        showLoadingWithMessage('✅ تم تحميل الجوائز!');
         
         // تهيئة UI
-        initUI();
+        console.log('🔄 Starting initUI...');
+        showLoadingWithMessage('🎨 جاري إعداد الواجهة...');
+        try {
+            initUI();
+            console.log('✅ initUI completed');
+        } catch (error) {
+            console.error('❌ initUI error:', error);
+        }
         
         // تهيئة عجلة الحظ
-        wheel = new WheelOfFortune('wheel-canvas', CONFIG.WHEEL_PRIZES);
+        console.log('🔄 Starting WheelOfFortune initialization...');
+        showLoadingWithMessage('🎰 جاري إعداد عجلة الحظ...');
+        try {
+            wheel = new WheelOfFortune('wheel-canvas', CONFIG.WHEEL_PRIZES);
+            console.log('✅ WheelOfFortune initialized');
+        } catch (error) {
+            console.error('❌ WheelOfFortune error:', error);
+        }
         
         // تحميل البيانات الأولية
-        await loadInitialData();
+        console.log('🔄 Starting loadInitialData...');
+        showLoadingWithMessage('📈 جاري تحميل البيانات المتبقية...');
+        await Promise.race([
+            loadInitialData(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('loadInitialData timeout')), 15000))
+        ]);
+        console.log('✅ loadInitialData completed');
+        showLoadingWithMessage('✅ انتهى التحميل... جاري فتح الموقع!');
         
         // التحقق من معاملات URL للتنقل
         const urlParams = new URLSearchParams(window.location.search);
@@ -263,9 +322,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         // إخفاء Loading وإظهار المحتوى
-        clearTimeout(timeoutId);
-        showLoading(false);
-        document.body.classList.remove('loading');
+        console.log('✅ All initialization completed - showing app!');
+        setTimeout(() => {
+            clearTimeout(timeoutId);
+            showLoading(false);
+            document.body.classList.remove('loading');
+            
+            // إظهار رسالة نجاح قصيرة
+            showToast('✅ مرحباً بك! تم فتح التطبيق بنجاح', 'success');
+        }, 1000);
         
         console.log('✅ App Initialized Successfully');
         
@@ -460,14 +525,26 @@ async function loadUserData() {
             console.warn('⚠️ Could not update profile:', profileError);
         }
         
-        const response = await API.getUserData(userId);
+        console.log('🔄 Fetching user data from API...');
+        const response = await Promise.race([
+            API.getUserData(userId),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('getUserData API timeout')), 12000))
+        ]);
+        console.log('📦 API Response:', response);
         
         if (response.success) {
+            console.log('✅ User data loaded successfully');
             UserState.init(response.data);
+            
+            console.log('🔄 Updating user profile...');
             updateUserProfile();
+            
+            console.log('🔄 Updating UI...');
             updateUI();
+            
+            console.log('✅ User state and UI updated');
         } else {
-            throw new Error('فشل تحميل بيانات المستخدم');
+            throw new Error('فشل تحميل بيانات المستخدم: ' + (response.error || 'Unknown error'));
         }
     } catch (error) {
         console.error('Error loading user data:', error);
@@ -526,13 +603,36 @@ function updateUI() {
 // ═══════════════════════════════════════════════════════════════
 
 async function loadInitialData() {
-    // Channels already verified in main init
-    await Promise.all([
-        loadSpinHistory(),
-        loadReferrals(),
-        loadTasks(),
-        loadWithdrawals()
-    ]);
+    console.log('🔄 Loading initial data modules...');
+    
+    try {
+        // Channels already verified in main init
+        await Promise.race([
+            Promise.allSettled([
+                loadSpinHistory().catch(e => {
+                    console.warn('⚠️ loadSpinHistory failed:', e);
+                    return null;
+                }),
+                loadReferrals().catch(e => {
+                    console.warn('⚠️ loadReferrals failed:', e);
+                    return null;
+                }),
+                loadTasks().catch(e => {
+                    console.warn('⚠️ loadTasks failed:', e);
+                    return null;
+                }),
+                loadWithdrawals().catch(e => {
+                    console.warn('⚠️ loadWithdrawals failed:', e);
+                    return null;
+                })
+            ]),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('loadInitialData timeout')), 12000))
+        ]);
+        console.log('✅ Initial data loading completed (some may have failed, but continuing)');
+    } catch (error) {
+        console.error('⚠️ loadInitialData timeout (continuing anyway):', error);
+        // لا نوقف التطبيق، نكمل عادي
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
