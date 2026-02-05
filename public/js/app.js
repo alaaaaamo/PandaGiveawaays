@@ -24,12 +24,9 @@ function showLoadingWithMessage(message) {
 // ═══════════════════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🐼 Panda Giveaways Starting...');
-    
     // إضافة timeout للتحميل لمنع التحميل اللا نهائي
     const LOADING_TIMEOUT = 60000; // 60 ثانية
     const timeoutId = setTimeout(() => {
-        console.error('⏰ Loading timeout reached');
         showLoading(false);
         document.body.innerHTML = `
             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; 
@@ -65,14 +62,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const userId = TelegramApp.getUserId();
         const isValidTelegram = TelegramApp.isValidTelegram();
         
-        console.log('🔍 Telegram validation check:');
-        console.log('- userId:', userId);
-        console.log('- isValidTelegram:', isValidTelegram);
-        console.log('- isTelegram:', TelegramApp.isTelegram);
-        
         // إذا لم يتم فتح الصفحة من تليجرام أصلاً أو لا توجد بيانات مستخدم صحيحة
         if (!isValidTelegram) {
-            console.log('❌ Not a valid Telegram session - showing redirect screen');
             document.body.innerHTML = `
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; 
                     min-height: 100vh; background: #0d1117; padding: 20px; text-align: center;">
@@ -153,7 +144,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     return;
                 }
             } catch (statusError) {
-                console.warn('⚠️ Could not check bot status:', statusError);
                 // في حالة الخطأ، نستمر عادياً
             }
         }
@@ -233,7 +223,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     return;
                 }
             } catch (verifyError) {
-                console.warn('⚠️ Could not check verification status:', verifyError);
                 // في حالة الخطأ، نستمر عادياً
             }
         }
@@ -246,22 +235,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         savePendingReferral();
         
         // Check required channels FIRST before loading anything
-        console.log('🔄 Starting checkRequiredChannels...');
         showLoadingWithMessage('📺 جاري التحقق من اشتراكك في القنوات...');
         
         let channelsVerified = false;
         try {
             // Use the proper channels check module
             if (typeof ChannelsCheck !== 'undefined') {
-                console.log('✅ Using ChannelsCheck module');
                 await ChannelsCheck.loadChannels();
                 channelsVerified = await ChannelsCheck.verifySubscription();
             } else {
-                console.warn('⚠️ ChannelsCheck module not available, using fallback');
                 channelsVerified = await checkRequiredChannels();
             }
         } catch (error) {
-            console.error('❌ Channels check error:', error);
             // في حالة الخطأ، نسمح للمستخدم بالمتابعة
             channelsVerified = true;
         }
@@ -1353,6 +1338,9 @@ window.continueAppInitialization = async function() {
         // إخفاء Loading وإظهار المحتوى
         console.log('✅ All initialization completed - showing app!');
         setTimeout(() => {
+            if (window.globalTimeoutId) {
+                clearTimeout(window.globalTimeoutId);
+            }
             showLoading(false);
             document.body.classList.remove('loading');
             
@@ -1364,6 +1352,9 @@ window.continueAppInitialization = async function() {
         
     } catch (error) {
         console.error('❌ Error in continueAppInitialization:', error);
+        if (window.globalTimeoutId) {
+            clearTimeout(window.globalTimeoutId);
+        }
         showLoading(false);
         showToast('حدث خطأ في استكمال التحميل', 'error');
     }

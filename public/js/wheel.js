@@ -5,11 +5,30 @@
 class WheelOfFortune {
     constructor(canvasId, prizes) {
         this.canvas = document.getElementById(canvasId);
+        if (!this.canvas) {
+            this.showError('❌ عجلة الحظ غير متاحة');
+            return;
+        }
+        
         this.ctx = this.canvas.getContext('2d');
+        if (!this.ctx) {
+            this.showError('❌ لا يمكن رسم العجلة');
+            return;
+        }
+        
+        if (!prizes || prizes.length === 0) {
+            this.showError('❌ لا توجد جوائز للعجلة');
+            return;
+        }
+        
         this.prizes = prizes;
         this.rotation = 0;
         this.isSpinning = false;
         this.spinButton = document.getElementById('spin-button');
+        
+        if (!this.spinButton) {
+            this.showError('⚠️ زر اللف غير متاح');
+        }
         
         // 🎨 إصلاح البكسلة - High DPI Support
         this.setupHighDPI();
@@ -24,38 +43,75 @@ class WheelOfFortune {
         this.draw();
         
         // إضافة مستمع للنقر
-        this.spinButton.addEventListener('click', () => this.spin());
+        if (this.spinButton) {
+            this.spinButton.addEventListener('click', () => this.spin());
+        }
+        
+        this.showSuccess('✅ تم تحميل عجلة الحظ بنجاح');
     }
     
     // ═══════════════════════════════════════════════════════════
+    // 📱 VISUAL ERROR HANDLING
+    // ═══════════════════════════════════════════════════════
+    
+    showError(message) {
+        if (typeof showToast !== 'undefined') {
+            showToast(message, 'error');
+        } else {
+            // Fallback - عرض على العجلة مباشرة
+            const wheelContainer = document.querySelector('.wheel-container');
+            if (wheelContainer) {
+                wheelContainer.innerHTML = `
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; 
+                        height: 300px; background: #1a1a1a; border-radius: 20px; padding: 20px; text-align: center;">
+                        <div style="font-size: 60px; margin-bottom: 20px;">😔</div>
+                        <h3 style="color: #ff4444; margin-bottom: 10px;">خطأ في عجلة الحظ</h3>
+                        <p style="color: #999; font-size: 14px;">${message}</p>
+                    </div>
+                `;
+            }
+        }
+    }
+    
+    showSuccess(message) {
+        if (typeof showToast !== 'undefined') {
+            showToast(message, 'success');
+        }
+    }
+    
+    
+    // ═══════════════════════════════════════════════════════
     // 🎨 HIGH DPI SUPPORT - إصلاح البكسلة
-    // ═══════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
     
     setupHighDPI() {
-        const dpr = window.devicePixelRatio || 1;
-        const rect = this.canvas.getBoundingClientRect();
-        
-        // حفظ الأبعاد الأصلية
-        const width = rect.width;
-        const height = rect.height;
-        
-        // تعيين حجم canvas الداخلي بناءً على DPI
-        this.canvas.width = width * dpr;
-        this.canvas.height = height * dpr;
-        
-        // تعيين حجم العرض CSS
-        this.canvas.style.width = width + 'px';
-        this.canvas.style.height = height + 'px';
-        
-        // تكبير السياق لمطابقة DPI
-        this.ctx.scale(dpr, dpr);
-        
-        // تحديث إعدادات العجلة بعد التكبير
-        this.centerX = width / 2;
-        this.centerY = height / 2;
-        this.radius = Math.min(this.centerX, this.centerY) - 10;
-        
-        console.log('🎨 High DPI setup:', { dpr, width, height });
+        try {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = this.canvas.getBoundingClientRect();
+            
+            // حفظ الأبعاد الأصلية
+            const width = rect.width;
+            const height = rect.height;
+            
+            // تعيين حجم canvas الداخلي بناءً على DPI
+            this.canvas.width = width * dpr;
+            this.canvas.height = height * dpr;
+            
+            // تعيين حجم العرض CSS
+            this.canvas.style.width = width + 'px';
+            this.canvas.style.height = height + 'px';
+            
+            // تكبير السياق لمطابقة DPI
+            this.ctx.scale(dpr, dpr);
+            
+            // تحديث إعدادات العجلة بعد التكبير
+            this.centerX = width / 2;
+            this.centerY = height / 2;
+            this.radius = Math.min(this.centerX, this.centerY) - 10;
+            
+        } catch (error) {
+            this.showError('❌ خطأ في إعداد العجلة');
+        }
     }
     
     // ═══════════════════════════════════════════════════════════
