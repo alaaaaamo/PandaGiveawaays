@@ -65,13 +65,72 @@ async function checkRequiredChannels() {
     }
 }
 
-// Show channels verification modal
-function showChannelsModal(channels) {
-    console.log('📱 Showing channels modal with', channels.length, 'channels');
-    
-    // لا تعرض المودال الديناميكي - استخدم المودال الموجود في index.html
-    console.log('✅ Using existing channels modal from index.html');
-    return;
+// Show channels verification modal and wait for completion
+async function showChannelsModalAndWait(allChannels, missingChannels) {
+    return new Promise((resolve) => {
+        console.log('📱 Showing channels modal for missing subscriptions');
+        
+        // Use the existing modal from index.html
+        const modal = document.getElementById('channels-modal');
+        const channelsList = document.getElementById('channels-list');
+        const verifyBtn = document.getElementById('verify-channels-btn');
+        
+        if (!modal || !channelsList || !verifyBtn) {
+            console.warn('⚠️ Channels modal elements not found in DOM');
+            resolve(false);
+            return;
+        }
+        
+        // Clear existing channels
+        channelsList.innerHTML = '';
+        
+        // Add missing channels to modal
+        missingChannels.forEach(channel => {
+            const channelEl = document.createElement('div');
+            channelEl.className = 'channel-item';
+            channelEl.innerHTML = `
+                <div class="channel-info">
+                    <span class="channel-icon">📺</span>
+                    <span class="channel-name">${channel.name || channel.channel_name || channel.id}</span>
+                </div>
+                <a href="${channel.url || `https://t.me/${channel.id.replace('@', '')}}`}" 
+                   target="_blank" class="channel-link">
+                    <img src="/img/links.png" alt="@" style="width: 16px; height: 16px;"> فتح
+                </a>
+            `;
+            channelsList.appendChild(channelEl);
+        });
+        
+        // Show modal
+        modal.style.display = 'flex';
+        
+        // Handle verify button
+        const handleVerify = async () => {
+            verifyBtn.disabled = true;
+            verifyBtn.innerHTML = '⏳ جاري التحقق...';
+            
+            // Re-check subscription
+            const recheckResult = await checkSubscriptionStatus();
+            
+            if (recheckResult) {
+                // Success - hide modal and continue
+                modal.style.display = 'none';
+                if (typeof showToast !== 'undefined') {
+                    showToast('✅ تم التحقق من الاشتراك بنجاح!', 'success');
+                }
+                resolve(true);
+            } else {
+                // Still not subscribed
+                verifyBtn.disabled = false;
+                verifyBtn.innerHTML = '<img src="/img/payment-success.svg" alt="تحقق" style="width: 18px; height: 18px; vertical-align: middle; margin-left: 4px;"> تحقق من الاشتراك';
+                if (typeof showToast !== 'undefined') {
+                    showToast('⚠️ يرجى الاشتراك في جميع القنوات أولاً', 'error');
+                }
+            }
+        };
+        
+        verifyBtn.onclick = handleVerify;
+    });
 }
 
 // Mark channel as opened when user clicks the link
@@ -93,41 +152,40 @@ window.markChannelAsOpened = function(channelId) {
     }
 };
 
-// Verify all channels subscriptions
-window.verifySubscriptions = function() {
-    console.log('🔍 Verifying subscriptions...');
-    console.log('Channel Status:', window.channelStatus);
-    
-    if (!window.channelStatus) {
-        console.error('❌ Channel status not found');
-        return;
+// Check subscription status with server
+async function checkSubscriptionStatus() {
+    try {
+        const userId = TelegramApp?.getUserId();
+        if (!userId) {
+            console.warn('⚠️ No user ID for subscription check');
+            return false;
+        }
+        
+        console.log('🔄 Re-checking subscription status...');
+        
+        const response = await fetch('/verify-subscription', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                user_id: userId
+            })
+        });
+        
+        const result = await response.json();
+        console.log('📊 Subscription recheck result:', result);
+        
+        if (result.success && result.verified) {
+            // Save verification status
+            localStorage.setItem(`channelsChecked_${userId}`, new Date().toISOString());
+            return true;
+        }
+        
+        return false;
+        
+    } catch (error) {
+        console.error('❌ Error checking subscription status:', error);
+        return false;
     }
-
-    // Check if user opened all channels
-    const allChannelsOpened = Object.values(window.channelStatus).every(status => status === true);
-
-    if (!allChannelsOpened) {
-        console.log('⚠️ Not all channels opened yet');
-        showToast('⚠️ يرجى فتح جميع القنوات أولاً!', 'warning');
-        return;
-    }
-
-    console.log('✅ All channels opened, marking as verified');
-    
-    // Mark as verified
-    localStorage.setItem('channelsChecked', new Date().toISOString());
-    
-    // Close modal
-    const modal = document.getElementById('channelsModal');
-    if (modal) {
-        modal.classList.remove('active');
-        setTimeout(() => modal.remove(), 300);
-    }
-
-    // Reload to show main content
-    showToast('<img src="/img/payment-success.svg" style="width: 16px; height: 16px; vertical-align: middle;"> تم التحقق بنجاح! مرحباً بك 🎉', 'success');
-    setTimeout(() => {
-        console.log('🔄 Reloading page...');
-        window.location.reload();
-    }, 1000);
-};
+}

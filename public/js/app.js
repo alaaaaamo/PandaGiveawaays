@@ -48,6 +48,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         `;
     }, LOADING_TIMEOUT);
     
+    // حفظ ID للاستخدام من خارج هذا السياق
+    window.globalTimeoutId = timeoutId;
+    
     try {
         // تهيئة Telegram Web App
         TelegramApp.init();
@@ -245,15 +248,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Check required channels FIRST before loading anything
         console.log('🔄 Starting checkRequiredChannels...');
         showLoadingWithMessage('📺 جاري التحقق من اشتراكك في القنوات...');
-        const channelsVerified = await Promise.race([
-            checkRequiredChannels(),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('checkRequiredChannels timeout')), 15000))
-        ]);
+        
+        let channelsVerified = false;
+        try {
+            // Use the proper channels check module
+            if (typeof ChannelsCheck !== 'undefined') {
+                console.log('✅ Using ChannelsCheck module');
+                await ChannelsCheck.loadChannels();
+                channelsVerified = await ChannelsCheck.verifySubscription();
+            } else {
+                console.warn('⚠️ ChannelsCheck module not available, using fallback');
+                channelsVerified = await checkRequiredChannels();
+            }
+        } catch (error) {
+            console.error('❌ Channels check error:', error);
+            // في حالة الخطأ، نسمح للمستخدم بالمتابعة
+            channelsVerified = true;
+        }
+        
         console.log('📋 Channels verification result:', channelsVerified);
         
         if (!channelsVerified) {
             // Hide loading - channels modal will be shown
             clearTimeout(timeoutId);
+            clearTimeout(window.globalTimeoutId);
             showLoading(false);
             console.log('⏸️ Waiting for channel verification...');
             return;
@@ -325,6 +343,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('✅ All initialization completed - showing app!');
         setTimeout(() => {
             clearTimeout(timeoutId);
+            clearTimeout(window.globalTimeoutId);
             showLoading(false);
             document.body.classList.remove('loading');
             
@@ -337,6 +356,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
         console.error('❌ App Initialization Error:', error);
         clearTimeout(timeoutId);
+        clearTimeout(window.globalTimeoutId);
         showLoading(false);
         // لا نزيل loading class في حالة الخطأ للحفاظ على إخفاء المحتوى الثابت
         showToast('حدث خطأ في تحميل التطبيق', 'error');
@@ -1251,3 +1271,100 @@ window.registerPendingReferral = registerPendingReferral;
 window.loadUserData = loadUserData;
 
 console.log('🐼 Panda Giveaways App Loaded');
+
+// ═══════════════════════════════════════════════════════════════
+// 🚀 CONTINUE APP INITIALIZATION AFTER CHANNELS CHECK
+// ═══════════════════════════════════════════════════════════════
+
+window.continueAppInitialization = async function() {
+    try {
+        console.log('🔄 Continuing app initialization after channels verification...');
+        
+        // إلغاء الـ timeout العام إذا كان موجود
+        if (window.globalTimeoutId) {
+            clearTimeout(window.globalTimeoutId);
+            console.log('✅ Cleared global timeout');
+        }
+        
+        // عرض Loading مع رسائل التحديث
+        showLoading(true);
+        showLoadingWithMessage('✅ تم التحقق من القنوات! جاري المتابعة...');
+
+        // بعد التحقق من القنوات، نسجل الإحالة
+        await registerPendingReferral();
+        
+        // تحميل بيانات المستخدم
+        console.log('🔄 Starting loadUserData...');
+        showLoadingWithMessage('📊 جاري تحميل بياناتك...');
+        await Promise.race([
+            loadUserData(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('loadUserData timeout')), 15000))
+        ]);
+        console.log('✅ loadUserData completed');
+        showLoadingWithMessage('✅ تم تحميل بياناتك!');
+        
+        // تحميل جوائز العجلة من API
+        console.log('🔄 Starting loadWheelPrizes...');
+        showLoadingWithMessage('🎁 جاري تحميل جوائز العجلة...');
+        await Promise.race([
+            loadWheelPrizes(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('loadWheelPrizes timeout')), 8000))
+        ]);
+        console.log('✅ loadWheelPrizes completed');
+        showLoadingWithMessage('✅ تم تحميل الجوائز!');
+        
+        // تهيئة UI
+        console.log('🔄 Starting initUI...');
+        showLoadingWithMessage('🎨 جاري إعداد الواجهة...');
+        try {
+            initUI();
+            console.log('✅ initUI completed');
+        } catch (error) {
+            console.error('❌ initUI error:', error);
+        }
+        
+        // تهيئة عجلة الحظ
+        console.log('🔄 Starting WheelOfFortune initialization...');
+        showLoadingWithMessage('🎰 جاري إعداد عجلة الحظ...');
+        try {
+            wheel = new WheelOfFortune('wheel-canvas', CONFIG.WHEEL_PRIZES);
+            console.log('✅ WheelOfFortune initialized');
+        } catch (error) {
+            console.error('❌ WheelOfFortune error:', error);
+        }
+        
+        // تحميل البيانات الأولية
+        console.log('🔄 Starting loadInitialData...');
+        showLoadingWithMessage('📈 جاري تحميل البيانات المتبقية...');
+        await Promise.race([
+            loadInitialData(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('loadInitialData timeout')), 15000))
+        ]);
+        console.log('✅ loadInitialData completed');
+        showLoadingWithMessage('✅ انتهى التحميل... جاري فتح الموقع!');
+        
+        // التحقق من معاملات URL للتنقل
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetPage = urlParams.get('page');
+        if (targetPage && ['wheel', 'tasks', 'withdraw'].includes(targetPage)) {
+            switchPage(targetPage);
+        }
+        
+        // إخفاء Loading وإظهار المحتوى
+        console.log('✅ All initialization completed - showing app!');
+        setTimeout(() => {
+            showLoading(false);
+            document.body.classList.remove('loading');
+            
+            // إظهار رسالة نجاح قصيرة
+            showToast('✅ مرحباً بك! تم فتح التطبيق بنجاح', 'success');
+        }, 1000);
+        
+        console.log('✅ App Initialized Successfully after channels check');
+        
+    } catch (error) {
+        console.error('❌ Error in continueAppInitialization:', error);
+        showLoading(false);
+        showToast('حدث خطأ في استكمال التحميل', 'error');
+    }
+};

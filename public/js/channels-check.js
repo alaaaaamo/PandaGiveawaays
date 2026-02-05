@@ -141,9 +141,14 @@ const ChannelsCheck = {
                 await registerPendingReferral();
             }
             
-            // إعادة تحميل بيانات المستخدم
-            if (typeof loadUserData !== 'undefined') {
-                await loadUserData();
+            // بدلاً من reload، استدعي استكمال تهيئة التطبيق مباشرة
+            console.log('✅ Channels verified, continuing app initialization...');
+            if (typeof continueAppInitialization !== 'undefined') {
+                await continueAppInitialization();
+            } else {
+                // Fallback - reload if function not available  
+                console.log('🔄 continueAppInitialization not found, reloading...');
+                setTimeout(() => window.location.reload(), 1000);
             }
         } else {
             btn.disabled = false;
