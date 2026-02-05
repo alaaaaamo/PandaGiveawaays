@@ -11,6 +11,25 @@ let wheel = null;
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🐼 Panda Giveaways Starting...');
     
+    // إضافة timeout للتحميل لمنع التحميل اللا نهائي
+    const LOADING_TIMEOUT = 30000; // 30 ثانية
+    const timeoutId = setTimeout(() => {
+        console.error('⏰ Loading timeout reached');
+        showLoading(false);
+        document.body.innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; 
+                min-height: 100vh; background: #0d1117; padding: 20px; text-align: center;">
+                <h2 style="color: #ff4444; margin: 20px 0;">⏰ انتهت مهلة التحميل</h2>
+                <p style="color: #8b95a1; font-size: 16px;">يرجى المحاولة مرة أخرى</p>
+                <button onclick="window.location.reload()" 
+                    style="padding: 12px 24px; background: #ffa500; color: #000; border: none; 
+                    border-radius: 8px; font-size: 16px; font-weight: bold; margin-top: 20px; cursor: pointer;">
+                    إعادة المحاولة
+                </button>
+            </div>
+        `;
+    }, LOADING_TIMEOUT);
+    
     try {
         // تهيئة Telegram Web App
         TelegramApp.init();
@@ -18,10 +37,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         // ═══════════════════════════════════════════════════════
         // 🔐 التحقق من فتح الصفحة من تليجرام أولاً
         // ═══════════════════════════════════════════════════════
-        const userId = TelegramApp.getUserId();
         
-        // إذا لم يتم فتح الصفحة من تليجرام، عرض رسالة فوراً
-        if (!userId || !window.Telegram?.WebApp) {
+        // انتظار قصير لضمان تحميل Telegram WebApp بشكل كامل
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        const userId = TelegramApp.getUserId();
+        const isValidTelegram = TelegramApp.isValidTelegram();
+        
+        console.log('🔍 Telegram validation check:');
+        console.log('- userId:', userId);
+        console.log('- isValidTelegram:', isValidTelegram);
+        console.log('- isTelegram:', TelegramApp.isTelegram);
+        
+        // إذا لم يتم فتح الصفحة من تليجرام أصلاً أو لا توجد بيانات مستخدم صحيحة
+        if (!isValidTelegram) {
+            console.log('❌ Not a valid Telegram session - showing redirect screen');
             document.body.innerHTML = `
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; 
                     min-height: 100vh; background: #0d1117; padding: 20px; text-align: center;">
@@ -52,6 +82,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             `;
             return;
         }
+        
+        console.log('✅ Valid Telegram session - proceeding with app initialization');
         
         // عرض Loading
         showLoading(true);
@@ -189,7 +221,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         savePendingReferral();
         
         // Check required channels FIRST before loading anything
+        console.log('🔄 Starting checkRequiredChannels...');
         const channelsVerified = await checkRequiredChannels();
+        console.log('📋 Channels verification result:', channelsVerified);
         
         if (!channelsVerified) {
             // Hide loading - channels modal will be shown
@@ -197,15 +231,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.log('⏸️ Waiting for channel verification...');
             return;
         }
+        console.log('✅ Channels verified - continuing...');
         
         // بعد التحقق من القنوات، نسجل الإحالة
         await registerPendingReferral();
         
         // تحميل بيانات المستخدم
+        console.log('🔄 Starting loadUserData...');
         await loadUserData();
+        console.log('✅ loadUserData completed');
         
         // تحميل جوائز العجلة من API
+        console.log('🔄 Starting loadWheelPrizes...');
         await loadWheelPrizes();
+        console.log('✅ loadWheelPrizes completed');
         
         // تهيئة UI
         initUI();
@@ -224,6 +263,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         // إخفاء Loading وإظهار المحتوى
+        clearTimeout(timeoutId);
         showLoading(false);
         document.body.classList.remove('loading');
         
@@ -231,6 +271,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
     } catch (error) {
         console.error('❌ App Initialization Error:', error);
+        clearTimeout(timeoutId);
         showLoading(false);
         // لا نزيل loading class في حالة الخطأ للحفاظ على إخفاء المحتوى الثابت
         showToast('حدث خطأ في تحميل التطبيق', 'error');
@@ -392,12 +433,12 @@ async function loadUserData() {
     try {
         let userId = TelegramApp.getUserId();
         
+        console.log('🔄 Loading user data for userId:', userId);
+        
         // إذا لم نجد user_id حقيقي، لا نستمر
         if (!userId) {
             throw new Error('لا يمكن التحميل بدون معرف مستخدم صحيح من تليجرام');
-        }
-        
-        console.log('Loading data for user:', userId);
+        };
         
         // تحديث بيانات المستخدم من Telegram أولاً
         try {

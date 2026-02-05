@@ -268,44 +268,66 @@ const TelegramApp = {
     isReady: false,
     webApp: null,
     user: null,
+    isTelegram: false,
     
     // تهيئة التطبيق
     init() {
+        console.log('🔄 Initializing TelegramApp...'); 
+        
+        // التحقق من وجود Telegram WebApp
         if (typeof Telegram === 'undefined' || !Telegram.WebApp) {
-            console.warn('Telegram WebApp not available');
-            // Development mode - استخدام بيانات تجريبية
-            this.user = {
-                id: 123456789,
-                first_name: 'Test',
-                last_name: 'User',
-                username: 'testuser',
-                photo_url: 'https://via.placeholder.com/100'
-            };
+            console.warn('❌ Telegram WebApp not available - not running inside Telegram');
+            this.isTelegram = false;
             this.isReady = true;
             return;
         }
         
+        console.log('✅ Telegram WebApp detected');
+        this.isTelegram = true;
         this.webApp = Telegram.WebApp;
-        this.webApp.ready();
-        this.webApp.expand();
         
-        // تخصيص الألوان
-        this.webApp.setHeaderColor('#0d1117');
-        this.webApp.setBackgroundColor('#0d1117');
-        
-        // الحصول على بيانات المستخدم
-        this.user = this.webApp.initDataUnsafe?.user || null;
-        this.isReady = true;
-        
-        // إعداد زر الرجوع
-        this.webApp.BackButton.onClick(() => {
-            window.history.back();
-        });
+        try {
+            this.webApp.ready();
+            this.webApp.expand();
+            
+            // تخصيص الألوان
+            this.webApp.setHeaderColor('#0d1117');
+            this.webApp.setBackgroundColor('#0d1117');
+            
+            // الحصول على بيانات المستخدم
+            console.log('🔍 Checking initDataUnsafe:', this.webApp.initDataUnsafe);
+            
+            if (this.webApp.initDataUnsafe && this.webApp.initDataUnsafe.user) {
+                this.user = this.webApp.initDataUnsafe.user;
+                console.log('✅ User data found:', this.user);
+            } else {
+                console.warn('⚠️ No user data in initDataUnsafe');
+                this.user = null;
+            }
+            
+            this.isReady = true;
+            
+            // إعداد زر الرجوع
+            this.webApp.BackButton.onClick(() => {
+                window.history.back();
+            });
+            
+        } catch (error) {
+            console.error('❌ Error initializing Telegram WebApp:', error);
+            this.isReady = true;
+        }
     },
     
     // الحصول على معرف المستخدم
     getUserId() {
-        return this.user?.id || null;
+        const userId = this.user?.id || null;
+        console.log('🆔 getUserId() returning:', userId);
+        return userId;
+    },
+    
+    // التحقق من صحة التشغيل
+    isValidTelegram() {
+        return this.isTelegram && this.user && this.user.id;
     },
     
     // الحصول على الاسم الكامل
