@@ -15,13 +15,50 @@ document.addEventListener('DOMContentLoaded', async () => {
         // تهيئة Telegram Web App
         TelegramApp.init();
         
+        // ═══════════════════════════════════════════════════════
+        // 🔐 التحقق من فتح الصفحة من تليجرام أولاً
+        // ═══════════════════════════════════════════════════════
+        const userId = TelegramApp.getUserId();
+        
+        // إذا لم يتم فتح الصفحة من تليجرام، عرض رسالة فوراً
+        if (!userId || !window.Telegram?.WebApp) {
+            document.body.innerHTML = `
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; 
+                    min-height: 100vh; background: #0d1117; padding: 20px; text-align: center;">
+                    <lottie-player src="/img/notallowed.json" 
+                        background="transparent" speed="1" 
+                        style="width: 200px; height: 200px;" 
+                        loop autoplay>
+                    </lottie-player>
+                    <img src="/img/payment-failure.svg" alt="X" 
+                        style="width: 60px; height: 60px; margin: 20px 0;">
+                    <h2 style="color: #ff4444; margin: 20px 0; font-size: 24px; font-weight: bold;">
+                        🚫 يجب فتح الصفحة من تليجرام
+                    </h2>
+                    <p style="color: #8b95a1; font-size: 16px; line-height: 1.6; max-width: 400px; margin-bottom: 30px;">
+                        هذا التطبيق يعمل داخل تليجرام فقط. يرجى فتحه من خلال البوت.
+                    </p>
+                    <a href="https://t.me/${window.CONFIG?.BOT_USERNAME || 'PandaGiveawaysBot'}" 
+                        style="display: inline-flex; align-items: center; gap: 10px; margin-top: 20px; padding: 16px 40px; 
+                        background: linear-gradient(135deg, #ffa500, #ff8c00); color: #000; 
+                        text-decoration: none; border-radius: 12px; font-weight: bold; 
+                        font-size: 18px; box-shadow: 0 4px 15px rgba(255, 165, 0, 0.3); 
+                        transition: transform 0.2s;" 
+                        onmouseover="this.style.transform='scale(1.05)'" 
+                        onmouseout="this.style.transform='scale(1)'">
+                        🚀 فتح البوت
+                    </a>
+                </div>
+            `;
+            return;
+        }
+        
         // عرض Loading
         showLoading(true);
         
         // ═══════════════════════════════════════════════════════
         // � التحقق من حالة البوت أولاً
         // ═══════════════════════════════════════════════════════
-        const userId = TelegramApp.getUserId();
         const isAdmin = CONFIG.ADMIN_IDS && CONFIG.ADMIN_IDS.includes(userId);
         
         if (!isAdmin) {
@@ -186,14 +223,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             switchPage(targetPage);
         }
         
-        // إخفاء Loading
+        // إخفاء Loading وإظهار المحتوى
         showLoading(false);
+        document.body.classList.remove('loading');
         
         console.log('✅ App Initialized Successfully');
         
     } catch (error) {
         console.error('❌ App Initialization Error:', error);
         showLoading(false);
+        // لا نزيل loading class في حالة الخطأ للحفاظ على إخفاء المحتوى الثابت
         showToast('حدث خطأ في تحميل التطبيق', 'error');
     }
 });
@@ -353,16 +392,9 @@ async function loadUserData() {
     try {
         let userId = TelegramApp.getUserId();
         
-        // إذا كان getUserId يرجع null، حاول الحصول عليه من URL
+        // إذا لم نجد user_id حقيقي، لا نستمر
         if (!userId) {
-            const urlParams = new URLSearchParams(window.location.search);
-            userId = urlParams.get('user_id');
-        }
-        
-        // إذا لم نجد user_id، استخدم قيمة تجريبية
-        if (!userId) {
-            console.warn('No user ID found, using test ID');
-            userId = 123456789; // Test user
+            throw new Error('لا يمكن التحميل بدون معرف مستخدم صحيح من تليجرام');
         }
         
         console.log('Loading data for user:', userId);
@@ -408,9 +440,22 @@ function updateUserProfile() {
     const name = document.getElementById('user-name');
     const username = document.getElementById('user-username');
     
-    avatar.src = TelegramApp.getPhotoUrl();
-    name.textContent = TelegramApp.getFullName();
-    username.textContent = `@${TelegramApp.getUsername()}`;
+    // التحقق من وجود البيانات الحقيقية من تليجرام
+    const userPhoto = TelegramApp.getPhotoUrl();
+    const fullName = TelegramApp.getFullName();
+    const telegramUsername = TelegramApp.getUsername();
+    
+    if (avatar && userPhoto) {
+        avatar.src = userPhoto;
+    }
+    
+    if (name && fullName) {
+        name.textContent = fullName;
+    }
+    
+    if (username && telegramUsername) {
+        username.textContent = `@${telegramUsername}`;
+    }
 }
 
 function updateUI() {
