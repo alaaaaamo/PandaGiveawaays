@@ -50,6 +50,18 @@ footer {margin-top:30px;text-align:center;font-size:.7rem;opacity:.55;}
     <footer>جميع البيانات تُستخدم لحماية المستخدمين من التلاعب.</footer>
   </div>
 <script>
+// إعدادات الـ API
+const API_CONFIG = {
+  BASE_URL: 'https://pandagiveawaays.onrender.com',
+  getApiUrl: function() {
+    // استخدم دائماً الـ full URL للتواصل مع السيرفر
+    return this.BASE_URL;
+  }
+};
+
+console.log('🌐 Frontend URL:', window.location.href);
+console.log('🔗 API Server URL:', API_CONFIG.BASE_URL);
+
 (function initTelegram(){
   if(window.Telegram && Telegram.WebApp){
     try { Telegram.WebApp.ready(); Telegram.WebApp.expand(); } catch(e) {}
@@ -112,6 +124,7 @@ function getReferrerIdFromUrl(){
   async function digest(str){ const buf=new TextEncoder().encode(str); const h=await crypto.subtle.digest('SHA-256',buf); return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,'0')).join('').slice(0,32); }
 
   async function build(){
+    console.log('🔍 Starting fingerprint build...');
     const ua=navigator.userAgent; 
     const rez=screen.width+'x'+screen.height; 
     const tz=Intl.DateTimeFormat().resolvedOptions().timeZone || 'NA'; 
@@ -120,6 +133,7 @@ function getReferrerIdFromUrl(){
     const afp=await audioFP();
     const raw = ua+'|'+rez+'|'+tz+'|'+lid+'|'+cfp+'|'+afp; 
     const final = await digest(raw);
+    console.log('✅ Fingerprint generated:', final.substring(0, 16) + '...');
     
     // الحصول على IP address (بدون عرضه)
     let userIP = 'Unknown';
@@ -127,6 +141,7 @@ function getReferrerIdFromUrl(){
       const ipResp = await fetch('https://api.ipify.org?format=json');
       const ipData = await ipResp.json();
       userIP = ipData.ip || 'Unknown';
+      console.log('📍 IP Address detected');
     } catch(e) {
       console.error('Failed to get IP:', e);
     }
@@ -163,11 +178,25 @@ function getReferrerIdFromUrl(){
           status.textContent='📡 جارٍ التحقق من الجهاز...';
           status.className='status pending';
           
-          const resp = await fetch('/api/fingerprint', {
+          // بناء الـ URL الكامل للـ API
+          const apiUrl = `${API_CONFIG.getApiUrl()}/api/fingerprint`;
+          console.log('🔗 Sending request to:', apiUrl);
+          console.log('📦 Payload:', {
+            user_id: uid,
+            fp_token: fpToken?.substring(0, 10) + '...',
+            fingerprint: final?.substring(0, 16) + '...'
+          });
+          
+          const resp = await fetch(apiUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
             body: JSON.stringify(payload)
           });
+          
+          console.log('📨 Response status:', resp.status, resp.statusText);
           
           if(resp.ok){
             const result = await resp.json();
@@ -207,9 +236,11 @@ function getReferrerIdFromUrl(){
             }
           } else {
             // معالجة الأخطاء من الخادم (403, 400, etc)
+            console.error('❌ Server error:', resp.status, resp.statusText);
             let errorMessage = 'خطأ في الاتصال بالخادم';
             try {
               const errorData = await resp.json();
+              console.error('📋 Error details:', errorData);
               errorMessage = errorData.error || errorData.message || errorMessage;
             } catch(e) {
               errorMessage = `خطأ ${resp.status}: ${resp.statusText}`;
@@ -231,7 +262,12 @@ function getReferrerIdFromUrl(){
             status.className='status err';
           }
         } catch(err){ 
-          console.error('Direct server request failed:', err);
+          console.error('💥 Network/Fetch error:', err);
+          console.error('Error details:', {
+            name: err.name,
+            message: err.message,
+            stack: err.stack
+          });
           
           // عرض notallowed animation
           animationPlayer.load('/img/notallowed.json');

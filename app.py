@@ -141,11 +141,21 @@ def send_withdrawal_notification_to_admin(user_id, username, full_name, amount, 
 
 app = Flask(__name__)  # إزالة static_folder لأن الملفات ستكون في Vercel
 # إعداد CORS للسماح بالوصول من Vercel
-CORS(app, origins=[
-    'https://panda-giveawaays.vercel.app',
-    'http://localhost:3000',
-    'http://127.0.0.1:5000'
-])  # السماح بـ CORS من المواقع المحددة
+CORS(app, 
+    resources={
+        r"/api/*": {
+            "origins": [
+                'https://panda-giveawaays.vercel.app',
+                'http://localhost:3000',
+                'http://127.0.0.1:5000',
+                'http://localhost:5000'
+            ],
+            "methods": ["GET", "POST", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Accept", "Authorization"],
+            "supports_credentials": False
+        }
+    }
+)  # السماح بـ CORS من المواقع المحددة
 
 # ═══════════════════════════════════════════════════════════════
 # 🤖 BOT STARTUP IN BACKGROUND
@@ -1613,15 +1623,30 @@ def verify_all_channels():
 # 🔐 DEVICE VERIFICATION ENDPOINTS
 # ═══════════════════════════════════════════════════════════════
 
-@app.route('/api/fingerprint', methods=['POST'])
+@app.route('/api/fingerprint', methods=['POST', 'OPTIONS'])
 def submit_fingerprint():
     """استقبال وحفظ بصمة الجهاز من صفحة التحقق"""
+    # معالجة preflight request
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Accept')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        return response, 200
+    
     try:
         data = request.get_json()
         user_id = data.get('user_id')
         fp_token = data.get('fp_token')
         fingerprint = data.get('fingerprint')
         meta = data.get('meta', {})
+        
+        # Logging للطلب
+        print(f"📥 Fingerprint request received:")
+        print(f"   User ID: {user_id}")
+        print(f"   Token: {fp_token}")
+        print(f"   Fingerprint: {fingerprint[:16] if fingerprint else 'None'}...")
+        print(f"   Origin: {request.headers.get('Origin', 'Unknown')}")
         
         if not all([user_id, fp_token, fingerprint]):
             return jsonify({
