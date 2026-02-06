@@ -33,6 +33,12 @@ class WheelOfFortune {
         // 🎨 إصلاح البكسلة - High DPI Support
         this.setupHighDPI();
         
+        // التحقق من نجح إعداد الأبعاد
+        if (!this.centerX || !this.centerY || !this.radius || this.radius <= 0) {
+            this.showError('❌ فشل في إعداد أبعاد العجلة');
+            return;
+        }
+        
         // Sound effects
         this.sounds = {
             spin: null, // يمكن إضافة صوت لاحقاً
@@ -40,7 +46,12 @@ class WheelOfFortune {
         };
         
         // رسم العجلة الأولية
-        this.draw();
+        try {
+            this.draw();
+        } catch (drawError) {
+            this.showError('❌ خطأ في رسم العجلة: ' + drawError.message);
+            return;
+        }
         
         // إضافة مستمع للنقر
         if (this.spinButton) {
@@ -93,6 +104,12 @@ class WheelOfFortune {
             const width = rect.width;
             const height = rect.height;
             
+            // التحقق من صحة الأبعاد
+            if (!width || !height || width < 50 || height < 50) {
+                this.showError('❌ أبعاد العجلة صغيرة جداً');
+                return;
+            }
+            
             // تعيين حجم canvas الداخلي بناءً على DPI
             this.canvas.width = width * dpr;
             this.canvas.height = height * dpr;
@@ -104,13 +121,22 @@ class WheelOfFortune {
             // تكبير السياق لمطابقة DPI
             this.ctx.scale(dpr, dpr);
             
-            // تحديث إعدادات العجلة بعد التكبير
+            // تحديث إعدادات العجلة بعد التكبير مع حماية من القيم السالبة
             this.centerX = width / 2;
             this.centerY = height / 2;
-            this.radius = Math.min(this.centerX, this.centerY) - 10;
+            const calculatedRadius = Math.min(this.centerX, this.centerY) - 10;
+            
+            // التأكد من أن نصف القطر موجب دائماً
+            this.radius = Math.max(calculatedRadius, 30); // الحد الأدنى 30px
+            
+            // التحقق النهائي من صحة القيم
+            if (this.radius <= 0 || !this.centerX || !this.centerY) {
+                this.showError('❌ لا يمكن حساب أبعاد العجلة');
+                return;
+            }
             
         } catch (error) {
-            this.showError('❌ خطأ في إعداد العجلة');
+            this.showError('❌ خطأ في إعداد العجلة: ' + error.message);
         }
     }
     
@@ -126,7 +152,7 @@ class WheelOfFortune {
                 this.sounds[type].currentTime = 0;
                 this.sounds[type].play();
             } catch (e) {
-                console.log('Sound play failed:', e);
+                // Sound play failed silently
             }
         }
     }
@@ -137,6 +163,17 @@ class WheelOfFortune {
     
     draw() {
         const { ctx, centerX, centerY, radius, prizes, rotation } = this;
+        
+        // التحقق من صحة البيانات قبل الرسم
+        if (!ctx || !centerX || !centerY || !radius || radius <= 0) {
+            this.showError('❌ بيانات العجلة غير صالحة للرسم');
+            return;
+        }
+        
+        if (!prizes || prizes.length === 0) {
+            this.showError('❌ لا توجد جوائز للعرض');
+            return;
+        }
         
         // مسح الـ canvas
         const canvasWidth = this.canvas.width / (window.devicePixelRatio || 1);
@@ -158,95 +195,112 @@ class WheelOfFortune {
         
         // رسم القطاعات بـ Gradients
         prizes.forEach((prize, index) => {
-            const startAngle = rotation + (index * anglePerSegment);
-            const endAngle = startAngle + anglePerSegment;
-            
-            // حساب نقاط الـ gradient
-            const gradStartX = centerX + Math.cos(startAngle) * radius * 0.3;
-            const gradStartY = centerY + Math.sin(startAngle) * radius * 0.3;
-            const gradEndX = centerX + Math.cos(endAngle) * radius * 0.9;
-            const gradEndY = centerY + Math.sin(endAngle) * radius * 0.9;
-            
-            // إنشاء gradient لكل قطاع
-            const gradient = ctx.createLinearGradient(gradStartX, gradStartY, gradEndX, gradEndY);
-            const colorPair = oilColors[index % oilColors.length];
-            gradient.addColorStop(0, colorPair.start);
-            gradient.addColorStop(1, colorPair.end);
-            
-            // رسم القطاع
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, radius, startAngle, endAngle);
-            ctx.lineTo(centerX, centerY);
-            ctx.fillStyle = gradient;
-            ctx.fill();
-            
-            // إضافة حدود ناعمة
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 2;
-            ctx.globalAlpha = 0.3;
-            ctx.stroke();
-            ctx.globalAlpha = 1;
-            
-            // رسم النص بخط محسن
-            ctx.save();
-            ctx.translate(centerX, centerY);
-            ctx.rotate(startAngle + anglePerSegment / 2);
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            
-            // ظل النص
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-            ctx.shadowBlur = 6;
-            ctx.shadowOffsetX = 0;
-            ctx.shadowOffsetY = 2;
-            
-            // النص نفسه
-            ctx.fillStyle = '#F2F2F2';
-            ctx.font = '600 16px Inter, system-ui, sans-serif';
-            ctx.fillText(prize.name, radius * 0.65, 0);
-            ctx.restore();
+            try {
+                const startAngle = rotation + (index * anglePerSegment);
+                const endAngle = startAngle + anglePerSegment;
+                
+                // حساب نقاط الـ gradient
+                const gradStartX = centerX + Math.cos(startAngle) * radius * 0.3;
+                const gradStartY = centerY + Math.sin(startAngle) * radius * 0.3;
+                const gradEndX = centerX + Math.cos(endAngle) * radius * 0.9;
+                const gradEndY = centerY + Math.sin(endAngle) * radius * 0.9;
+                
+                // إنشاء gradient لكل قطاع
+                const gradient = ctx.createLinearGradient(gradStartX, gradStartY, gradEndX, gradEndY);
+                const colorPair = oilColors[index % oilColors.length];
+                gradient.addColorStop(0, colorPair.start);
+                gradient.addColorStop(1, colorPair.end);
+                
+                // رسم القطاع مع حماية إضافية
+                ctx.beginPath();
+                if (radius > 0 && centerX > 0 && centerY > 0) {
+                    ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+                    ctx.lineTo(centerX, centerY);
+                    ctx.fillStyle = gradient;
+                    ctx.fill();
+                    
+                    // إضافة حدود ناعمة
+                    ctx.strokeStyle = '#000000';
+                    ctx.lineWidth = 2;
+                    ctx.globalAlpha = 0.3;
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+                }
+                
+                // رسم النص بخط محسن
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                ctx.rotate(startAngle + anglePerSegment / 2);
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                // ظل النص
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+                ctx.shadowBlur = 6;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 2;
+                
+                // النص نفسه
+                ctx.fillStyle = '#F2F2F2';
+                ctx.font = '600 16px Inter, system-ui, sans-serif';
+                ctx.fillText(prize.name, radius * 0.65, 0);
+                ctx.restore();
+                
+            } catch (segmentError) {
+                // تسجيل الخطأ بصمت ومتابعة رسم باقي القطاعات
+                if (typeof showToast !== 'undefined') {
+                    showToast('⚠️ خطأ في رسم جزء من العجلة', 'warning');
+                }
+            }
         });
         
         // 🌟 رسم الإطار الذهبي الناعم
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-        ctx.strokeStyle = '#C9A24D';
-        ctx.lineWidth = 6;
-        ctx.shadowColor = 'rgba(201, 162, 77, 0.6)';
-        ctx.shadowBlur = 12;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
-        ctx.stroke();
-        
-        // إطار داخلي إضافي
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius - 3, 0, 2 * Math.PI);
-        ctx.strokeStyle = '#E5C76A';
-        ctx.lineWidth = 2;
-        ctx.shadowBlur = 6;
-        ctx.stroke();
-        
-        // 🎯 رسم الدائرة الداخلية (للزر) مع gradient
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-        ctx.shadowBlur = 15;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 3;
-        
-        const innerGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 50);
-        innerGradient.addColorStop(0, '#1a1f2e');
-        innerGradient.addColorStop(1, '#0d1117');
-        
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, 50, 0, 2 * Math.PI);
-        ctx.fillStyle = innerGradient;
-        ctx.fill();
-        
-        // إطار ذهبي للدائرة الداخلية
-        ctx.strokeStyle = '#C9A24D';
-        ctx.lineWidth = 3;
-        ctx.shadowBlur = 8;
-        ctx.shadowColor = 'rgba(201, 162, 77, 0.5)';
-        ctx.stroke();
+        try {
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+            ctx.strokeStyle = '#C9A24D';
+            ctx.lineWidth = 6;
+            ctx.shadowColor = 'rgba(201, 162, 77, 0.6)';
+            ctx.shadowBlur = 12;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+            ctx.stroke();
+            
+            // إطار داخلي إضافي
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius - 3, 0, 2 * Math.PI);
+            ctx.strokeStyle = '#E5C76A';
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 6;
+            ctx.stroke();
+            
+            // 🎯 رسم الدائرة الداخلية (للزر) مع gradient
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+            ctx.shadowBlur = 15;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 3;
+            
+            const innerGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 50);
+            innerGradient.addColorStop(0, '#1a1f2e');
+            innerGradient.addColorStop(1, '#0d1117');
+            
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 50, 0, 2 * Math.PI);
+            ctx.fillStyle = innerGradient;
+            ctx.fill();
+            
+            // إطار ذهبي للدائرة الداخلية
+            ctx.strokeStyle = '#C9A24D';
+            ctx.lineWidth = 3;
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = 'rgba(201, 162, 77, 0.5)';
+            ctx.stroke();
+        } catch (borderError) {
+            // في حالة خطأ الحدود، لا نفعل شيء (العجلة ستكون بدون حدود فقط)
+            if (typeof showToast !== 'undefined') {
+                showToast('⚠️ خطأ في رسم حدود العجلة', 'warning');
+            }
+        }
     }
     
     // ═══════════════════════════════════════════════════════════
@@ -282,7 +336,7 @@ class WheelOfFortune {
         
         try {
             // طلب اللف من السيرفر أولاً
-            console.log('🎲 Requesting spin from server...');
+            // Requesting spin from server...
             const response = await API.spinWheel(TelegramApp.getUserId());
             
             if (!response.success) {
@@ -290,7 +344,7 @@ class WheelOfFortune {
             }
             
             const { prize, new_balance, new_spins } = response.data;
-            console.log('🎁 Server response:', prize);
+            showToast('🎁 استلام نتيجة اللفة من الخادم', 'info');
             
             // إخفاء Loading
             showLoading(false);
@@ -315,12 +369,7 @@ class WheelOfFortune {
                 throw new Error('الجائزة غير موجودة في العجلة');
             }
             
-            console.log('🎯 Prize matched:', {
-                serverPrize: prize,
-                wheelPrize: this.prizes[prizeIndex],
-                prizeIndex,
-                allPrizes: this.prizes.map((p, i) => ({ index: i, name: p.name, amount: p.amount }))
-            });
+            // Prize matched successfully - server response processed
             
             const anglePerSegment = (2 * Math.PI) / this.prizes.length;
             
@@ -361,22 +410,7 @@ class WheelOfFortune {
             const extraRotations = 5 + Math.floor(Math.random() * 3);
             const totalRotation = (extraRotations * 2 * Math.PI) + angleDiff;
             
-            console.log('🎲 Spin calculation:', {
-                prizeName: prize.name,
-                prizeAmount: prize.amount,
-                prizeIndex,
-                totalPrizes: this.prizes.length,
-                anglePerSegment: (anglePerSegment * 180 / Math.PI).toFixed(2) + '°',
-                prizeStartAngle: (prizeStartAngle * 180 / Math.PI).toFixed(2) + '°',
-                prizeCenterAngle: (prizeCenterAngle * 180 / Math.PI).toFixed(2) + '°',
-                pointerAngle: (pointerAngle * 180 / Math.PI).toFixed(2) + '°',
-                currentRotation: (currentRotation * 180 / Math.PI).toFixed(2) + '°',
-                targetAngle: (targetAngle * 180 / Math.PI).toFixed(2) + '°',
-                angleDiff: (angleDiff * 180 / Math.PI).toFixed(2) + '°',
-                extraRotations,
-                totalRotation: (totalRotation * 180 / Math.PI).toFixed(2) + '°',
-                finalRotation: ((currentRotation + totalRotation) * 180 / Math.PI).toFixed(2) + '°'
-            });
+            // Spin calculation completed successfully
             
             // تدوير العجلة
             await this.animateSpin(totalRotation);
@@ -461,12 +495,7 @@ class WheelOfFortune {
                     const stoppedIndex = Math.floor(adjustedAngle / anglePerSegment);
                     const stoppedPrize = this.prizes[stoppedIndex];
                     
-                    console.log('🎯 Wheel stopped at:', {
-                        finalRotation: (finalRotation * 180 / Math.PI).toFixed(2) + '°',
-                        adjustedAngle: (adjustedAngle * 180 / Math.PI).toFixed(2) + '°',
-                        stoppedIndex,
-                        stoppedPrize: stoppedPrize ? { name: stoppedPrize.name, amount: stoppedPrize.amount } : 'undefined'
-                    });
+                    // Wheel stopped successfully 
                     
                     resolve();
                 }
@@ -635,4 +664,4 @@ window.WheelOfFortune = WheelOfFortune;
 window.closeWinModal = closeWinModal;
 window.loadSpinHistory = loadSpinHistory;
 
-console.log('🎰 Wheel of Fortune Loaded');
+// 🎰 Wheel of Fortune Loaded Successfully
