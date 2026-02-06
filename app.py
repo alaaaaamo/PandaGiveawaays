@@ -306,7 +306,8 @@ CORS(app,
                 "Accept", 
                 "Authorization",
                 "X-Telegram-Init-Data",
-                "X-User-Id"
+                "X-User-Id",
+                "X-Session-Id"
             ],
             "supports_credentials": False
         }
