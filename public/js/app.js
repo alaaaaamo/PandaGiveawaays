@@ -612,6 +612,9 @@ async function loadUserData() {
         DebugError.add(`Critical error in loadUserData: ${error.message}`, 'error', error);
         handleApiError(error, 'loadUserData');
         
+        // تحديث حالة السيرفر
+        updateServerStatus('error', 'فشل الاتصال');
+        
         // إذا فشل تحميل البيانات من API، استخدم بيانات أساسية
         DebugError.add('Using offline fallback for user data', 'warn');
         
