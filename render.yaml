@@ -1,7 +1,7 @@
 services:
-  # Combined Service - Flask Web + Telegram Bot
+  # Backend API Service - Flask Web + Telegram Bot
   - type: web
-    name: panda-giveaways
+    name: panda-giveaways-backend
     env: python
     buildCommand: pip install -r requirements.txt
     startCommand: bash start_render.sh
@@ -10,6 +10,8 @@ services:
         value: 3.11
       - key: DATABASE_PATH
         value: /opt/render/project/src/panda_giveaways.db
+      - key: FRONTEND_URL
+        value: https://panda-giveawaays.vercel.app
     disk:
       name: panda-data
       mountPath: /opt/render/project/src

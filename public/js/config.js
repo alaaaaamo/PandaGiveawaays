@@ -5,6 +5,7 @@
 const CONFIG = {
     // API Endpoints
     API_BASE_URL: 'https://pandagiveawaays.onrender.com/api',
+    FRONTEND_URL: 'https://panda-giveawaays.vercel.app',
     BOT_USERNAME: 'PandaGiveawaysBot',
     
     // Admin IDs (استثناء من التحقق)

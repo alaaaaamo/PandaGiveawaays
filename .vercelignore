@@ -1,0 +1,45 @@
+# Vercel Ignore - Backend files
+*.py
+*.db
+*.sqlite3
+*.log
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment
+.env
+.env.local
+.env.production.local
+
+# Dependencies
+node_modules/
+venv/
+env/
+
+# Render files
+Procfile
+render.yaml
+start_render.sh
+restart_bot.sh
+requirements.txt
+runtime.txt
+
+# Bot files
+panda_giveaways_bot.py
+check_bot_status.py
+update_prizes.py
+bot_icons.py
+run.py
+start_all.py
+app.py
+
+# Shell scripts
+*.sh
+*.bat
+
+# Documentation
+README.md
+docs/

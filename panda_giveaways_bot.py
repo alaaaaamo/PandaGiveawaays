@@ -93,7 +93,7 @@ load_dotenv()
 # 🤖 معلومات البوت
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "PandaGiveawaysBot")
-MINI_APP_URL = os.getenv("MINI_APP_URL")
+MINI_APP_URL = os.getenv("MINI_APP_URL", "https://panda-giveawaays.vercel.app")
 
 # 👥 الأدمن (يتم قراءتهم من .env)
 ADMIN_IDS_STR = os.getenv("ADMIN_IDS", "")
@@ -142,7 +142,8 @@ else:
 print(f"📂 Bot using database at: {DATABASE_PATH}")
 
 # 🌐 API Configuration
-API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:5000/api")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://pandagiveawaays.onrender.com/api")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://panda-giveawaays.vercel.app")
 
 # � إعدادات البرودكاست
 BROADCAST_CONCURRENCY = 25  # عدد الرسائل المتزامنة
@@ -2261,7 +2262,7 @@ async def admin_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     
     # الحصول على حالة التحقق من التعدد
     try:
-        response = requests.get(f"{MINI_APP_URL}/api/admin/verification-settings?admin_id={user_id}")
+        response = requests.get(f"{API_BASE_URL}/admin/verification-settings?admin_id={user_id}")
         verification_data = response.json()
         verification_enabled = verification_data.get('verification_enabled', True)
     except:
@@ -2405,14 +2406,14 @@ async def toggle_verification_callback(update: Update, context: ContextTypes.DEF
     
     try:
         # الحصول على الحالة الحالية
-        response = requests.get(f"{MINI_APP_URL}/api/admin/verification-settings?admin_id={user_id}")
+        response = requests.get(f"{API_BASE_URL}/admin/verification-settings?admin_id={user_id}")
         current_data = response.json()
         current_state = current_data.get('verification_enabled', True)
         new_state = not current_state
         
         # تحديث الإعداد
         update_response = requests.post(
-            f"{MINI_APP_URL}/api/admin/verification-settings",
+            f"{API_BASE_URL}/admin/verification-settings",
             json={'admin_id': user_id, 'enabled': new_state}
         )
         

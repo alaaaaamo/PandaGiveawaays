@@ -139,8 +139,13 @@ def send_withdrawal_notification_to_admin(user_id, username, full_name, amount, 
         import traceback
         traceback.print_exc()
 
-app = Flask(__name__, static_folder='public', static_url_path='')
-CORS(app)  # السماح بـ CORS
+app = Flask(__name__)  # إزالة static_folder لأن الملفات ستكون في Vercel
+# إعداد CORS للسماح بالوصول من Vercel
+CORS(app, origins=[
+    'https://panda-giveawaays.vercel.app',
+    'http://localhost:3000',
+    'http://127.0.0.1:5000'
+])  # السماح بـ CORS من المواقع المحددة
 
 # ═══════════════════════════════════════════════════════════════
 # 🤖 BOT STARTUP IN BACKGROUND
@@ -567,23 +572,19 @@ def get_bot_stats():
     return stats
 
 # ═══════════════════════════════════════════════════════════════
-# 🌐 ROUTES - Static Files
+# 🌐 ROUTES - Redirects to Vercel Frontend
 # ═══════════════════════════════════════════════════════════════
 
 @app.route('/')
 def index():
-    """الصفحة الرئيسية"""
-    return send_from_directory('public', 'index.html')
-
-@app.route('/fp.html')
-@app.route('/fp')
-def fingerprint_page():
-    """صفحة التحقق من الجهاز"""
-    return send_from_directory('.', 'fp.html')
+    """إعادة توجيه للموقع في Vercel"""
+    from flask import redirect
+    return redirect('https://panda-giveawaays.vercel.app', code=302)
 
 @app.route('/admin')
 def admin():
-    """صفحة الأدمن - محمية للأدمن فقط"""
+    """إعادة توجيه لصفحة الأدمن في Vercel"""
+    from flask import redirect
     # الحصول على user_id من query params
     user_id = request.args.get('user_id')
     
@@ -609,12 +610,15 @@ def admin():
     except ValueError:
         return jsonify({'error': 'Invalid user ID'}), 400
     
-    return send_from_directory('public', 'admin.html')
+    # إعادة توجيه لصفحة الأدمن في Vercel مع user_id
+    return redirect(f'https://panda-giveawaays.vercel.app/admin?user_id={user_id}', code=302)
 
-@app.route('/<path:path>')
-def serve_static(path):
-    """خدمة الملفات الثابتة (CSS, JS, Images)"""
-    return send_from_directory('public', path)
+@app.route('/fp.html')
+@app.route('/fp')
+def fingerprint_page():
+    """إعادة توجيه لصفحة التحقق من الجهاز"""
+    from flask import redirect
+    return redirect('https://panda-giveawaays.vercel.app/fp.html', code=302)
 
 # ═══════════════════════════════════════════════════════════════
 # 🔌 API ENDPOINTS

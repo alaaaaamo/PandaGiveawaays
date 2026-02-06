@@ -1,0 +1,12 @@
+{
+  "name": "panda-giveaways-frontend",
+  "version": "1.0.0",
+  "description": "Panda Giveaways Frontend - Mini App interface",
+  "scripts": {
+    "build": "echo 'Static build complete'",
+    "start": "echo 'Static files ready'"
+  },
+  "keywords": ["telegram", "mini-app", "giveaways", "ton", "crypto"],
+  "author": "Panda Giveaways Team",
+  "license": "MIT"
+}
