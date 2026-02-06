@@ -1247,10 +1247,7 @@ window.continueAppInitialization = async function() {
             if (!wheel || !wheel.canvas) {
                 throw new Error('فشل في إنشاء العجلة');
             }
-            showToast('✅ تم تحميل عجلة الحظ بنجاح', 'success');
         } catch (error) {
-            showToast('❌ خطأ في تحميل عجلة الحظ: ' + error.message, 'error');
-            
             // عرض رسالة خطأ على العجلة
             const wheelContainer = document.querySelector('.wheel-container');
             if (wheelContainer) {
@@ -1269,12 +1266,11 @@ window.continueAppInitialization = async function() {
         }
         
         // تحميل البيانات الأولية
-        showLoadingWithMessage('📈 جاري تحميل البيانات المتبقية...');
+        showLoadingWithMessage('� جاري تحميل البيانات...');
         await Promise.race([
             loadInitialData(),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('loadInitialData timeout')), 15000))
+            new Promise((_, reject) => setTimeout(() => reject(new Error('loadInitialData timeout')), 8000))
         ]);
-        showLoadingWithMessage('✅ انتهى التحميل... جاري فتح الموقع!');
         
         // التحقق من معاملات URL للتنقل
         const urlParams = new URLSearchParams(window.location.search);
@@ -1290,18 +1286,14 @@ window.continueAppInitialization = async function() {
             }
             showLoading(false);
             document.body.classList.remove('loading');
-            
-            // إظهار رسالة نجاح قصيرة
-            showToast('✅ مرحباً بك! تم فتح التطبيق بنجاح', 'success');
-        }, 1000);
+        }, 500);
         
     } catch (error) {
-        showToast('❌ خطأ في استكمال التحميل: ' + error.message, 'error');
+        // عرض رسالة خطأ مرئية
         if (window.globalTimeoutId) {
             clearTimeout(window.globalTimeoutId);
         }
         showLoading(false);
-        // عرض رسالة خطأ مرئية بدلاً من console.error
         const errorDiv = document.createElement('div');
         errorDiv.style.cssText = `
             position: fixed; top: 20px; left: 50%; transform: translateX(-50%); 
