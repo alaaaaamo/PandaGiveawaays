@@ -280,18 +280,7 @@ async function loadPrizes() {
     try {
         DebugError.add('Loading prizes from API...', 'info');
         
-        // استخدام الـ API URL الصحيح
-        const apiUrl = `${CONFIG.API_BASE_URL}/admin/prizes`;
-        DebugError.add(`Fetching prizes from: ${apiUrl}`, 'info');
-        
-        const response = await fetch(apiUrl);
-        DebugError.add(`Prizes API Response Status: ${response.status}`, 'info');
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const result = await response.json();
+        const result = await API.request('/admin/prizes', 'GET');
         DebugError.add(`Prizes API Response:`, 'info', result);
         
         if (result.success && result.data) {
@@ -1876,20 +1865,11 @@ async function addSpinsToUserByUsername(username, spinsAmount) {
     try {
         showLoading();
         
-        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
-        const response = await fetch(`${API_BASE_URL}/admin/add-spins`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                username: username,
-                spins_count: spinsAmount,
-                admin_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 1797127532
-            })
+        const result = await API.request('/admin/add-spins', 'POST', {
+            username: username,
+            spins_count: spinsAmount,
+            admin_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 1797127532
         });
-        
-        const result = await response.json();
         
         hideLoading();
         
@@ -1933,20 +1913,11 @@ async function addSpinsToUser() {
     try {
         showLoading();
         
-        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
-        const response = await fetch(`${API_BASE_URL}/admin/add-spins`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                username: username,
-                spins_count: spinsAmount,
-                admin_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 1797127532
-            })
+        const result = await API.request('/admin/add-spins', 'POST', {
+            username: username,
+            spins_count: spinsAmount,
+            admin_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 1797127532
         });
-        
-        const result = await response.json();
         
         hideLoading();
         
