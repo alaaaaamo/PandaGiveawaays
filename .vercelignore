@@ -1,45 +1,51 @@
-# Vercel Ignore - Backend files
+# ALL BACKEND FILES - FRONTEND ONLY!
+# Python files
 *.py
-*.db
-*.sqlite3
-*.log
-
-# Python cache
 __pycache__/
 *.pyc
 *.pyo
+*.pyw
 
-# Environment
-.env
-.env.local
-.env.production.local
+# Database files  
+*.db
+*.sqlite3
+*.sqlite
+*.sql
 
-# Dependencies
-node_modules/
-venv/
-env/
+# Environment & config
+.env*
+*.log
 
-# Render files
+# Backend dependencies
+requirements.txt
+runtime.txt
+Pipfile*
+poetry.lock
+
+# Render/Deploy files
 Procfile
 render.yaml
 start_render.sh
 restart_bot.sh
-requirements.txt
-runtime.txt
-
-# Bot files
-panda_giveaways_bot.py
-check_bot_status.py
-update_prizes.py
-bot_icons.py
-run.py
+deploy-guide.sh
 start_all.py
-app.py
+start.sh
+start.bat
 
-# Shell scripts
-*.sh
-*.bat
-
-# Documentation
-README.md
+# Documentation 
+README*.md
 docs/
+
+# Git & IDE
+.git/
+.vscode/
+.idea/
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# ONLY KEEP:
+# - public/ folder
+# - vercel.json  
+# - package.json

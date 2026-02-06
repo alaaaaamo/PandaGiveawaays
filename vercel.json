@@ -1,20 +1,15 @@
 {
   "version": 2,
   "name": "panda-giveaways-frontend",
+  "public": true,
   "rewrites": [
-    {
-      "source": "/",
-      "destination": "/index.html"
-    },
     {
       "source": "/admin",
       "destination": "/admin.html"
     },
     {
-      "source": "/referral-program",
+      "source": "/referral-program", 
       "destination": "/referral-program.html"
     }
-  ],
-  "cleanUrls": true,
-  "trailingSlash": false
+  ]
 }
