@@ -16,18 +16,18 @@ const TasksModule = {
     
     async loadTasks() {
         try {
-            const response = await fetch('/api/tasks');
-            const data = await response.json();
+            DebugError.add('📝 Loading tasks from API...', 'info');
+            const data = await API.request('/tasks', 'GET');
             
             if (data.success && data.tasks) {
                 this.tasks = data.tasks;
-                console.log(`✅ Loaded ${this.tasks.length} tasks`);
+                DebugError.add(`✅ Loaded ${this.tasks.length} tasks`, 'info', this.tasks);
             } else {
-                console.error('❌ Failed to load tasks:', data.message);
+                DebugError.add('❌ Failed to load tasks', 'error', data);
                 this.tasks = [];
             }
         } catch (error) {
-            console.error('❌ Error loading tasks:', error);
+            DebugError.add(`❌ Error loading tasks: ${error.message}`, 'error', error);
             this.tasks = [];
         }
     },
@@ -35,18 +35,18 @@ const TasksModule = {
     async loadCompletedTasks() {
         try {
             const userId = TelegramApp.getUserId();
-            const response = await fetch(`/api/user/${userId}/completed-tasks`);
-            const data = await response.json();
+            DebugError.add(`📝 Loading completed tasks for user ${userId}...`, 'info');
+            const data = await API.request(`/user/${userId}/completed-tasks`, 'GET');
             
             if (data.success && data.completed_tasks) {
                 // تحويل إلى array من الـ IDs فقط
                 this.completedTasks = data.completed_tasks.map(t => t.task_id);
-                console.log(`✅ Loaded ${this.completedTasks.length} completed tasks`);
+                DebugError.add(`✅ Loaded ${this.completedTasks.length} completed tasks`, 'info', this.completedTasks);
             } else {
                 this.completedTasks = [];
             }
         } catch (error) {
-            console.error('❌ Error loading completed tasks:', error);
+            DebugError.add(`❌ Error loading completed tasks: ${error.message}`, 'error', error);
             this.completedTasks = [];
         }
     },
@@ -148,13 +148,12 @@ const TasksModule = {
     async markTaskAsClicked(taskId) {
         try {
             const userId = TelegramApp.getUserId();
-            await fetch(`/api/tasks/${taskId}/click`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({user_id: userId})
+            await API.request(`/tasks/${taskId}/click`, 'POST', {
+                user_id: userId
             });
+            DebugError.add(`✅ Task ${taskId} marked as clicked`, 'info');
         } catch (error) {
-            console.error('Error marking task as clicked:', error);
+            DebugError.add(`Error marking task as clicked: ${error.message}`, 'error', error);
         }
     },
     
@@ -167,16 +166,15 @@ const TasksModule = {
         
         try {
             const userId = TelegramApp.getUserId();
-            const response = await fetch(`/api/tasks/${taskId}/verify`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({user_id: userId})
-            });
+            DebugError.add(`🔍 Verifying task ${taskId} for user ${userId}...`, 'info');
             
-            const data = await response.json();
+            const data = await API.request(`/tasks/${taskId}/verify`, 'POST', {
+                user_id: userId
+            });
             
             if (data.success) {
                 // Task completed successfully
+                DebugError.add(`✅ Task ${taskId} verified successfully`, 'info', data);
                 showToast(data.message || `<img src="/img/payment-success.svg" style="width: 16px; height: 16px; vertical-align: middle;"> تم إكمال المهمة! +${data.reward_spins} دورة`, 'success');
                 
                 // Reload tasks and user data
@@ -189,12 +187,13 @@ const TasksModule = {
                     await loadUserData();
                 }
             } else {
+                DebugError.add(`❌ Task ${taskId} verification failed`, 'warn', data);
                 showToast(data.message || '<img src="/img/payment-failure.svg" style="width: 16px; height: 16px; vertical-align: middle;"> لم يتم التحقق. تأكد من اشتراكك!', 'error');
                 btn.disabled = false;
                 btn.innerHTML = originalText;
             }
         } catch (error) {
-            console.error('Error verifying task:', error);
+            DebugError.add(`Error verifying task: ${error.message}`, 'error', error);
             showToast('<img src="/img/payment-failure.svg" style="width: 16px; height: 16px; vertical-align: middle;"> حدث خطأ في التحقق', 'error');
             btn.disabled = false;
             btn.innerHTML = originalText;

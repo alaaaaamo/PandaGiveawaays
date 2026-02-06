@@ -6,7 +6,7 @@
 const DEBUG_CONFIG = {
     SHOW_DEBUG_UI: false,        // إظهار UI الـ debug على الشاشة
     SHOW_SERVER_STATUS: false,   // إظهار مؤشر حالة السيرفر  
-    CONSOLE_LOGGING: true,       // الـ logging في الـ console (مفيد للمطورين)
+    CONSOLE_LOGGING: true,       // ✅ الـ logging في الـ console (مفعل للتشخيص)
     AUTO_SHOW_ERRORS: false      // إظهار تلقائي للأخطاء
 };
 

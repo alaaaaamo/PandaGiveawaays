@@ -378,52 +378,75 @@ class WheelOfFortune {
             // حساب زاوية الدوران للجائزة
             // نبحث عن الجائزة بناءً على عدة معايير لضمان الدقة
             let prizeIndex = -1;
+            const serverAmount = parseFloat(prize.amount) || 0;
             
             DebugError.add('🔍 Searching for prize in wheel...', 'info', {
                 serverPrize: prize,
+                serverAmount: serverAmount,
                 wheelPrizes: this.prizes,
-                searchCriteria: 'amount or name matching'
+                searchCriteria: 'ID > amount > name matching'
             });
             
             // البحث الأول: بناءً على ID إذا كان موجود
             if (prize.id) {
-                prizeIndex = this.prizes.findIndex(p => p.id === prize.id);
+                prizeIndex = this.prizes.findIndex(p => p.id == prize.id); // استخدام == بدلاً من === للمرونة
                 DebugError.add(`🆔 Search by ID (${prize.id}):`, 'info', { found: prizeIndex !== -1, index: prizeIndex });
             }
             
-            // البحث الثاني: إذا كانت الجائزة "حظ أوفر" (amount = 0)
-            if (prizeIndex === -1 && prize.amount === 0) {
+            // البحث الثاني: بناءً على المبلغ (مع tolerance أوسع)
+            if (prizeIndex === -1 && serverAmount >= 0) {
+                prizeIndex = this.prizes.findIndex(p => {
+                    const wheelAmount = parseFloat(p.amount) || 0;
+                    const diff = Math.abs(wheelAmount - serverAmount);
+                    return diff < 0.01; // tolerance أوسع (1 cent)
+                });
+                DebugError.add(`💰 Search by amount (${serverAmount}):`, 'info', { 
+                    found: prizeIndex !== -1, 
+                    index: prizeIndex,
+                    matchedAmount: prizeIndex !== -1 ? this.prizes[prizeIndex].amount : null
+                });
+            }
+            
+            // البحث الثالث: بناءً على الاسم (تطابق تام)
+            if (prizeIndex === -1) {
+                prizeIndex = this.prizes.findIndex(p => p.name === prize.name);
+                DebugError.add(`📝 Search by exact name (${prize.name}):`, 'info', { found: prizeIndex !== -1, index: prizeIndex });
+            }
+            
+            // البحث الرابع: بناءً على الاسم (تطابق جزئي)
+            if (prizeIndex === -1) {
                 prizeIndex = this.prizes.findIndex(p => 
-                    p.amount === 0 && 
-                    (p.name.includes('حظ') || p.name.includes('أوفر') || p.name.includes('تحظ'))
+                    p.name.includes(prize.name) || prize.name.includes(p.name)
                 );
+                DebugError.add(`📝 Search by partial name:`, 'info', { found: prizeIndex !== -1, index: prizeIndex });
+            }
+            
+            // البحث الخامس: للجوائز الخاصة ("حظ أوفر" أو amount = 0)
+            if (prizeIndex === -1 && serverAmount === 0) {
+                prizeIndex = this.prizes.findIndex(p => {
+                    const wheelAmount = parseFloat(p.amount) || 0;
+                    return wheelAmount === 0 || 
+                           p.name.includes('حظ') || 
+                           p.name.includes('أوفر') || 
+                           p.name.includes('تحظ');
+                });
                 DebugError.add('🍀 Search by "حظ أوفر" pattern:', 'info', { found: prizeIndex !== -1, index: prizeIndex });
             }
             
-            // البحث الثالث: بناءً على المبلغ (مع tolerance)
             if (prizeIndex === -1) {
-                prizeIndex = this.prizes.findIndex(p => Math.abs(p.amount - prize.amount) < 0.001);
-                DebugError.add(`💰 Search by amount (${prize.amount}):`, 'info', { found: prizeIndex !== -1, index: prizeIndex });
-            }
-            
-            // البحث الرابع: بناءً على الاسم
-            if (prizeIndex === -1) {
-                prizeIndex = this.prizes.findIndex(p => p.name === prize.name);
-                DebugError.add(`📝 Search by name (${prize.name}):`, 'info', { found: prizeIndex !== -1, index: prizeIndex });
-            }
-            
-            if (prizeIndex === -1) {
-                DebugError.add('❌ Prize not found in wheel!', 'error', {
+                DebugError.add('❌ Prize not found in wheel after all attempts!', 'error', {
                     serverPrize: prize,
+                    serverAmount: serverAmount,
                     availablePrizes: this.prizes,
-                    comparison: this.prizes.map(p => ({
+                    comparison: this.prizes.map((p, idx) => ({
+                        index: idx,
                         name: p.name,
                         amount: p.amount,
                         id: p.id,
-                        amountDiff: Math.abs(p.amount - prize.amount)
+                        amountDiff: Math.abs((parseFloat(p.amount) || 0) - serverAmount)
                     }))
                 });
-                throw new Error('الجائزة غير موجودة في العجلة');
+                throw new Error(`الجائزة ${prize.name} (${serverAmount} TON) غير موجودة في العجلة`);
             }
             
             DebugError.add(`✅ Prize found at index ${prizeIndex}:`, 'info', this.prizes[prizeIndex]);
@@ -573,16 +596,26 @@ class WheelOfFortune {
         const resultText = document.getElementById('result-text');
         const resultAmount = document.getElementById('result-amount');
         
-        if (prize.amount > 0) {
-            resultText.textContent = '🎉 تهانينا!';
+        DebugError.add('🎁 Showing prize result:', 'info', prize);
+        
+        // استخدام المبلغ الفعلي من السيرفر
+        const prizeAmount = parseFloat(prize.amount) || 0;
+        
+        if (prizeAmount > 0) {
+            // رسالة ديناميكية بناءً على المبلغ
+            resultText.textContent = '🎉 مبروك!';
             // إضافة أيقونة TON
             const tonIcon = '<img src="img/Ton.png" alt="TON" class="ton-icon">';
-            resultAmount.innerHTML = `ربحت ${prize.amount} ${tonIcon}`;
+            resultAmount.innerHTML = `ربحت ${prizeAmount} ${tonIcon}`;
             resultDiv.style.borderColor = '#3fb950';
+            
+            DebugError.add(`✅ Prize won: ${prizeAmount} TON`, 'info');
         } else {
             resultText.textContent = '😢 حظ أوفر المرة القادمة!';
-            resultAmount.textContent = prize.name;
+            resultAmount.textContent = prize.name || 'حظ أوفر';
             resultDiv.style.borderColor = '#808080';
+            
+            DebugError.add('No prize won (حظ أوفر)', 'info');
         }
         
         resultDiv.classList.remove('hidden');
@@ -594,7 +627,7 @@ class WheelOfFortune {
         }, 5000);
         
         // عرض Modal للفوز الكبير
-        if (prize.amount >= 0.5) {
+        if (prizeAmount >= 0.5) {
             showWinModal(prize);
         }
     }

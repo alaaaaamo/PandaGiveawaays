@@ -520,16 +520,31 @@ async function loadUsers() {
         
         const result = await API.request('/admin/users', 'GET');
         
+        // تشخيص مفصل للـ response
+        console.log('📊 Users API Full Response:', result);
+        console.log('📊 Users Data:', result.data);
+        console.log('📊 Users Count:', result.count);
+        
         hideLoading();
         
         if (result.success) {
             adminData.users = result.data || [];
-            DebugError.add(`✅ Successfully loaded ${adminData.users.length} users`, 'info', result.data);
+            DebugError.add(`✅ Successfully loaded ${adminData.users.length} users`, 'info', {
+                totalUsers: adminData.users.length,
+                sampleUser: adminData.users[0] || null,
+                allUsers: adminData.users
+            });
             
             // تسجيل معلومات عن المستخدمين المحظورين
             const bannedUsers = adminData.users.filter(u => u.is_banned === true || u.is_banned === 1);
             if (bannedUsers.length > 0) {
                 DebugError.add(`🔴 Found ${bannedUsers.length} banned users`, 'warn', bannedUsers.map(u => ({id: u.id, name: u.name, is_banned: u.is_banned, ban_reason: u.ban_reason})));
+            }
+            
+            // تحذير إذا كانت القائمة فارغة
+            if (adminData.users.length === 0) {
+                DebugError.add('⚠️ No users returned from API - database may be empty', 'warn');
+                showToast('لا يوجد مستخدمين في قاعدة البيانات', 'warn');
             }
         } else {
             DebugError.add('❌ Failed to load users - API returned error', 'error', result);
