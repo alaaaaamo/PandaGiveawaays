@@ -500,14 +500,7 @@ async function resetPrizesToDefault() {
         showLoading();
         DebugError.add('🔄 Resetting prizes to default...', 'info');
         
-        const response = await fetch(`${CONFIG.API_BASE_URL}/admin/reset-prizes`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const result = await response.json();
+        const result = await API.request('/admin/reset-prizes', 'POST');
         
         hideLoading();
         
@@ -628,14 +621,7 @@ async function unbanUser(userId, username) {
     
     try {
         showLoading();
-        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
-        const response = await fetch(`${API_BASE_URL}/admin/unban-user`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: userId })
-        });
-        
-        const result = await response.json();
+        const result = await API.request('/admin/unban-user', 'POST', { user_id: userId });
         hideLoading();
         
         if (result.success) {
@@ -699,9 +685,7 @@ function filterUsersTable(query) {
 async function loadWithdrawals() {
     // تحميل طلبات السحب من API
     try {
-        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
-        const response = await fetch(`${API_BASE_URL}/withdrawals`);
-        const result = await response.json();
+        const result = await API.request('/withdrawals', 'GET');
         
         if (result.success) {
             adminData.withdrawals = result.data || [];
@@ -770,17 +754,10 @@ async function approveWithdrawal(id) {
     
     try {
         showLoading();
-        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
-        const response = await fetch(`${API_BASE_URL}/withdrawal/approve`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                withdrawal_id: id,
-                admin_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 1797127532
-            })
+        const result = await API.request('/withdrawal/approve', 'POST', {
+            withdrawal_id: id,
+            admin_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 1797127532
         });
-        
-        const result = await response.json();
         hideLoading();
         
         if (result.success) {
@@ -805,18 +782,11 @@ async function rejectWithdrawal(id) {
     
     try {
         showLoading();
-        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
-        const response = await fetch(`${API_BASE_URL}/withdrawal/reject`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                withdrawal_id: id,
-                admin_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 1797127532,
-                reason: reason || 'لم يتم تحديد سبب'
-            })
+        const result = await API.request('/withdrawal/reject', 'POST', {
+            withdrawal_id: id,
+            admin_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 1797127532,
+            reason: reason || 'لم يتم تحديد سبب'
         });
-        
-        const result = await response.json();
         hideLoading();
         
         if (result.success) {
@@ -1036,16 +1006,7 @@ async function updateTask(taskId) {
         
         // إرسال البيانات إلى API
         showLoading();
-        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
-        const response = await fetch(`${API_BASE_URL}/admin/tasks`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(taskData)
-        });
-        
-        const result = await response.json();
+        const result = await API.request('/admin/tasks', 'PUT', taskData);
         hideLoading();
         
         console.log('📥 Server response:', result);
@@ -1077,12 +1038,7 @@ async function deleteTask(taskId) {
     
     try {
         showLoading();
-        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
-        const response = await fetch(`${API_BASE_URL}/admin/tasks?task_id=${taskId}`, {
-            method: 'DELETE'
-        });
-        
-        const data = await response.json();
+        const result = await API.request(`/admin/tasks?task_id=${taskId}`, 'DELETE');
         hideLoading();
         
         if (data.success) {
@@ -1250,16 +1206,7 @@ async function createChannel() {
         
         // إرسال البيانات إلى API
         showLoading();
-        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
-        const response = await fetch(`${API_BASE_URL}/admin/channels`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(channelData)
-        });
-        
-        const result = await response.json();
+        const result = await API.request('/admin/channels', 'POST', channelData);
         hideLoading();
         
         console.log('📥 Server response:', result);
@@ -1291,12 +1238,7 @@ async function deleteChannel(channelId) {
     
     try {
         showLoading();
-        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
-        const response = await fetch(`${API_BASE_URL}/admin/channels?channel_id=${encodeURIComponent(channelId)}`, {
-            method: 'DELETE'
-        });
-        
-        const data = await response.json();
+        const result = await API.request(`/admin/channels?channel_id=${encodeURIComponent(channelId)}`, 'DELETE');
         hideLoading();
         
         if (data.success) {
@@ -1319,8 +1261,7 @@ async function deleteChannel(channelId) {
 async function loadSettings() {
     try {
         // جلب الإعدادات من الـ API
-        const response = await fetch(`${window.CONFIG.API_BASE_URL}/settings`);
-        const result = await response.json();
+        const result = await API.request('/settings', 'GET');
         
         if (result.success && result.data) {
             // تحميل الإعدادات
