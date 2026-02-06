@@ -1,33 +1,24 @@
 {
   "version": 2,
   "name": "panda-giveaways-frontend",
-  "builds": [
-    {
-      "src": "public/**",
-      "use": "@vercel/static"
-    }
-  ],
   "routes": [
     {
       "src": "/",
-      "dest": "/public/index.html"
+      "dest": "/index.html"
     },
     {
       "src": "/admin",
-      "dest": "/public/admin.html"
+      "dest": "/admin.html"
     },
     {
       "src": "/referral-program",
-      "dest": "/public/referral-program.html"
+      "dest": "/referral-program.html"
     },
     {
       "src": "/(.*)",
-      "dest": "/public/$1"
+      "dest": "/$1"
     }
   ],
-  "functions": {
-    "public/**": {
-      "includeFiles": "public/**"
-    }
-  }
+  "cleanUrls": true,
+  "trailingSlash": false
 }
