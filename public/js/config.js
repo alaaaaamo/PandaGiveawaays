@@ -5,7 +5,7 @@
 const CONFIG = {
     // API Endpoints
     API_BASE_URL: 'https://pandagiveawaays.onrender.com/api',
-    FRONTEND_URL: 'https://panda-giveawaays.vercel.app',
+    FRONTEND_URL: 'https://panda-giveawaays.vercel.app/api',
     BOT_USERNAME: 'PandaGiveawaysBot',
     
     // Admin IDs (استثناء من التحقق)
@@ -301,9 +301,28 @@ const TelegramApp = {
             if (this.webApp.initDataUnsafe && this.webApp.initDataUnsafe.user) {
                 this.user = this.webApp.initDataUnsafe.user;
                 console.log('✅ User data found:', this.user);
+                
+                // حفظ الـ user ID في localStorage للمرات القادمة
+                try {
+                    localStorage.setItem('telegram_user_id', this.user.id.toString());
+                    localStorage.setItem('telegram_user_data', JSON.stringify(this.user));
+                } catch (e) {
+                    console.warn('Could not save user data to localStorage');
+                }
             } else {
                 console.warn('⚠️ No user data in initDataUnsafe');
                 this.user = null;
+                
+                // محاولة استرداد من localStorage
+                try {
+                    const cachedUserData = localStorage.getItem('telegram_user_data');
+                    if (cachedUserData) {
+                        this.user = JSON.parse(cachedUserData);
+                        console.log('📱 Retrieved user data from cache:', this.user);
+                    }
+                } catch (e) {
+                    console.warn('Could not retrieve cached user data');
+                }
             }
             
             this.isReady = true;
@@ -321,9 +340,60 @@ const TelegramApp = {
     
     // الحصول على معرف المستخدم
     getUserId() {
-        const userId = this.user?.id || null;
-        console.log('🆔 getUserId() returning:', userId);
-        return userId;
+        // 1. من Telegram WebApp (الخيار المفضل)
+        let userId = this.user?.id || null;
+        
+        if (userId) {
+            console.log('🆔 getUserId() from Telegram WebApp:', userId);
+            return userId;
+        }
+        
+        // 2. من URL parameters (fallback)
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            userId = urlParams.get('user_id');
+            if (userId) {
+                userId = parseInt(userId);
+                console.log('🆔 getUserId() from URL params:', userId);
+                return userId;
+            }
+        } catch (e) {
+            console.warn('Error parsing user_id from URL');
+        }
+        
+        // 3. من localStorage (cache)
+        try {
+            const cachedUserId = localStorage.getItem('telegram_user_id');
+            if (cachedUserId) {
+                userId = parseInt(cachedUserId);
+                console.log('🆔 getUserId() from localStorage:', userId);
+                return userId;
+            }
+        } catch (e) {
+            console.warn('Error reading from localStorage');
+        }
+        
+        // 4. من Telegram initData (alternative method)
+        try {
+            if (window.Telegram?.WebApp?.initData) {
+                const initData = window.Telegram.WebApp.initData;
+                const urlParams = new URLSearchParams(initData);
+                const userString = urlParams.get('user');
+                if (userString) {
+                    const userObj = JSON.parse(decodeURIComponent(userString));
+                    userId = userObj.id;
+                    console.log('🆔 getUserId() from initData:', userId);
+                    // حفظ في localStorage للمرات القادمة
+                    localStorage.setItem('telegram_user_id', userId.toString());
+                    return userId;
+                }
+            }
+        } catch (e) {
+            console.warn('Error parsing initData');
+        }
+        
+        console.warn('❌ No user ID found from any source');
+        return null;
     },
     
     // التحقق من صحة التشغيل

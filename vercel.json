@@ -4,12 +4,31 @@
   "public": true,
   "rewrites": [
     {
-      "source": "/admin",
+      "source": "/admin(.*)",
       "destination": "/admin.html"
     },
     {
       "source": "/referral-program", 
       "destination": "/referral-program.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods", 
+          "value": "GET, POST, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization"
+        }
+      ]
     }
   ]
 }
