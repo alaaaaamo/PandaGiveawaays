@@ -131,9 +131,9 @@ async function loadDashboardData() {
 
 async function loadStatistics() {
     try {
-        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
-        const response = await fetch(`${API_BASE_URL}/stats`);
-        const result = await response.json();
+        DebugError.add('🔄 Loading main statistics...', 'info');
+        
+        const result = await API.request('/stats', 'GET');
         
         if (result.success && result.data) {
             const stats = result.data;
@@ -141,8 +141,10 @@ async function loadStatistics() {
             document.getElementById('total-spins').textContent = formatNumber(stats.total_spins || 0);
             document.getElementById('total-balance').textContent = (stats.total_distributed || 0).toFixed(2);
             document.getElementById('pending-withdrawals').textContent = formatNumber(stats.pending_withdrawals || 0);
+            
+            DebugError.add('✅ Statistics loaded successfully', 'info', stats);
         } else {
-            console.error('Failed to load statistics:', result.error);
+            DebugError.add('❌ Failed to load statistics - API error', 'error', result);
             // Set default values on error
             document.getElementById('total-users').textContent = '0';
             document.getElementById('total-spins').textContent = '0';
@@ -150,7 +152,7 @@ async function loadStatistics() {
             document.getElementById('pending-withdrawals').textContent = '0';
         }
     } catch (error) {
-        console.error('Error loading statistics:', error);
+        DebugError.add(`💥 Error loading statistics: ${error.message}`, 'error', error);
         // Set default values on error
         document.getElementById('total-users').textContent = '0';
         document.getElementById('total-spins').textContent = '0';
@@ -514,27 +516,29 @@ async function loadUsers() {
     // تحميل المستخدمين من API
     try {
         showLoading();
-        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
-        const response = await fetch(`${API_BASE_URL}/admin/users`);
-        const result = await response.json();
+        DebugError.add('🔄 Starting to load users from API...', 'info');
+        
+        const result = await API.request('/admin/users', 'GET');
         
         hideLoading();
         
         if (result.success) {
             adminData.users = result.data || [];
-            console.log(`✅ Loaded ${adminData.users.length} users`);
+            DebugError.add(`✅ Successfully loaded ${adminData.users.length} users`, 'info', result.data);
             
             // تسجيل معلومات عن المستخدمين المحظورين
             const bannedUsers = adminData.users.filter(u => u.is_banned === true || u.is_banned === 1);
-            console.log(`🔴 Found ${bannedUsers.length} banned users:`, bannedUsers.map(u => ({id: u.id, name: u.name, is_banned: u.is_banned, ban_reason: u.ban_reason})));
+            if (bannedUsers.length > 0) {
+                DebugError.add(`🔴 Found ${bannedUsers.length} banned users`, 'warn', bannedUsers.map(u => ({id: u.id, name: u.name, is_banned: u.is_banned, ban_reason: u.ban_reason})));
+            }
         } else {
-            console.error('❌ Failed to load users:', result.error);
+            DebugError.add('❌ Failed to load users - API returned error', 'error', result);
             adminData.users = [];
             showToast('فشل تحميل المستخدمين', 'error');
         }
     } catch (error) {
         hideLoading();
-        console.error('Error loading users:', error);
+        DebugError.add(`💥 Error loading users: ${error.message}`, 'error', error);
         adminData.users = [];
         showToast('خطأ في تحميل المستخدمين', 'error');
     }
@@ -544,7 +548,18 @@ async function loadUsers() {
 
 function renderUsersTable() {
     const tbody = document.getElementById('users-table-body');
-    if (!tbody) return;
+    if (!tbody) {
+        DebugError.add('❌ users-table-body element not found in DOM', 'error');
+        return;
+    }
+    
+    DebugError.add(`🔄 Rendering users table with ${adminData.users.length} users`, 'info', adminData.users);
+    
+    if (adminData.users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #999;">لا توجد بيانات مستخدمين</td></tr>';
+        DebugError.add('⚠️ No users to display in table', 'warn');
+        return;
+    }
     
     tbody.innerHTML = adminData.users.map(user => {
         const isBanned = user.is_banned === true || user.is_banned === 1;

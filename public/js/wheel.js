@@ -9,24 +9,30 @@ if (typeof CONFIG !== 'undefined' && CONFIG.WHEEL_PRIZES) {
 
 class WheelOfFortune {
     constructor(canvasId, prizes) {
+        DebugError.add('🎰 WheelOfFortune constructor called', 'info', { canvasId, prizesCount: prizes?.length });
+        
         this.canvas = document.getElementById(canvasId);
         if (!this.canvas) {
+            DebugError.add(`❌ Canvas element '${canvasId}' not found`, 'error');
             this.showError('❌ عجلة الحظ غير متاحة');
             return;
         }
         
         this.ctx = this.canvas.getContext('2d');
         if (!this.ctx) {
+            DebugError.add('❌ Cannot get canvas 2D context', 'error');
             this.showError('❌ لا يمكن رسم العجلة');
             return;
         }
         
         if (!prizes || prizes.length === 0) {
+            DebugError.add('❌ No prizes provided to wheel', 'error', prizes);
             this.showError('❌ لا توجد جوائز للعجلة');
             return;
         }
         
         this.prizes = prizes;
+        DebugError.add('✅ Wheel initialized with prizes', 'info', this.prizes);
         this.rotation = 0;
         this.isSpinning = false;
         this.spinButton = document.getElementById('spin-button');
@@ -316,9 +322,13 @@ class WheelOfFortune {
     // ═══════════════════════════════════════════════════════════
     
     async spin() {
+        DebugError.add('🎲 Starting wheel spin process...', 'info');
+        DebugError.add(`Available prizes in wheel: ${this.prizes.length}`, 'info', this.prizes);
+        
         // التحقق من إمكانية اللف
         const canSpin = UserState.canSpin();
         if (!canSpin.can) {
+            DebugError.add(`❌ Cannot spin: ${canSpin.reason}`, 'error');
             showToast(canSpin.reason, 'error');
             TelegramApp.hapticFeedback('error');
             return;
@@ -326,6 +336,7 @@ class WheelOfFortune {
         
         // التحقق من Rate Limiting
         if (!RateLimiter.check('spin', 10, 60000)) {
+            DebugError.add('⏱️ Rate limit exceeded', 'warn');
             showToast('الكثير من المحاولات! انتظر دقيقة.', 'error');
             return;
         }
@@ -342,17 +353,21 @@ class WheelOfFortune {
         // إظهار Loading
         showLoading(true);
         
+        DebugError.add(`🌐 Sending spin request for user ${TelegramApp.getUserId()}...`, 'info');
+        
         try {
             // طلب اللف من السيرفر أولاً
-            // Requesting spin from server...
             const response = await API.spinWheel(TelegramApp.getUserId());
             
+            DebugError.add('📡 Received server response:', 'info', response);
+            
             if (!response.success) {
+                DebugError.add(`❌ Server rejected spin: ${response.error}`, 'error', response);
                 throw new Error(response.error || 'فشل اللف');
             }
             
             const { prize, new_balance, new_spins } = response.data;
-            // Requesting spin from server...
+            DebugError.add('🎁 Server selected prize:', 'info', { prize, new_balance, new_spins });
             
             // إخفاء Loading
             showLoading(false);
@@ -361,21 +376,57 @@ class WheelOfFortune {
             
             // الآن نبدأ دوران العجلة بناءً على نتيجة السيرفر
             // حساب زاوية الدوران للجائزة
-            // نبحث عن الجائزة بناءً على amount بدلاً من الاسم لضمان الدقة
+            // نبحث عن الجائزة بناءً على عدة معايير لضمان الدقة
             let prizeIndex = -1;
             
-            // إذا كانت الجائزة "حظ أوفر" (amount = 0 واسم يحتوي على "حظ")
-            if (prize.amount === 0 && (prize.name.includes('حظ') || prize.name.includes('أوفر'))) {
-                prizeIndex = this.prizes.findIndex(p => p.amount === 0 && (p.name.includes('حظ') || p.name.includes('أوفر')));
-            } else {
-                // ابحث عن الجائزة بناءً على المبلغ
+            DebugError.add('🔍 Searching for prize in wheel...', 'info', {
+                serverPrize: prize,
+                wheelPrizes: this.prizes,
+                searchCriteria: 'amount or name matching'
+            });
+            
+            // البحث الأول: بناءً على ID إذا كان موجود
+            if (prize.id) {
+                prizeIndex = this.prizes.findIndex(p => p.id === prize.id);
+                DebugError.add(`🆔 Search by ID (${prize.id}):`, 'info', { found: prizeIndex !== -1, index: prizeIndex });
+            }
+            
+            // البحث الثاني: إذا كانت الجائزة "حظ أوفر" (amount = 0)
+            if (prizeIndex === -1 && prize.amount === 0) {
+                prizeIndex = this.prizes.findIndex(p => 
+                    p.amount === 0 && 
+                    (p.name.includes('حظ') || p.name.includes('أوفر') || p.name.includes('تحظ'))
+                );
+                DebugError.add('🍀 Search by "حظ أوفر" pattern:', 'info', { found: prizeIndex !== -1, index: prizeIndex });
+            }
+            
+            // البحث الثالث: بناءً على المبلغ (مع tolerance)
+            if (prizeIndex === -1) {
                 prizeIndex = this.prizes.findIndex(p => Math.abs(p.amount - prize.amount) < 0.001);
+                DebugError.add(`💰 Search by amount (${prize.amount}):`, 'info', { found: prizeIndex !== -1, index: prizeIndex });
+            }
+            
+            // البحث الرابع: بناءً على الاسم
+            if (prizeIndex === -1) {
+                prizeIndex = this.prizes.findIndex(p => p.name === prize.name);
+                DebugError.add(`📝 Search by name (${prize.name}):`, 'info', { found: prizeIndex !== -1, index: prizeIndex });
             }
             
             if (prizeIndex === -1) {
-                console.error('Prize not found in wheel! Prize:', prize, 'Available prizes:', this.prizes);
+                DebugError.add('❌ Prize not found in wheel!', 'error', {
+                    serverPrize: prize,
+                    availablePrizes: this.prizes,
+                    comparison: this.prizes.map(p => ({
+                        name: p.name,
+                        amount: p.amount,
+                        id: p.id,
+                        amountDiff: Math.abs(p.amount - prize.amount)
+                    }))
+                });
                 throw new Error('الجائزة غير موجودة في العجلة');
             }
+            
+            DebugError.add(`✅ Prize found at index ${prizeIndex}:`, 'info', this.prizes[prizeIndex]);
             
             // Prize matched successfully - server response processed
             

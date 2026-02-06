@@ -169,6 +169,7 @@ const API = {
     // ═══════════════════════════════════════════════════════════
     
     async spinWheel(userId) {
+        DebugError.add(`🎲 Real API spinWheel called for user ${userId}`, 'info');
         return await this.request(`/spin`, 'POST', { 
             user_id: userId,
             session_id: UserState.sessionId,
@@ -295,6 +296,9 @@ const MockAPI = {
     },
     
     async spinWheel(userId) {
+        DebugError.add(`⚠️ WARNING: Still using MockAPI spinWheel for user ${userId}`, 'warn');
+        DebugError.add('Mock prizes being used:', 'warn', CONFIG.WHEEL_PRIZES);
+        
         await this.simulateDelay(1000, 2000);
         
         // محاكاة نظام الاحتمالات
@@ -309,6 +313,8 @@ const MockAPI = {
                 break;
             }
         }
+        
+        DebugError.add('Mock selected prize:', 'warn', selectedPrize);
         
         // تحديث البيانات المحلية
         this.userData.available_spins--;
@@ -389,11 +395,12 @@ const MockAPI = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// 🔀 CONDITIONAL EXPORT (استخدام Mock في التطوير)
+// 🔀 CONDITIONAL EXPORT (استخدام API الحقيقي في الإنتاج)
 // ═══════════════════════════════════════════════════════════════
 
-const USE_MOCK = true;  // تغيير إلى false في الإنتاج
+const USE_MOCK = false;  // ❌ تم تعطيل Mock API لاستخدام البيانات الحقيقية
 
 window.API = USE_MOCK ? MockAPI : API;
 
 console.log('🌐 API Client Loaded', USE_MOCK ? '(Mock Mode)' : '(Production Mode)');
+DebugError.add(`🌐 API initialized in ${USE_MOCK ? 'MOCK' : 'PRODUCTION'} mode`, 'info');

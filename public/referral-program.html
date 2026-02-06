@@ -245,6 +245,10 @@
             // Show loading
             $('#loading-overlay').removeClass('hidden');
             
+            DebugError.add('🚀 Referral page started loading...', 'info');
+            DebugError.add(`Page URL: ${window.location.href}`, 'info');
+            DebugError.add(`Telegram WebApp available: ${!!window.Telegram?.WebApp}`, 'info');
+            
             // 🔧 تحسين: استخدام نظام تحميل البيانات المطور
             let userData;
             try {
@@ -303,8 +307,10 @@
             const botUsername = 'PandaGiveawaysBot'; // يمكنك تغيير اسم البوت هنا
             const referralLink = `https://t.me/${botUsername}?start=ref_${userData.id}`;
             $('#user-referral-link').val(referralLink);
+            DebugError.add(`Generated referral link for user ${userData.id}: ${referralLink}`, 'info');
             
             // Load user data and referral stats from API
+            DebugError.add(`Making API calls for user ${userData.id}...`, 'info');
             Promise.all([
                 API.request(`/api/user/${userData.id}`, 'GET'),
                 API.request(`/api/user/${userData.id}/referrals`, 'GET')

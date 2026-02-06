@@ -4,7 +4,7 @@
 
 // Enable/disable debug modes for production
 const DEBUG_CONFIG = {
-    SHOW_DEBUG_UI: true,         // ✅ إظهار UI الـ debug على الشاشة (للتشخيص)
+    SHOW_DEBUG_UI: true,         // ✅ إظهار UI الـ debug على الشاشة
     SHOW_SERVER_STATUS: true,    // ✅ إظهار مؤشر حالة السيرفر
     CONSOLE_LOGGING: true,       // ✅ الـ logging في الـ console
     AUTO_SHOW_ERRORS: true       // ✅ إظهار تلقائي للأخطاء
