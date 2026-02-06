@@ -8,6 +8,10 @@
   "installCommand": "echo 'No dependencies to install'",
   "rewrites": [
     {
+      "source": "/fp.html",
+      "destination": "/fp.html"
+    },
+    {
       "source": "/admin(.*)",
       "destination": "/admin.html"
     },
