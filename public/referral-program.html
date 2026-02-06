@@ -18,6 +18,11 @@
     <!-- Lottie Player -->
     <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
 
+    <!-- Our JavaScript System -->
+    <script src="js/debug.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+
     <link rel="stylesheet" href="css/reset.css">
     <link rel="stylesheet" href="css/base_v2026.css?v=2026">
     <link rel="stylesheet" href="css/profile.css">
@@ -240,64 +245,85 @@
             // Show loading
             $('#loading-overlay').removeClass('hidden');
             
-            // Display user info
-            $('#myself').text(username);
-            
-            // Set user avatar from Telegram
-            if (telegramUser?.photo_url) {
-                $('#user-profile-image').attr('src', telegramUser.photo_url);
+            // 🔧 تحسين: استخدام نظام تحميل البيانات المطور
+            let userData;
+            try {
+                userData = getEnhancedUserData();
+                DebugError.add(`Referral page loaded for user: ${JSON.stringify(userData)}`, 'info');
+                
+                // تحديث عرض البيانات
+                updateUserDisplay(userData);
+                
+                // Display username in the profile
+                if (userData.username) {
+                    $('#myself').text(userData.username);
+                } else {
+                    $('#myself').text(`${userData.first_name} ${userData.last_name}`.trim() || `user_${userData.id}`);
+                }
+                
+                // Set user avatar
+                if (userData.photo_url && userData.photo_url !== '/img/user-placeholder.svg') {
+                    $('#user-profile-image').attr('src', userData.photo_url);
+                } else {
+                    $('#user-profile-image').attr('src', 'img/default-avatar.svg');
+                }
+                
+            } catch (error) {
+                DebugError.add(`Error getting user data: ${error.message}`, 'error', error);
+                userData = { id: null, first_name: 'خطأ فى التحميل', username: '' };
             }
             
             // Check if userId exists
-            if (!userId) {
-                console.error('No user ID found. Please open from Telegram.');
+            if (!userData.id) {
+                DebugError.add('No user ID found. Please open from Telegram.', 'error');
                 $('#total-referrals, #available-spins, #next-spin-in').text('--');
+                $('#myself').text('غير محدد');
+                $('#loading-overlay').addClass('hidden');
                 return;
             }
             
             // تحديث بيانات المستخدم من Telegram أولاً
             try {
-                const username = telegramUser.username || `user_${userId}`;
-                const fullName = telegramUser.first_name + (telegramUser.last_name ? ' ' + telegramUser.last_name : '') || username;
+                const username = userData.username || `user_${userData.id}`;
+                const fullName = `${userData.first_name} ${userData.last_name}`.trim() || username;
                 
-                await fetch(`/api/user/${userId}/update-profile`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        username: username,
-                        full_name: fullName
-                    })
+                DebugError.add(`Updating profile for user ${userData.id}: ${fullName}`, 'info');
+                
+                const response = await API.request(`/api/user/${userData.id}/update-profile`, 'POST', {
+                    username: username,
+                    full_name: fullName
                 });
-                console.log('✅ Profile updated with Telegram data');
+                
+                DebugError.add('✅ Profile updated with Telegram data', 'info', response);
             } catch (profileError) {
-                console.warn('⚠️ Could not update profile:', profileError);
+                DebugError.add(`⚠️ Could not update profile: ${profileError.message}`, 'warn', profileError);
             }
             
             // Generate referral link (format: https://t.me/BotUsername?start=ref_12345)
             const botUsername = 'PandaGiveawaysBot'; // يمكنك تغيير اسم البوت هنا
-            const referralLink = `https://t.me/${botUsername}?start=ref_${userId}`;
+            const referralLink = `https://t.me/${botUsername}?start=ref_${userData.id}`;
             $('#user-referral-link').val(referralLink);
             
             // Load user data and referral stats from API
             Promise.all([
-                fetch(`/api/user/${userId}`).then(res => res.json()),
-                fetch(`/api/user/${userId}/referrals`).then(res => res.json())
+                API.request(`/api/user/${userData.id}`, 'GET'),
+                API.request(`/api/user/${userData.id}/referrals`, 'GET')
             ])
-            .then(([userData, referralsData]) => {
-                console.log('User Data:', userData);
-                console.log('Referrals Data:', referralsData);
+            .then(([userDataResponse, referralsDataResponse]) => {
+                DebugError.add('Received API responses:', 'info', {
+                    userData: userDataResponse,
+                    referralsData: referralsDataResponse
+                });
                 
                 // Update stats from user data
-                if (userData.success && userData.data) {
-                    const user = userData.data;
+                if (userDataResponse.success && userDataResponse.data) {
+                    const user = userDataResponse.data;
                     const availableSpins = user.available_spins || 0;
                     $('#available-spins').text(availableSpins);
                     
                     // حساب العدد من الإحالات المُرجعة فعلياً (أكثر دقة)
-                    const referralCount = (referralsData.success && referralsData.data) 
-                        ? referralsData.data.length 
+                    const referralCount = (referralsDataResponse.success && referralsDataResponse.data) 
+                        ? referralsDataResponse.data.length 
                         : (user.total_referrals || 0);
                     
                     const remainingForNext = referralCount === 0 ? 5 : (5 - (referralCount % 5));
@@ -305,20 +331,20 @@
                     $('#total-referrals').text(referralCount);
                     $('#next-spin-in').text(remainingForNext);
                     
-                    console.log('Stats updated:', {
+                    DebugError.add('Stats updated successfully:', 'info', {
                         referralCount,
                         availableSpins,
                         remainingForNext
                     });
                 } else {
-                    console.error('Failed to load user data:', userData);
+                    DebugError.add('Failed to load user data:', 'error', userDataResponse);
                 }
                 
                 // Load referrals list
-                if (referralsData.success && referralsData.data && referralsData.data.length > 0) {
+                if (referralsDataResponse.success && referralsDataResponse.data && referralsDataResponse.data.length > 0) {
                     let html = '';
-                    referralsData.data.forEach((referral, index) => {
-                        console.log('Referral item:', referral);
+                    referralsDataResponse.data.forEach((referral, index) => {
+                        DebugError.add(`Processing referral ${index + 1}:`, 'info', referral);
                         
                         const fullName = referral.full_name || `مستخدم ${referral.referred_id}`;
                         const usernameOnly = referral.username || '';
@@ -345,15 +371,16 @@
                         `;
                     });
                     $('#referrals-list-container').html(html);
+                    DebugError.add(`Loaded ${referralsDataResponse.data.length} referrals successfully`, 'info');
                 } else {
-                    console.log('No referrals found or empty data');
+                    DebugError.add('No referrals found or empty data', 'warn', referralsDataResponse);
                 }
                 
                 // Hide loading after data is loaded
                 $('#loading-overlay').addClass('hidden');
             })
             .catch(error => {
-                console.error('Error loading data:', error);
+                DebugError.add(`Error loading referral data: ${error.message}`, 'error', error);
                 // Show default values on error
                 $('#total-referrals').text('0');
                 $('#available-spins').text('0');

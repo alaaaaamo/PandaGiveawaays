@@ -1,6 +1,14 @@
 // ═══════════════════════════════════════════════════════════════
-// 🐛 DEBUG & ERROR DISPLAY SYSTEM
+// 🐛 DEBUG & ERROR DISPLAY SYSTEM - DISABLED FOR PRODUCTION
 // ═══════════════════════════════════════════════════════════════
+
+// Enable/disable debug modes for production
+const DEBUG_CONFIG = {
+    SHOW_DEBUG_UI: true,         // ✅ إظهار UI الـ debug على الشاشة (للتشخيص)
+    SHOW_SERVER_STATUS: true,    // ✅ إظهار مؤشر حالة السيرفر
+    CONSOLE_LOGGING: true,       // ✅ الـ logging في الـ console
+    AUTO_SHOW_ERRORS: true       // ✅ إظهار تلقائي للأخطاء
+};
 
 class DebugError {
     static container = null;
@@ -8,7 +16,12 @@ class DebugError {
     static errors = [];
     
     static init() {
-        // إنشاء container للأخطاء
+        // تعطيل الـ debug UI في الإنتاج
+        if (!DEBUG_CONFIG.SHOW_DEBUG_UI) {
+            return;
+        }
+        
+        // إنشاء container للأخطاء (معطل في الإنتاج)
         if (!this.container) {
             this.container = document.createElement('div');
             this.container.id = 'debug-error-container';
@@ -44,7 +57,7 @@ class DebugError {
             
             document.body.appendChild(this.container);
             
-            // إضافة زر toggle في الزاوية
+            // إضافة زر toggle في الزاوية (معطل في الإنتاج)
             const toggleBtn = document.createElement('div');
             toggleBtn.id = 'debug-toggle-btn';
             toggleBtn.style.cssText = `
@@ -56,7 +69,7 @@ class DebugError {
                 width: 40px;
                 height: 40px;
                 border-radius: 50%;
-                display: flex;
+                display: none; /* مخفي في الإنتاج */
                 align-items: center;
                 justify-content: center;
                 cursor: pointer;
@@ -84,12 +97,19 @@ class DebugError {
             this.errors.pop(); // حذف القديم
         }
         
-        console.error(`[${timestamp}] ${message}`, data);
-        this.render();
+        // Console logging فقط إذا مفعل
+        if (DEBUG_CONFIG.CONSOLE_LOGGING) {
+            console.error(`[${timestamp}] ${message}`, data);
+        }
         
-        // إظهار تلقائياً عند الخطأ
-        if (type === 'error' && !this.isVisible) {
-            this.show();
+        // تحديث UI فقط إذا مفعل
+        if (DEBUG_CONFIG.SHOW_DEBUG_UI) {
+            this.render();
+            
+            // إظهار تلقائياً عند الخطأ إذا مفعل
+            if (DEBUG_CONFIG.AUTO_SHOW_ERRORS && type === 'error' && !this.isVisible) {
+                this.show();
+            }
         }
     }
     
@@ -107,6 +127,11 @@ class DebugError {
     }
     
     static show() {
+        // لا تظهر UI إذا كان معطل في الإنتاج
+        if (!DEBUG_CONFIG.SHOW_DEBUG_UI) {
+            return;
+        }
+        
         if (!this.container) this.init();
         this.container.style.display = 'block';
         this.isVisible = true;
@@ -133,23 +158,29 @@ class DebugError {
     }
 }
 
-// تهيئة النظام
-DebugError.init();
+// تهيئة النظام (فقط إذا مفعل)
+if (DEBUG_CONFIG.SHOW_DEBUG_UI) {
+    DebugError.init();
+}
 
-// إضافة معالج للأخطاء العامة
-window.addEventListener('error', (event) => {
-    DebugError.add(`JavaScript Error: ${event.message}`, 'error', {
-        filename: event.filename,
-        lineno: event.lineno,
-        colno: event.colno,
-        stack: event.error?.stack
+// إضافة معالج للأخطاء العامة (فقط إذا مفعل الـ logging)
+if (DEBUG_CONFIG.CONSOLE_LOGGING) {
+    window.addEventListener('error', (event) => {
+        DebugError.add(`JavaScript Error: ${event.message}`, 'error', {
+            filename: event.filename,
+            lineno: event.lineno,
+            colno: event.colno,
+            stack: event.error?.stack
+        });
     });
-});
+}
 
-// إضافة معالج للـ Promise rejections
-window.addEventListener('unhandledrejection', (event) => {
-    DebugError.add(`Promise Rejection: ${event.reason}`, 'error', event.reason);
-});
+// إضافة معالج للـ Promise rejections (فقط إذا مفعل الـ logging)
+if (DEBUG_CONFIG.CONSOLE_LOGGING) {
+    window.addEventListener('unhandledrejection', (event) => {
+        DebugError.add(`Promise Rejection: ${event.reason}`, 'error', event.reason);
+    });
+}
 
 // ======================================================================
 // 🔍 ENHANCED USER DATA FETCHING

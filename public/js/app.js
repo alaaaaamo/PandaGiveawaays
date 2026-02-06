@@ -33,6 +33,11 @@ function showLoadingWithMessage(message) {
 
 // إضافة مؤشر حالة السيرفر
 function addServerStatusIndicator() {
+    // تعطيل مؤشر حالة السيرفر في الإنتاج
+    if (!DEBUG_CONFIG.SHOW_SERVER_STATUS) {
+        return;
+    }
+    
     // تحقق من عدم وجود المؤشر بالفعل
     if (document.getElementById('server-status-indicator')) return;
     
@@ -79,6 +84,11 @@ function addServerStatusIndicator() {
 
 // تحديث مؤشر حالة السيرفر
 function updateServerStatus(status, message) {
+    // لا تحديث إذا كان مؤشر السيرفر معطل
+    if (!DEBUG_CONFIG.SHOW_SERVER_STATUS) {
+        return;
+    }
+    
     const indicator = document.getElementById('server-status-indicator');
     const dot = document.getElementById('server-status-dot');
     const text = document.getElementById('server-status-text');
