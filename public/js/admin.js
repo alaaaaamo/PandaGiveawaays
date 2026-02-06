@@ -279,97 +279,55 @@ function filterUsersByStatus(status) {
 
 async function loadPrizes() {
     try {
-        DebugError.add('Loading prizes from API using new 20-slot system...', 'info');
+        DebugError.add('Loading prizes from API...', 'info');
         
-        const result = await API.request('/admin/prizes', 'GET');
-        DebugError.add('Prizes API Response:', 'info', result);
+        // استخدام الـ API URL الصحيح
+        const apiUrl = `${CONFIG.API_BASE_URL}/admin/prizes`;
+        DebugError.add(`Fetching prizes from: ${apiUrl}`, 'info');
+        
+        const response = await fetch(apiUrl);
+        DebugError.add(`Prizes API Response Status: ${response.status}`, 'info');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        DebugError.add(`Prizes API Response:`, 'info', result);
         
         if (result.success && result.data) {
-            DebugError.add(`Successfully loaded ${result.data.length} prizes from database`, 'info', result.data);
-            
-            // إعداد الـ 20 slot الثابت
-            adminData.prizes = [];
-            for (let i = 0; i < 20; i++) {
-                adminData.prizes.push({
-                    position: i,
-                    id: null,
-                    name: 'حظ أوفر',
-                    value: 0,
-                    probability: 5,
-                    color: CONFIG.WHEEL_COLORS[i],
-                    isEmpty: true,
-                    isActive: true
-                });
-            }
-            
-            // ملء الأماكن بالجوائز الحقيقية
-            result.data.forEach(prize => {
-                const position = prize.position || prize.id - 1; // fallback للنظام القديم
-                if (position >= 0 && position < 20) {
-                    adminData.prizes[position] = {
-                        position: position,
-                        id: prize.id,
-                        name: prize.name,
-                        value: parseFloat(prize.value) || 0,
-                        probability: parseFloat(prize.probability) || 0,
-                        color: prize.color || CONFIG.WHEEL_COLORS[position],
-                        isEmpty: false,
-                        isActive: prize.is_active !== 0,
-                        emoji: prize.emoji || '🎁'
-                    };
-                }
-            });
-            
-            const filledSlots = adminData.prizes.filter(p => !p.isEmpty);
-            const emptySlots = adminData.prizes.filter(p => p.isEmpty);
-            
-            DebugError.add(`✅ 20-slot wheel configured: ${filledSlots.length} filled, ${emptySlots.length} empty`, 'info', {
-                filledSlots: filledSlots,
-                emptySlots: emptySlots.length
-            });
-            
-            showToast(`تم تحميل ${filledSlots.length} جائزة في ${emptySlots.length + filledSlots.length} مكان`, 'success');
+            adminData.prizes = result.data;
+            DebugError.add(`Successfully loaded ${adminData.prizes.length} prizes`, 'info', adminData.prizes);
+            showToast(`تم تحميل ${adminData.prizes.length} جائزة بنجاح`, 'success');
         } else {
             DebugError.add(`Failed to load prizes: ${result.error || 'Unknown error'}`, 'error', result);
-            
-            // إعداد 20 مكان فارغ
-            adminData.prizes = [];
-            for (let i = 0; i < 20; i++) {
-                adminData.prizes.push({
-                    position: i,
-                    id: null,
-                    name: 'حظ أوفر',
-                    value: 0,
-                    probability: 5,
-                    color: CONFIG.WHEEL_COLORS[i],
-                    isEmpty: true,
-                    isActive: true
-                });
-            }
-            
-            DebugError.add('Created 20 empty slots for new setup', 'info');
-            showToast('تم إعداد 20 مكان فارغ للعجلة', 'info');
+            showToast('فشل تحميل الجوائز', 'error');
+            // استخدام جوائز افتراضية
+            adminData.prizes = CONFIG.WHEEL_PRIZES.map((prize, index) => ({
+                id: index + 1,
+                name: prize.name,
+                value: prize.amount,
+                probability: prize.probability,
+                color: prize.color || `#${Math.floor(Math.random()*16777215).toString(16)}`
+            }));
+            DebugError.add('Using default prizes from CONFIG', 'warn', adminData.prizes);
         }
     } catch (error) {
-        DebugError.add(`Error loading prizes: ${error.message}`, 'error', error);
+        DebugError.add(`Error loading prizes: ${error.message}`, 'error', {
+            error: error.stack,
+            url: CONFIG.API_BASE_URL
+        });
+        handleApiError(error, 'admin/prizes');
         
-        // إعداد 20 مكان فارغ في حالة الخطأ
-        adminData.prizes = [];
-        for (let i = 0; i < 20; i++) {
-            adminData.prizes.push({
-                position: i,
-                id: null,
-                name: 'حظ أوفر',
-                value: 0,
-                probability: 5,
-                color: CONFIG.WHEEL_COLORS[i],
-                isEmpty: true,
-                isActive: true
-            });
-        }
-        
-        DebugError.add('Fallback to 20 empty slots', 'warn');
-        showToast('تم إعداد عجلة فارغة - يمكن إضافة الجوائز', 'warn');
+        // استخدام جوائز افتراضية في حالة الخطأ
+        adminData.prizes = CONFIG.WHEEL_PRIZES.map((prize, index) => ({
+            id: index + 1,
+            name: prize.name,
+            value: prize.amount,
+            probability: prize.probability,
+            color: prize.color || `#${Math.floor(Math.random()*16777215).toString(16)}`
+        }));
+        DebugError.add('Fallback to default prizes', 'warn');
     }
     
     renderPrizesList();
@@ -378,99 +336,45 @@ async function loadPrizes() {
 
 function renderPrizesList() {
     const container = document.getElementById('prizes-list');
-    if (!container) {
-        DebugError.add('Prize list container not found', 'error');
-        return;
-    }
+    if (!container) return;
     
-    // عرض الجوائز الممتلئة فقط
-    const filledSlots = adminData.prizes.filter(p => !p.isEmpty);
+    // 🎨 الألوان الزيتية بالترتيب (نفس العجلة)
+    const oilColors = [
+        '#00bfff',  // Blue (0.05 TON)
+        '#ffa500',  // Orange (0.1 TON)  
+        '#9370db',  // Purple (0.15 TON)
+        '#32cd32',  // Green (0.5 TON)
+        '#ff1493',  // Pink (1.0 TON)
+        '#808080'   // Gray (حظ أوفر)
+    ];
     
-    DebugError.add(`Rendering ${filledSlots.length} filled prize slots out of ${adminData.prizes.length} total`, 'info');
-    
-    if (filledSlots.length === 0) {
-        container.innerHTML = `
-            <div style="text-align: center; padding: 60px 20px; color: #8b95a1;">
-                <div style="font-size: 64px; margin-bottom: 20px;">🎁</div>
-                <h3 style="margin-bottom: 10px; color: #c9d1d9;">لا توجد جوائز حتى الآن</h3>
-                <p style="margin-bottom: 20px;">اضغط على زر "إضافة جائزة جديدة" لبدء إضافة الجوائز</p>
-            </div>
-        `;
-        return;
-    }
-    
-    container.innerHTML = filledSlots.map((slot) => {
-        const position = slot.position;
-        const statusIcon = slot.isActive ? '✅' : '❌';
-        
+    container.innerHTML = adminData.prizes.map((prize, index) => {
+        const color = oilColors[index % oilColors.length];
         return `
-        <div class="prize-slot filled-slot" data-position="${position}" data-id="${slot.id}">
-            <div class="slot-header">
-                <div class="slot-position">موضع ${position + 1}</div>
-                <div class="slot-status">${statusIcon}</div>
-            </div>
-            <div class="prize-color-bar" style="background: ${slot.color};"></div>
+        <div class="prize-item-compact" data-id="${prize.id}">
+            <div class="prize-color-bar" style="background: ${color};"></div>
             <div class="prize-info-compact">
-                <div class="prize-name">${slot.name}</div>
+                <div class="prize-name">${prize.name}</div>
                 <div class="prize-stats">
-                    <span class="stat-item">💰 ${slot.value.toFixed(4)} TON</span>
-                    <span class="stat-item">📊 ${slot.probability}%</span>
-                    <span class="stat-item">🆔 ${slot.id}</span>
-                    <span class="stat-item">🎨 ${slot.color}</span>
+                    <span class="stat-item">💰 ${prize.value} TON</span>
+                    <span class="stat-item">📊 ${prize.probability}%</span>
                 </div>
             </div>
             <div class="prize-actions-compact">
-                <button class="icon-btn-small edit" onclick="openEditPrizeModal(${slot.id}, ${position})" title="تعديل">✏️</button>
-                <button class="icon-btn-small delete" onclick="deletePrize(${slot.id}, ${position})" title="حذف">🗑️</button>
-                <button class="icon-btn-small toggle" onclick="togglePrize(${slot.id}, ${position})" title="${slot.isActive ? 'تعطيل' : 'تفعيل'}">${slot.isActive ? '⏸️' : '▶️'}</button>
+                <button class="icon-btn-small edit" onclick="openEditPrizeModal(${prize.id})" title="تعديل">✏️</button>
+                <button class="icon-btn-small delete" onclick="deletePrize(${prize.id})" title="حذف">🗑️</button>
             </div>
         </div>
     `}).join('');
-    
-    DebugError.add('Prize slots rendered successfully', 'info');
 }
 
 function updatePrizesInfo() {
-    const totalSlots = adminData.prizes.length;
-    const filledSlots = adminData.prizes.filter(p => !p.isEmpty);
-    const emptySlots = adminData.prizes.filter(p => p.isEmpty);
-    const activeSlots = adminData.prizes.filter(p => !p.isEmpty && p.isActive);
+    const totalPrizes = adminData.prizes.length;
     const totalProbability = adminData.prizes.reduce((sum, p) => sum + p.probability, 0);
-    const isValid = Math.abs(totalProbability - 100) < 0.1;
+    const isValid = totalProbability === 100;
     
-    // تحديث العناصر
-    const elements = {
-        'total-prizes-count': totalSlots,
-        'filled-slots-count': filledSlots.length,
-        'empty-slots-count': emptySlots.length,
-        'active-prizes-count': activeSlots.length,
-        'total-probability': `${totalProbability.toFixed(1)}%`
-    };
-    
-    Object.entries(elements).forEach(([id, value]) => {
-        const element = document.getElementById(id);
-        if (element) {
-            element.textContent = value;
-        }
-    });
-    
-    // تحديث مؤشر صحة الاحتمالات
-    const probabilityElement = document.getElementById('total-probability');
-    if (probabilityElement) {
-        probabilityElement.style.color = isValid ? '#4CAF50' : '#ff4444';
-        probabilityElement.parentElement.title = isValid 
-            ? 'الاحتمالات صحيحة ✅' 
-            : `الاحتمالات غير متوازنة! يجب أن تكون 100% (حالياً ${totalProbability.toFixed(1)}%) ⚠️`;
-    }
-    
-    DebugError.add('Updated prizes statistics', 'info', {
-        totalSlots,
-        filledSlots: filledSlots.length,
-        emptySlots: emptySlots.length,
-        activeSlots: activeSlots.length,
-        totalProbability: totalProbability.toFixed(1),
-        isValid
-    });
+    document.getElementById('total-prizes-count').textContent = totalPrizes;
+    document.getElementById('total-probability').textContent = `${totalProbability}%`;
     
     const statusEl = document.getElementById('system-status');
     if (isValid) {
@@ -483,26 +387,6 @@ function updatePrizesInfo() {
 }
 
 function openAddPrizeModal() {
-    // ملء dropdown بالمواضع الفارغة
-    const select = document.getElementById('prize-position-select');
-    const emptySlots = adminData.prizes.filter(p => p.isEmpty);
-    
-    if (emptySlots.length === 0) {
-        showToast('❌ جميع المواضع ممتلئة! احذف جائزة أولاً', 'error');
-        return;
-    }
-    
-    select.innerHTML = emptySlots.map(slot => {
-        const colorBox = `<span style="display: inline-block; width: 12px; height: 12px; background: ${slot.color}; border-radius: 2px; margin-left: 5px;"></span>`;
-        return `<option value="${slot.position}">موضع ${slot.position + 1} - ${slot.color}</option>`;
-    }).join('');
-    
-    // تعيين أول موضع فارغ كافتراضي
-    if (emptySlots.length > 0) {
-        select.value = emptySlots[0].position;
-    }
-    
-    // فتح النافذة
     const modal = document.getElementById('add-prize-modal');
     modal.classList.add('active');
 }
@@ -524,22 +408,9 @@ async function addPrize() {
     const name = document.getElementById('prize-name').value;
     const value = parseFloat(document.getElementById('prize-value').value);
     const probability = parseFloat(document.getElementById('prize-probability').value);
-    const position = parseInt(document.getElementById('prize-position-select').value);
     
-    if (!name || isNaN(value) || isNaN(probability) || isNaN(position)) {
+    if (!name || isNaN(value) || isNaN(probability)) {
         showToast('❌ يرجى ملء جميع الحقول', 'error');
-        return;
-    }
-    
-    // التحقق من صحة الموضع
-    if (position < 0 || position > 19) {
-        showToast('❌ الموضع غير صحيح! يجب أن يكون بين 0 و 19', 'error');
-        return;
-    }
-    
-    // التحقق من أن الموضع فارغ
-    if (!adminData.prizes[position].isEmpty) {
-        showToast('❌ هذا الموضع ممتلئ بالفعل!', 'error');
         return;
     }
     
@@ -551,7 +422,7 @@ async function addPrize() {
                 name,
                 value,
                 probability,
-                position: position
+                position: adminData.prizes.length
             })
         });
         

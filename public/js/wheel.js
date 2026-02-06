@@ -216,10 +216,6 @@ class WheelOfFortune {
                 const startAngle = rotation + (index * anglePerSegment);
                 const endAngle = startAngle + anglePerSegment;
                 
-                // استخدام لون الجائزة من الـ config أو لون افتراضي
-                const prizeColor = prize.color || CONFIG.WHEEL_COLORS[index] || '#808080';
-                const darkerColor = this.darkenColor(prizeColor, 0.3);
-                
                 // حساب نقاط الـ gradient
                 const gradStartX = centerX + Math.cos(startAngle) * radius * 0.3;
                 const gradStartY = centerY + Math.sin(startAngle) * radius * 0.3;
@@ -228,8 +224,9 @@ class WheelOfFortune {
                 
                 // إنشاء gradient لكل قطاع
                 const gradient = ctx.createLinearGradient(gradStartX, gradStartY, gradEndX, gradEndY);
-                gradient.addColorStop(0, prizeColor);
-                gradient.addColorStop(1, darkerColor);
+                const colorPair = oilColors[index % oilColors.length];
+                gradient.addColorStop(0, colorPair.start);
+                gradient.addColorStop(1, colorPair.end);
                 
                 // رسم القطاع مع حماية إضافية
                 ctx.beginPath();
@@ -379,75 +376,57 @@ class WheelOfFortune {
             
             // الآن نبدأ دوران العجلة بناءً على نتيجة السيرفر
             // حساب زاوية الدوران للجائزة
-            // نبحث عن الجائزة في النظام الجديد بـ 20 مكان
+            // نبحث عن الجائزة بناءً على عدة معايير لضمان الدقة
             let prizeIndex = -1;
             
-            DebugError.add('🔍 Searching for prize in 20-slot wheel...', 'info', {
+            DebugError.add('🔍 Searching for prize in wheel...', 'info', {
                 serverPrize: prize,
-                wheelSlots: this.prizes,
-                searchCriteria: 'position, ID, amount, or name matching'
+                wheelPrizes: this.prizes,
+                searchCriteria: 'amount or name matching'
             });
             
-            // البحث الأول: بناءً على position إذا كان موجود
-            if (prize.position !== undefined && prize.position !== null) {
-                if (prize.position >= 0 && prize.position < this.prizes.length) {
-                    prizeIndex = prize.position;
-                    DebugError.add(`📍 Search by position (${prize.position}):`, 'info', { found: true, index: prizeIndex });
-                }
-            }
-            
-            // البحث الثاني: بناءً على ID إذا كان موجود  
-            if (prizeIndex === -1 && prize.id) {
+            // البحث الأول: بناءً على ID إذا كان موجود
+            if (prize.id) {
                 prizeIndex = this.prizes.findIndex(p => p.id === prize.id);
                 DebugError.add(`🆔 Search by ID (${prize.id}):`, 'info', { found: prizeIndex !== -1, index: prizeIndex });
             }
             
-            // البحث الثالث: إذا كانت الجائزة "حظ أوفر" (amount = 0)
+            // البحث الثاني: إذا كانت الجائزة "حظ أوفر" (amount = 0)
             if (prizeIndex === -1 && prize.amount === 0) {
-                // نبحث عن أول slot فارغ أو يحتوي على "حظ أوفر"
                 prizeIndex = this.prizes.findIndex(p => 
-                    p.isEmpty === true || 
-                    p.amount === 0 || 
-                    (p.name && (p.name.includes('حظ') || p.name.includes('أوفر') || p.name === 'حظ أوفر'))
+                    p.amount === 0 && 
+                    (p.name.includes('حظ') || p.name.includes('أوفر') || p.name.includes('تحظ'))
                 );
-                DebugError.add('🍀 Search by "حظ أوفر" pattern:', 'info', { found: prizeIndex !== -1, index: prizeIndex, prize: prizeIndex !== -1 ? this.prizes[prizeIndex] : null });
+                DebugError.add('🍀 Search by "حظ أوفر" pattern:', 'info', { found: prizeIndex !== -1, index: prizeIndex });
             }
             
-            // البحث الرابع: بناءً على المبلغ (مع tolerance)
-            if (prizeIndex === -1 && prize.amount > 0) {
+            // البحث الثالث: بناءً على المبلغ (مع tolerance)
+            if (prizeIndex === -1) {
                 prizeIndex = this.prizes.findIndex(p => Math.abs(p.amount - prize.amount) < 0.001);
                 DebugError.add(`💰 Search by amount (${prize.amount}):`, 'info', { found: prizeIndex !== -1, index: prizeIndex });
             }
             
-            // البحث الخامس: بناءً على الاسم
+            // البحث الرابع: بناءً على الاسم
             if (prizeIndex === -1) {
                 prizeIndex = this.prizes.findIndex(p => p.name === prize.name);
                 DebugError.add(`📝 Search by name (${prize.name}):`, 'info', { found: prizeIndex !== -1, index: prizeIndex });
             }
             
-            // البحث السادس: إيجاد أول مكان فارغ للجوائز غير المعرفة
-            if (prizeIndex === -1) {
-                prizeIndex = this.prizes.findIndex(p => p.isEmpty === true);
-                DebugError.add('📭 Search for empty slot:', 'info', { found: prizeIndex !== -1, index: prizeIndex });
-            }
-            
             if (prizeIndex === -1) {
                 DebugError.add('❌ Prize not found in wheel!', 'error', {
                     serverPrize: prize,
-                    availableSlots: this.prizes,
-                    comparison: this.prizes.map((p, i) => ({
-                        position: i,
+                    availablePrizes: this.prizes,
+                    comparison: this.prizes.map(p => ({
                         name: p.name,
                         amount: p.amount,
                         id: p.id,
-                        isEmpty: p.isEmpty,
                         amountDiff: Math.abs(p.amount - prize.amount)
                     }))
                 });
                 throw new Error('الجائزة غير موجودة في العجلة');
             }
             
-            DebugError.add(`✅ Prize found at position ${prizeIndex}:`, 'info', this.prizes[prizeIndex]);
+            DebugError.add(`✅ Prize found at index ${prizeIndex}:`, 'info', this.prizes[prizeIndex]);
             
             // Prize matched successfully - server response processed
             
@@ -617,34 +596,6 @@ class WheelOfFortune {
         // عرض Modal للفوز الكبير
         if (prize.amount >= 0.5) {
             showWinModal(prize);
-        }
-    }
-    
-    // ═══════════════════════════════════════════════════════════
-    // 🎨 UTILITY METHODS
-    // ═══════════════════════════════════════════════════════════
-    
-    darkenColor(hex, amount) {
-        try {
-            // تحويل hex إلى RGB
-            let color = hex.replace('#', '');
-            if (color.length === 3) {
-                color = color.split('').map(c => c + c).join('');
-            }
-            const num = parseInt(color, 16);
-            const r = (num >> 16) & 255;
-            const g = (num >> 8) & 255;
-            const b = num & 255;
-            
-            // تغميق الألوان
-            const newR = Math.max(0, Math.floor(r * (1 - amount)));
-            const newG = Math.max(0, Math.floor(g * (1 - amount)));
-            const newB = Math.max(0, Math.floor(b * (1 - amount)));
-            
-            // تحويل إلى hex
-            return '#' + ((newR << 16) | (newG << 8) | newB).toString(16).padStart(6, '0');
-        } catch (error) {
-            return '#666666'; // لون افتراضي في حالة الخطأ
         }
     }
 }

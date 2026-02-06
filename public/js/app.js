@@ -386,50 +386,40 @@ async function loadWheelPrizes() {
     try {
         DebugError.add('🎁 Starting to load wheel prizes from API...', 'info');
         
-        // إعداد الـ 20 مكان الثابت أولاً
-        CONFIG.WHEEL_PRIZES = [...CONFIG.WHEEL_DEFAULT_SLOTS];
-        
         const result = await API.request('/admin/prizes', 'GET');
         
         if (result.success && result.data && result.data.length > 0) {
             DebugError.add(`✅ Got ${result.data.length} prizes from API`, 'info', result.data);
             
-            // ملء الأماكن بالجوائز الحقيقية من قاعدة البيانات
-            result.data.forEach(prize => {
-                if (prize.position !== null && prize.position >= 0 && prize.position < 20) {
-                    CONFIG.WHEEL_PRIZES[prize.position] = {
-                        position: prize.position,
-                        name: prize.name,
-                        amount: parseFloat(prize.value) || 0,
-                        probability: parseFloat(prize.probability) || 0,
-                        color: prize.color || CONFIG.WHEEL_COLORS[prize.position],
-                        id: prize.id,
-                        isEmpty: false
-                    };
-                }
-            });
+            // تحويل صيغة الجوائز من DB إلى صيغة العجلة
+            CONFIG.WHEEL_PRIZES = result.data.map(prize => ({
+                name: prize.name,
+                amount: parseFloat(prize.value) || 0,
+                probability: parseFloat(prize.probability) || 1,
+                color: prize.color || '#4CAF50',
+                id: prize.id
+            }));
             
-            DebugError.add('✅ Wheel configured with 20 slots', 'info', CONFIG.WHEEL_PRIZES);
+            DebugError.add('✅ Wheel prizes loaded and converted successfully', 'info', CONFIG.WHEEL_PRIZES);
             
             // التحقق من تطابق الجوائز مع ما هو متوقع
-            const filledSlots = CONFIG.WHEEL_PRIZES.filter(slot => !slot.isEmpty);
-            const emptySlots = CONFIG.WHEEL_PRIZES.filter(slot => slot.isEmpty);
-            
-            DebugError.add(`📊 Wheel slots: ${filledSlots.length} filled, ${emptySlots.length} empty (حظ أوفر)`, 'info');
-            
-            const totalProbability = CONFIG.WHEEL_PRIZES.reduce((sum, p) => sum + p.probability, 0);
-            DebugError.add(`📊 Total wheel probability: ${totalProbability}%`, 'info');
-            
-            if (Math.abs(totalProbability - 100) > 0.1) {
-                DebugError.add(`⚠️ Warning: Total probability is ${totalProbability}%, not 100%`, 'warn');
+            if (CONFIG.WHEEL_PRIZES.length === 0) {
+                DebugError.add('❌ No prizes loaded - wheel will not work!', 'error');
+            } else {
+                const totalProbability = CONFIG.WHEEL_PRIZES.reduce((sum, p) => sum + p.probability, 0);
+                DebugError.add(`📊 Total wheel probability: ${totalProbability}%`, 'info');
+                
+                if (Math.abs(totalProbability - 100) > 0.1) {
+                    DebugError.add(`⚠️ Warning: Total probability is ${totalProbability}%, not 100%`, 'warn');
+                }
             }
         } else {
-            DebugError.add('❌ No prizes from API, using 20 empty slots (all حظ أوفر)', 'warn', result);
+            DebugError.add('❌ Failed to load prizes from API, using default', 'error', result);
+            // يتم استخدام الجوائز الافتراضية من config.js
         }
     } catch (error) {
         DebugError.add(`💥 Error loading wheel prizes: ${error.message}`, 'error', error);
-        DebugError.add('⚠️ Using default 20 slots (all حظ أوفر)', 'warn');
-        CONFIG.WHEEL_PRIZES = [...CONFIG.WHEEL_DEFAULT_SLOTS];
+        DebugError.add('⚠️ Using default prizes from config', 'warn');
     }
 }
 
@@ -1482,12 +1472,17 @@ window.continueAppInitialization = async function() {
         await new Promise(resolve => setTimeout(resolve, 200));
         
         try {
-            // ✅ فحص الجوائز - لا جوائز default - فقط من الأدمن
-            const activeSlots = CONFIG.WHEEL_PRIZES.filter(slot => !slot.isEmpty && slot.isActive !== false);
-            
-            if (!CONFIG.WHEEL_PRIZES || CONFIG.WHEEL_PRIZES.length === 0 || activeSlots.length === 0) {
-                DebugError.add('❌ No prizes configured - Admin must add prizes first', 'error');
-                throw new Error('⚠️ لم يتم إضافة جوائز بعد - يرجى التواصل مع الإدارة');
+            // التأكد من وجود الجوائز
+            if (!CONFIG.WHEEL_PRIZES || CONFIG.WHEEL_PRIZES.length === 0) {
+                showToast('⚠️ جوائز العجلة غير متوفرة، سيتم استخدام الجوائز الافتراضية', 'warning');
+                CONFIG.WHEEL_PRIZES = [
+                    { name: '0.05 TON', amount: 0.05, probability: 45 },
+                    { name: '0.1 TON', amount: 0.1, probability: 30 },
+                    { name: '0.15 TON', amount: 0.15, probability: 15 },
+                    { name: '0.5 TON', amount: 0.5, probability: 0 },
+                    { name: '1.0 TON', amount: 1.0, probability: 0 },
+                    { name: 'حظ أوفر', amount: 0, probability: 10 }
+                ];
             }
             
             // التحقق من وجود العجلة في DOM
@@ -1496,7 +1491,6 @@ window.continueAppInitialization = async function() {
                 throw new Error('عنصر العجلة غير موجود في الصفحة');
             }
             
-            DebugError.add(`🎯 Creating wheel with ${activeSlots.length} active prizes`, 'info');
             showToast('🎯 بدء إنشاء العجلة...', 'info');
             wheel = new WheelOfFortune('wheel-canvas', CONFIG.WHEEL_PRIZES);
             
