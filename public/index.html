@@ -20,35 +20,67 @@
     (function() {
         'use strict';
         
-        // Must be opened from Telegram WebApp only
-        if (!window.Telegram || !window.Telegram.WebApp || !window.Telegram.WebApp.initData) {
-            document.write(`
-                <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; text-align: center; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial;">
-                    <div style="background: rgba(0,0,0,0.3); padding: 40px; border-radius: 20px; backdrop-filter: blur(10px);">
-                        <h1 style="font-size: 64px; margin-bottom: 20px;">🐼</h1>
-                        <h2 style="margin-bottom: 15px; font-size: 24px;">مرحباً بك في Panda Giveaways!</h2>
-                        <p style="font-size: 18px; line-height: 1.6; margin-bottom: 30px; opacity: 0.9;">للاستفادة من التطبيق، يجب فتحه من خلال البوت على Telegram</p>
-                        <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 12px; margin-top: 20px;">
-                            <p style="font-size: 14px; margin: 0 0 15px 0; opacity: 0.8;">ابحث عن البوت في Telegram:</p>
-                            <code style="background: rgba(0,0,0,0.3); padding: 8px 16px; border-radius: 8px; font-size: 16px; display: inline-block;">@PandaGiveawaysBot</code>
-                        </div>
-                        <p style="font-size: 12px; margin-top: 30px; opacity: 0.6;">Access through Telegram Bot only</p>
-                    </div>
-                </div>
-            `);
-            document.close();
-            throw new Error('Direct browser access blocked');
+        // 🔐 Enhanced security checks
+        
+        // Check 1: Telegram WebApp SDK must exist
+        if (!window.Telegram || !window.Telegram.WebApp) {
+            showBlockPage();
+            return;
         }
         
-        // 🔒 Freeze Telegram object to prevent tampering
-        if (window.Telegram && window.Telegram.WebApp) {
-            try {
-                Object.freeze(window.Telegram.WebApp.initDataUnsafe);
-                Object.freeze(window.Telegram.WebApp);
-                Object.seal(window.Telegram);
-            } catch(e) {
-                // Already frozen/sealed
-            }
+        const tg = window.Telegram.WebApp;
+        
+        // Check 2: Must have REAL initData from Telegram (not URL)
+        if (!tg.initData || tg.initData.length < 50) {
+            showBlockPage();
+            return;
+        }
+        
+        // Check 3: Must have user data
+        if (!tg.initDataUnsafe || !tg.initDataUnsafe.user || !tg.initDataUnsafe.user.id) {
+            showBlockPage();
+            return;
+        }
+        
+        // Check 4: Must be in Telegram environment (not standalone)
+        if (!tg.platform || tg.platform === 'unknown') {
+            showBlockPage();
+            return;
+        }
+        
+        // ✅ All checks passed - legitimate Telegram WebApp access
+        console.log('✅ Telegram WebApp verified - User:', tg.initDataUnsafe.user.id);
+        
+        // 🔒 Freeze objects to prevent tampering
+        try {
+            Object.freeze(tg.initDataUnsafe);
+            Object.freeze(tg);
+            Object.seal(window.Telegram);
+        } catch(e) {}
+        
+        function showBlockPage() {
+            document.write(`
+                <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; text-align: center; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial;">
+                    <div style="background: rgba(0,0,0,0.3); padding: 40px; border-radius: 20px; backdrop-filter: blur(10px); max-width: 450px;">
+                        <h1 style="font-size: 64px; margin-bottom: 20px; animation: bounce 2s infinite;">🐼</h1>
+                        <h2 style="margin-bottom: 15px; font-size: 24px; color: #ffd43b;">مرحباً بك في Panda Giveaways!</h2>
+                        <p style="font-size: 16px; line-height: 1.6; margin-bottom: 30px; opacity: 0.9;">للاستفادة من التطبيق، يجب فتحه من خلال البوت على Telegram</p>
+                        <div style="background: rgba(255,255,255,0.15); padding: 20px; border-radius: 12px; margin-top: 20px; border: 1px solid rgba(255,255,255,0.2);">
+                            <p style="font-size: 14px; margin: 0 0 15px 0; opacity: 0.9; font-weight: 600;">📲 ابحث عن البوت في Telegram:</p>
+                            <code style="background: rgba(0,0,0,0.4); padding: 10px 20px; border-radius: 8px; font-size: 16px; display: inline-block; color: #5eabe1; font-weight: bold;">@PandaGiveawaysBot</code>
+                        </div>
+                        <p style="font-size: 11px; margin-top: 30px; opacity: 0.5;">🔒 Access through Telegram Bot only</p>
+                    </div>
+                </div>
+                <style>
+                @keyframes bounce {
+                    0%, 100% { transform: translateY(0); }
+                    50% { transform: translateY(-10px); }
+                }
+                </style>
+            `);
+            document.close();
+            throw new Error('Direct browser access blocked - Telegram WebApp required');
         }
     })();
     </script>

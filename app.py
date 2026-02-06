@@ -110,14 +110,29 @@ def validate_telegram_init_data(init_data_str):
             
         received_hash = parsed_data.pop('hash')
         
-        # التحقق من auth_date (صلاحية 24 ساعة)
+        # التحقق من auth_date (تجاهل للأدمن)
         if 'auth_date' in parsed_data:
             auth_date = int(parsed_data['auth_date'])
             current_time = int(datetime.now().timestamp())
-            # التحقق من أن البيانات ليست قديمة (48 ساعة - مرونة أكثر)
-            if current_time - auth_date > 172800:
-                print(f"⚠️ Expired auth_date: {(current_time - auth_date) / 3600:.1f} hours old")
+            age_hours = (current_time - auth_date) / 3600
+            
+            # التحقق من user_id لتحديد إذا كان أدمن
+            is_admin_user = False
+            if 'user' in parsed_data:
+                try:
+                    user_data_temp = json.loads(unquote(parsed_data['user']))
+                    is_admin_user = user_data_temp.get('id') in ADMIN_IDS
+                except:
+                    pass
+            
+            # للأدمن: صلاحية 7 أيام، للمستخدمين العاديين: 48 ساعة
+            max_age = 604800 if is_admin_user else 172800
+            
+            if current_time - auth_date > max_age:
+                print(f"⚠️ Expired auth_date: {age_hours:.1f} hours old (max: {max_age/3600:.1f}h)")
                 return None
+            
+            print(f"✅ auth_date valid: {age_hours:.1f} hours old (admin: {is_admin_user})")
         
         # إنشاء البيانات للتحقق
         data_check_string = '\n'.join(
@@ -814,7 +829,7 @@ def fingerprint_page():
 
 @app.route('/api/user/<int:user_id>', methods=['GET'])
 @require_telegram_auth
-def get_user_data(user_id, authenticated_user_id=None):
+def get_user_data(user_id, authenticated_user_id=None, is_admin=False):
     """الحصول على بيانات المستخدم"""
     try:
         # التحقق من أن user_id يطابق الـ authenticated_user_id
@@ -861,7 +876,7 @@ def get_user_data(user_id, authenticated_user_id=None):
 
 @app.route('/api/user/<int:user_id>/update-profile', methods=['POST'])
 @require_telegram_auth
-def update_user_profile(user_id, authenticated_user_id=None):
+def update_user_profile(user_id, authenticated_user_id=None, is_admin=False):
     """تحديث username و full_name للمستخدم من Telegram"""
     try:
         # التحقق من المصادقة
@@ -917,7 +932,7 @@ def update_user_profile(user_id, authenticated_user_id=None):
 
 @app.route('/api/user/<int:user_id>/referrals', methods=['GET'])
 @require_telegram_auth
-def get_user_referrals(user_id, authenticated_user_id=None):
+def get_user_referrals(user_id, authenticated_user_id=None, is_admin=False):
     """الحصول على إحالات المستخدم"""
     try:
         # التحقق من المصادقة
@@ -938,7 +953,7 @@ def get_user_referrals(user_id, authenticated_user_id=None):
 
 @app.route('/api/user/<int:user_id>/spins', methods=['GET'])
 @require_telegram_auth
-def get_user_spins(user_id, authenticated_user_id=None):
+def get_user_spins(user_id, authenticated_user_id=None, is_admin=False):
     """الحصول على تاريخ لفات المستخدم"""
     try:
         # التحقق من المصادقة
@@ -960,7 +975,7 @@ def get_user_spins(user_id, authenticated_user_id=None):
 
 @app.route('/api/spin', methods=['POST'])
 @require_telegram_auth
-def perform_spin(authenticated_user_id=None):
+def perform_spin(authenticated_user_id=None, is_admin=False):
     """تنفيذ لفة العجلة"""
     import random
     import hashlib
@@ -1150,7 +1165,7 @@ def get_tasks():
 
 @app.route('/api/user/<int:user_id>/completed-tasks', methods=['GET'])
 @require_telegram_auth
-def get_user_completed_tasks(user_id, authenticated_user_id=None):
+def get_user_completed_tasks(user_id, authenticated_user_id=None, is_admin=False):
     """الحصول على المهام المكتملة للمستخدم"""
     try:
         # التحقق من المصادقة
@@ -1312,7 +1327,7 @@ def verify_task_completion(task_id):
 
 @app.route('/api/user/<int:user_id>/withdrawals', methods=['GET'])
 @require_telegram_auth
-def get_user_withdrawals(user_id, authenticated_user_id=None):
+def get_user_withdrawals(user_id, authenticated_user_id=None, is_admin=False):
     """الحصول على طلبات السحب للمستخدم"""
     try:
         # التحقق من المصادقة
@@ -1341,7 +1356,7 @@ def get_user_withdrawals(user_id, authenticated_user_id=None):
 
 @app.route('/api/withdrawal/request', methods=['POST'])
 @require_telegram_auth
-def request_withdrawal(authenticated_user_id=None):
+def request_withdrawal(authenticated_user_id=None, is_admin=False):
     """طلب سحب جديد"""
     try:
         # استخدام user_id المصادق عليه
