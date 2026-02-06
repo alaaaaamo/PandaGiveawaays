@@ -1280,8 +1280,7 @@ async function loadSettings() {
         // تحميل إعدادات التحقق من التعدد
         const adminId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
         if (adminId) {
-            const verificationResponse = await fetch(`${window.CONFIG.API_BASE_URL}/admin/verification-settings?admin_id=${adminId}`);
-            const verificationResult = await verificationResponse.json();
+            const verificationResult = await API.request(`/admin/verification-settings?admin_id=${adminId}`, 'GET');
             
             if (verificationResult.success) {
                 document.getElementById('verification-enabled').checked = verificationResult.verification_enabled !== false;
@@ -1331,15 +1330,7 @@ async function saveSettings() {
         console.log('Saving settings:', settings);
         
         // حفظ الإعدادات في الـ API
-        const response = await fetch(`${window.CONFIG.API_BASE_URL}/settings`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(settings)
-        });
-        
-        const result = await response.json();
+        const result = await API.request('/settings', 'POST', settings);
         
         hideLoading();
         
@@ -1399,13 +1390,7 @@ function setupEventListeners() {
             console.log('🔄 Auto-withdrawal toggled:', isEnabled);
             
             try {
-                const response = await fetch(`${window.CONFIG.API_BASE_URL}/settings`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ auto_withdrawal_enabled: isEnabled })
-                });
-                
-                const result = await response.json();
+                const result = await API.request('/settings', 'POST', { auto_withdrawal_enabled: isEnabled });
                 
                 if (result.success) {
                     const status = isEnabled ? '✅ مفعّل' : '❌ معطّل';
@@ -1439,16 +1424,10 @@ function setupEventListeners() {
             }
             
             try {
-                const response = await fetch(`${window.CONFIG.API_BASE_URL}/admin/verification-settings`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        admin_id: adminId,
-                        enabled: isEnabled 
-                    })
+                const result = await API.request('/admin/verification-settings', 'POST', {
+                    admin_id: adminId,
+                    enabled: isEnabled
                 });
-                
-                const result = await response.json();
                 
                 if (result.success) {
                     const status = isEnabled ? '✅ مفعّل' : '❌ معطّل';
@@ -1808,16 +1787,7 @@ async function createTask() {
         
         // إرسال البيانات إلى API
         showLoading();
-        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
-        const response = await fetch(`${API_BASE_URL}/admin/tasks`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(taskData)
-        });
-        
-        const result = await response.json();
+        const result = await API.request('/admin/tasks', 'POST', taskData);
         hideLoading();
         
         console.log('📥 Server response:', result);
@@ -1859,19 +1829,12 @@ async function openAddChannelModal() {
     
     try {
         showLoading();
-        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
-        const response = await fetch(`${API_BASE_URL}/admin/channels`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                channel_id: channelId,
-                channel_name: channelName,
-                channel_url: channelUrl,
-                admin_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 1797127532
-            })
+        const result = await API.request('/admin/channels', 'POST', {
+            channel_id: channelId,
+            channel_name: channelName,
+            channel_url: channelUrl,
+            admin_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 1797127532
         });
-        
-        const result = await response.json();
         hideLoading();
         
         if (result.success) {
@@ -2014,12 +1977,7 @@ async function deleteChannel(channelId) {
     
     try {
         showLoading();
-        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
-        const response = await fetch(`${API_BASE_URL}/admin/channels?channel_id=${channelId}`, {
-            method: 'DELETE'
-        });
-        
-        const result = await response.json();
+        const result = await API.request(`/admin/channels?channel_id=${channelId}`, 'DELETE');
         hideLoading();
         
         if (result.success) {
@@ -2038,9 +1996,7 @@ async function deleteChannel(channelId) {
 async function viewUserReferrals(userId, userName) {
     try {
         showLoading();
-        const API_BASE_URL = window.CONFIG?.API_BASE_URL || '/api';
-        const response = await fetch(`${API_BASE_URL}/admin/user-referrals?user_id=${userId}`);
-        const result = await response.json();
+        const result = await API.request(`/admin/user-referrals?user_id=${userId}`, 'GET');
         
         hideLoading();
         
