@@ -95,8 +95,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
         
-        showToast('✅ تم التحقق من صحة جلسة تليجرام', 'success');
-        
         // عرض Loading مع رسالة تبين التقدم
         showLoadingWithMessage('🔄 جاري التهيئة...');
         showLoading(true);
@@ -108,7 +106,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         if (!isAdmin) {
             try {
-                showLoadingWithMessage('🔎 جاري التحقق من حالة البوت...');
+                showLoadingWithMessage('� جاري التحقق...');
                 const botStatusResp = await fetch(`${CONFIG.API_BASE_URL}/bot/status`);
                 const botStatusData = await botStatusResp.json();
                 
@@ -169,7 +167,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         if (userId && !isAdmin) {
             try {
-                showLoadingWithMessage('🔐 جاري التحقق من الحساب...');
+                showLoadingWithMessage('🔐 جاري التحقق...');
                 const verifyStatusResp = await fetch(`${CONFIG.API_BASE_URL}/verification/status/${userId}`);
                 const verifyData = await verifyStatusResp.json();
                 
@@ -228,14 +226,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         // إرسال رسالة ترحيبية (سيظهر تليجرام "Allow bot to message you?" تلقائياً)
-        showLoadingWithMessage('📩 جاري إعداد الاتصال...');
+        showLoadingWithMessage('📩 جاري الإعداد...');
         await sendWelcomeMessage();
         
         // حفظ referrer_id مؤقتاً إذا موجود (سيتم تسجيله بعد التحقق من القنوات)
         savePendingReferral();
         
         // Check required channels FIRST before loading anything
-        showLoadingWithMessage('📺 جاري التحقق من اشتراكك في القنوات...');
+        showLoadingWithMessage('📺 جاري التحقق...');
         
         let channelsVerified = false;
         try {
@@ -292,9 +290,9 @@ async function loadWheelPrizes() {
                 probability: prize.probability,
                 color: prize.color
             }));
-            showToast(`✅ تم تحميل ${CONFIG.WHEEL_PRIZES.length} جائزة من قاعدة البيانات`, 'success');
+            // تم تحميل الجوائز من قاعدة البيانات
         } else {
-            showToast('⚠️ يتم استخدام الجوائز الافتراضية', 'warning');
+            // استخدام الجوائز الافتراضية
         }
     } catch (error) {
         console.error('❌ Error loading prizes:', error);
@@ -1179,14 +1177,14 @@ console.log('🐼 Panda Giveaways App Loaded');
 
 window.continueAppInitialization = async function() {
     try {
-        showToast('✅ تم التحقق من القنوات! جاري المتابعة...', 'success');
+        // التحقق من القنوات مكتمل
         
-        // إلغاء الـ timeout العام إذا كان موجود
+        // إغاء الـ timeout العام
         if (window.globalTimeoutId) {
             clearTimeout(window.globalTimeoutId);
         }
         
-        // عرض Loading مع رسائل التحديث
+        // عرض Loading
         showLoading(true);
         showLoadingWithMessage('✅ تم التحقق من القنوات! جاري المتابعة...');
 
@@ -1194,39 +1192,33 @@ window.continueAppInitialization = async function() {
         await registerPendingReferral();
         
         // تحميل بيانات المستخدم
-        showLoadingWithMessage('📊 جاري تحميل بياناتك...');
+        showLoadingWithMessage('📊 جاري التحميل...');
         await Promise.race([
             loadUserData(),
             new Promise((_, reject) => setTimeout(() => reject(new Error('loadUserData timeout')), 15000))
         ]);
-        showLoadingWithMessage('✅ تم تحميل بياناتك!');
-        
         // تحميل جوائز العجلة من API
-        showLoadingWithMessage('🎁 جاري تحميل جوائز العجلة...');
         await Promise.race([
             loadWheelPrizes(),
             new Promise((_, reject) => setTimeout(() => reject(new Error('loadWheelPrizes timeout')), 8000))
         ]);
-        showLoadingWithMessage('✅ تم تحميل الجوائز!');
-        
         // تهيئة UI
-        showLoadingWithMessage('🎨 جاري إعداد الواجهة...');
         try {
             initUI();
-            showToast('✅ تم إعداد الواجهة بنجاح', 'success');
+            // تم إعداد الواجهة
         } catch (error) {
-            showToast('❌ خطأ في إعداد الواجهة: ' + error.message, 'error');
+            // خطأ في إعداد الواجهة
         }
         
         // تهيئة عجلة الحظ
-        showLoadingWithMessage('🎰 جاري إعداد عجلة الحظ...');
+        showLoadingWithMessage('🎰 جاري الإعداد...');
         // تأخير صغير لضمان أن DOM جاهز للعجلة
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 100));
         
         try {
             // التأكد من وجود الجوائز
             if (!CONFIG.WHEEL_PRIZES || CONFIG.WHEEL_PRIZES.length === 0) {
-                showToast('⚠️ جوائز العجلة غير متوفرة، سيتم استخدام الجوائز الافتراضية', 'warning');
+                // استخدام الجوائز الافتراضية
                 CONFIG.WHEEL_PRIZES = [
                     { name: '0.01 TON', amount: 0.01, probability: 25 },
                     { name: '0.05 TON', amount: 0.05, probability: 25 },
@@ -1247,7 +1239,7 @@ window.continueAppInitialization = async function() {
                 throw new Error('فشل في إنشاء العجلة');
             }
         } catch (error) {
-            showToast('❌ خطأ في تحميل عجلة الحظ: ' + error.message, 'error');
+            // خطأ في تحميل عجلة الحظ
             
             // عرض رسالة خطأ على العجلة
             const wheelContainer = document.querySelector('.wheel-container');
@@ -1267,13 +1259,11 @@ window.continueAppInitialization = async function() {
         }
         
         // تحميل البيانات الأولية
-        showLoadingWithMessage('📈 جاري تحميل البيانات المتبقية...');
+        showLoadingWithMessage('⏳ جاري الانتهاء...');
         await Promise.race([
             loadInitialData(),
             new Promise((_, reject) => setTimeout(() => reject(new Error('loadInitialData timeout')), 15000))
         ]);
-        showLoadingWithMessage('✅ انتهى التحميل... جاري فتح الموقع!');
-        
         // التحقق من معاملات URL للتنقل
         const urlParams = new URLSearchParams(window.location.search);
         const targetPage = urlParams.get('page');
@@ -1288,13 +1278,10 @@ window.continueAppInitialization = async function() {
             }
             showLoading(false);
             document.body.classList.remove('loading');
-            
-            // إظهار رسالة نجاح قصيرة
-            showToast('✅ مرحباً بك! تم فتح التطبيق بنجاح', 'success');
-        }, 1000);
+        }, 500);
         
     } catch (error) {
-        showToast('❌ خطأ في استكمال التحميل: ' + error.message, 'error');
+        // خطأ في استكمال التحميل
         if (window.globalTimeoutId) {
             clearTimeout(window.globalTimeoutId);
         }

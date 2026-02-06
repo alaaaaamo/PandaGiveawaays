@@ -45,7 +45,7 @@ class WheelOfFortune {
             win: null
         };
         
-        // رسم العجلة الأولية مع تأخير صغير لضمان DOM جاهز
+        // رسم العجلة الأولية
         setTimeout(() => {
             try {
                 this.draw();
@@ -53,14 +53,14 @@ class WheelOfFortune {
                 this.showError('❌ خطأ في رسم العجلة: ' + drawError.message);
                 return;
             }
-        }, 100);
+        }, 50);
         
         // إضافة مستمع للنقر
         if (this.spinButton) {
             this.spinButton.addEventListener('click', () => this.spin());
         }
         
-        this.showSuccess('✅ تم تحميل عجلة الحظ بنجاح');
+        // تم تحميل عجلة الحظ بنجاح
     }
     
     // ═══════════════════════════════════════════════════════════
@@ -68,28 +68,22 @@ class WheelOfFortune {
     // ═══════════════════════════════════════════════════════
     
     showError(message) {
-        if (typeof showToast !== 'undefined') {
-            showToast(message, 'error');
-        } else {
-            // Fallback - عرض على العجلة مباشرة
-            const wheelContainer = document.querySelector('.wheel-container');
-            if (wheelContainer) {
-                wheelContainer.innerHTML = `
-                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; 
-                        height: 300px; background: #1a1a1a; border-radius: 20px; padding: 20px; text-align: center;">
-                        <div style="font-size: 60px; margin-bottom: 20px;">😔</div>
-                        <h3 style="color: #ff4444; margin-bottom: 10px;">خطأ في عجلة الحظ</h3>
-                        <p style="color: #999; font-size: 14px;">${message}</p>
-                    </div>
-                `;
-            }
+        // عرض رسالة خطأ على العجلة مباشرة
+        const wheelContainer = document.querySelector('.wheel-container');
+        if (wheelContainer) {
+            wheelContainer.innerHTML = `
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; 
+                    height: 300px; background: #1a1a1a; border-radius: 20px; padding: 20px; text-align: center;">
+                    <div style="font-size: 60px; margin-bottom: 20px;">😔</div>
+                    <h3 style="color: #ff4444; margin-bottom: 10px;">خطأ في عجلة الحظ</h3>
+                    <p style="color: #999; font-size: 14px;">${message}</p>
+                </div>
+            `;
         }
     }
     
     showSuccess(message) {
-        if (typeof showToast !== 'undefined') {
-            showToast(message, 'success');
-        }
+        // رسالة نجاح طفيفة
     }
     
     
@@ -149,7 +143,7 @@ class WheelOfFortune {
                 return;
             }
             
-            this.showSuccess('✅ تم إعداد أبعاد العجلة بنجاح');
+            // تم إعداد أبعاد العجلة
             
         } catch (error) {
             this.showError('❌ خطأ في إعداد العجلة: ' + error.message);
@@ -319,22 +313,8 @@ class WheelOfFortune {
     
     async spin() {
         // التحقق من إمكانية اللف
-        const canSpin = UserState.canSpin();
-        if (!canSpin.can) {
-            showToast(canSpin.reason, 'error');
-            TelegramApp.hapticFeedback('error');
-            return;
-        }
-        
-        // التحقق من Rate Limiting
-        if (!RateLimiter.check('spin', 10, 60000)) {
-            showToast('الكثير من المحاولات! انتظر دقيقة.', 'error');
-            return;
-        }
-        
-        // قفل اللف
-        UserState.lockSpin();
-        this.isSpinning = true;
+        if (canSpin.can) {
+            // تتعامل مع اللف
         this.spinButton.disabled = true;
         this.spinButton.classList.add('spinning');
         

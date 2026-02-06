@@ -247,13 +247,9 @@ body {
 
 #wheel-canvas {
     display: block;
-    margin: 0 auto;
     width: 350px;
     height: 350px;
     border-radius: var(--radius-full);
-    position: absolute;
-    top: 0;
-    left: 0;
     /* 🎨 ظل محسن للعجلة */
     box-shadow: 
         0 0 40px rgba(201, 162, 77, 0.3),
@@ -265,10 +261,6 @@ body {
 }
 
 .spin-button {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
     width: 100px;
     height: 100px;
     border-radius: var(--radius-full);
@@ -280,12 +272,10 @@ body {
     cursor: pointer;
     box-shadow: var(--shadow-lg);
     transition: all 0.3s ease;
-    z-index: 20;
     display: flex;
     align-items: center;
     justify-content: center;
     text-align: center;
-    /* ضمان التوسيط التام */
 }
 
 .spin-button:hover:not(:disabled) {
