@@ -2,16 +2,6 @@
 // 🎰 WHEEL OF FORTUNE - عجلة الحظ
 // ═══════════════════════════════════════════════════════════════
 
-// Debugging: إشعار التحميل
-if (typeof console !== 'undefined') {
-    console.log('🎰 Wheel.js is loading...');
-}
-
-// إعلان متغير عام مبدئي
-if (typeof window.WheelOfFortune === 'undefined') {
-    window.WheelOfFortune = null;
-}
-
 class WheelOfFortune {
     constructor(canvasId, prizes) {
         this.canvas = document.getElementById(canvasId);
@@ -55,7 +45,7 @@ class WheelOfFortune {
             win: null
         };
         
-        // رسم العجلة الأولية
+        // رسم العجلة الأولية مع تأخير صغير لضمان DOM جاهز
         setTimeout(() => {
             try {
                 this.draw();
@@ -63,14 +53,14 @@ class WheelOfFortune {
                 this.showError('❌ خطأ في رسم العجلة: ' + drawError.message);
                 return;
             }
-        }, 50);
+        }, 100);
         
         // إضافة مستمع للنقر
         if (this.spinButton) {
             this.spinButton.addEventListener('click', () => this.spin());
         }
         
-        // تم تحميل عجلة الحظ بنجاح
+        this.showSuccess('✅ تم تحميل عجلة الحظ بنجاح');
     }
     
     // ═══════════════════════════════════════════════════════════
@@ -78,22 +68,28 @@ class WheelOfFortune {
     // ═══════════════════════════════════════════════════════
     
     showError(message) {
-        // عرض رسالة خطأ على العجلة مباشرة
-        const wheelContainer = document.querySelector('.wheel-container');
-        if (wheelContainer) {
-            wheelContainer.innerHTML = `
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; 
-                    height: 300px; background: #1a1a1a; border-radius: 20px; padding: 20px; text-align: center;">
-                    <div style="font-size: 60px; margin-bottom: 20px;">😔</div>
-                    <h3 style="color: #ff4444; margin-bottom: 10px;">خطأ في عجلة الحظ</h3>
-                    <p style="color: #999; font-size: 14px;">${message}</p>
-                </div>
-            `;
+        if (typeof showToast !== 'undefined') {
+            showToast(message, 'error');
+        } else {
+            // Fallback - عرض على العجلة مباشرة
+            const wheelContainer = document.querySelector('.wheel-container');
+            if (wheelContainer) {
+                wheelContainer.innerHTML = `
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; 
+                        height: 300px; background: #1a1a1a; border-radius: 20px; padding: 20px; text-align: center;">
+                        <div style="font-size: 60px; margin-bottom: 20px;">😔</div>
+                        <h3 style="color: #ff4444; margin-bottom: 10px;">خطأ في عجلة الحظ</h3>
+                        <p style="color: #999; font-size: 14px;">${message}</p>
+                    </div>
+                `;
+            }
         }
     }
     
     showSuccess(message) {
-        // رسالة نجاح طفيفة
+        if (typeof showToast !== 'undefined') {
+            showToast(message, 'success');
+        }
     }
     
     
@@ -153,7 +149,7 @@ class WheelOfFortune {
                 return;
             }
             
-            // تم إعداد أبعاد العجلة
+            this.showSuccess('✅ تم إعداد أبعاد العجلة بنجاح');
             
         } catch (error) {
             this.showError('❌ خطأ في إعداد العجلة: ' + error.message);
@@ -323,8 +319,22 @@ class WheelOfFortune {
     
     async spin() {
         // التحقق من إمكانية اللف
-        if (canSpin.can) {
-            // تتعامل مع اللف
+        const canSpin = UserState.canSpin();
+        if (!canSpin.can) {
+            showToast(canSpin.reason, 'error');
+            TelegramApp.hapticFeedback('error');
+            return;
+        }
+        
+        // التحقق من Rate Limiting
+        if (!RateLimiter.check('spin', 10, 60000)) {
+            showToast('الكثير من المحاولات! انتظر دقيقة.', 'error');
+            return;
+        }
+        
+        // قفل اللف
+        UserState.lockSpin();
+        this.isSpinning = true;
         this.spinButton.disabled = true;
         this.spinButton.classList.add('spinning');
         
@@ -660,28 +670,8 @@ function addWinToHistory(prize) {
 // 🎯 EXPORTS
 // ═══════════════════════════════════════════════════════════════
 
-// تصدير فوري للclass
 window.WheelOfFortune = WheelOfFortune;
 window.closeWinModal = closeWinModal;
 window.loadSpinHistory = loadSpinHistory;
 
-// إشعار بجاهزية العجلة
-window.wheelClassReady = true;
-
-// انتظار DOM وتشغيل callback إذا كان متاح
-if (typeof window.onWheelClassReady === 'function') {
-    try {
-        window.onWheelClassReady();
-    } catch (e) {
-        // تجاهل أخطاء callback
-    }
-}
-
 // 🎰 Wheel of Fortune Loaded Successfully
-// إشعار لـ console بأن الملف تم التحميل
-if (typeof console !== 'undefined') {
-    console.log('✅ WheelOfFortune class loaded and exported successfully!');
-    console.log('🔍 WheelOfFortune available?', typeof WheelOfFortune !== 'undefined');
-    console.log('🔍 window.WheelOfFortune available?', typeof window.WheelOfFortune !== 'undefined');
-    console.log('🔍 window.wheelClassReady:', window.wheelClassReady);
-}

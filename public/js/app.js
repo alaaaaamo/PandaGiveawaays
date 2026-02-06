@@ -4,56 +4,6 @@
 
 let wheel = null;
 
-// انتظار تحميل wheel class
-async function waitForWheelClass() {
-    // أولاً: انتظار إشارة أن wheel.js جاهز
-    let classReadyWait = 0;
-    while (!window.wheelClassReady && classReadyWait < 30) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        classReadyWait++;
-    }
-    
-    // ثانياً: انتظار إضافي للتأكد من تحميل class
-    let wheelLoadWait = 0;
-    while (typeof WheelOfFortune === 'undefined' && typeof window.WheelOfFortune === 'undefined' && wheelLoadWait < 50) {
-        await new Promise(resolve => setTimeout(resolve, 50));
-        wheelLoadWait++;
-    }
-    
-    // ثالثاً: إذا ما زال غير متاح، انتظار callback
-    if (typeof WheelOfFortune === 'undefined' && typeof window.WheelOfFortune === 'undefined') {
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error('انتهت مهلة انتظار تحميل WheelOfFortune class'));
-            }, 5000);
-            
-            window.onWheelClassReady = () => {
-                clearTimeout(timeout);
-                resolve();
-            };
-        });
-    }
-}
-
-// Backup wheel loader
-window.addEventListener('load', () => {
-    if (!wheel && (typeof WheelOfFortune !== 'undefined' || typeof window.WheelOfFortune !== 'undefined')) {
-        // محاولة إنشاء العجلة إذا لم تُنشأ بعد
-        setTimeout(() => {
-            if (!wheel) {
-                try {
-                    const WheelClass = WheelOfFortune || window.WheelOfFortune;
-                    if (WheelClass && CONFIG && CONFIG.WHEEL_PRIZES) {
-                        wheel = new WheelClass('wheel-canvas', CONFIG.WHEEL_PRIZES);
-                    }
-                } catch (e) {
-                    // Backup failed, no big deal
-                }
-            }
-        }, 1000);
-    }
-});
-
 // ═══════════════════════════════════════════════════════════════
 // � VISUAL DEBUGGING & LOADING MESSAGES
 // ═══════════════════════════════════════════════════════════════
@@ -69,17 +19,11 @@ function showLoadingWithMessage(message) {
     console.log('📱 Status:', message);
 }
 
-// تحديد callback لانتظار جاهزية wheel class
-window.onWheelClassReady = null;
-
 // ═══════════════════════════════════════════════════════════════
 // �🚀 APP INITIALIZATION
 // ═══════════════════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // انتظار تحميل wheel.js class بطرق متعددة
-    await waitForWheelClass();
-    
     // إضافة timeout للتحميل لمنع التحميل اللا نهائي
     const LOADING_TIMEOUT = 60000; // 60 ثانية
     const timeoutId = setTimeout(() => {
@@ -151,6 +95,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
         
+        showToast('✅ تم التحقق من صحة جلسة تليجرام', 'success');
+        
         // عرض Loading مع رسالة تبين التقدم
         showLoadingWithMessage('🔄 جاري التهيئة...');
         showLoading(true);
@@ -162,7 +108,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         if (!isAdmin) {
             try {
-                showLoadingWithMessage('� جاري التحقق...');
+                showLoadingWithMessage('🔎 جاري التحقق من حالة البوت...');
                 const botStatusResp = await fetch(`${CONFIG.API_BASE_URL}/bot/status`);
                 const botStatusData = await botStatusResp.json();
                 
@@ -223,7 +169,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         if (userId && !isAdmin) {
             try {
-                showLoadingWithMessage('🔐 جاري التحقق...');
+                showLoadingWithMessage('🔐 جاري التحقق من الحساب...');
                 const verifyStatusResp = await fetch(`${CONFIG.API_BASE_URL}/verification/status/${userId}`);
                 const verifyData = await verifyStatusResp.json();
                 
@@ -282,14 +228,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         // إرسال رسالة ترحيبية (سيظهر تليجرام "Allow bot to message you?" تلقائياً)
-        showLoadingWithMessage('📩 جاري الإعداد...');
+        showLoadingWithMessage('📩 جاري إعداد الاتصال...');
         await sendWelcomeMessage();
         
         // حفظ referrer_id مؤقتاً إذا موجود (سيتم تسجيله بعد التحقق من القنوات)
         savePendingReferral();
         
         // Check required channels FIRST before loading anything
-        showLoadingWithMessage('📺 جاري التحقق...');
+        showLoadingWithMessage('📺 جاري التحقق من اشتراكك في القنوات...');
         
         let channelsVerified = false;
         try {
@@ -346,9 +292,9 @@ async function loadWheelPrizes() {
                 probability: prize.probability,
                 color: prize.color
             }));
-            // تم تحميل الجوائز من قاعدة البيانات
+            showToast(`✅ تم تحميل ${CONFIG.WHEEL_PRIZES.length} جائزة من قاعدة البيانات`, 'success');
         } else {
-            // استخدام الجوائز الافتراضية
+            showToast('⚠️ يتم استخدام الجوائز الافتراضية', 'warning');
         }
     } catch (error) {
         console.error('❌ Error loading prizes:', error);
@@ -1233,14 +1179,14 @@ console.log('🐼 Panda Giveaways App Loaded');
 
 window.continueAppInitialization = async function() {
     try {
-        // التحقق من القنوات مكتمل
+        showToast('✅ تم التحقق من القنوات! جاري المتابعة...', 'success');
         
-        // إغاء الـ timeout العام
+        // إلغاء الـ timeout العام إذا كان موجود
         if (window.globalTimeoutId) {
             clearTimeout(window.globalTimeoutId);
         }
         
-        // عرض Loading
+        // عرض Loading مع رسائل التحديث
         showLoading(true);
         showLoadingWithMessage('✅ تم التحقق من القنوات! جاري المتابعة...');
 
@@ -1248,40 +1194,39 @@ window.continueAppInitialization = async function() {
         await registerPendingReferral();
         
         // تحميل بيانات المستخدم
-        showLoadingWithMessage('📊 جاري التحميل...');
+        showLoadingWithMessage('📊 جاري تحميل بياناتك...');
         await Promise.race([
             loadUserData(),
             new Promise((_, reject) => setTimeout(() => reject(new Error('loadUserData timeout')), 15000))
         ]);
+        showLoadingWithMessage('✅ تم تحميل بياناتك!');
+        
         // تحميل جوائز العجلة من API
+        showLoadingWithMessage('🎁 جاري تحميل جوائز العجلة...');
         await Promise.race([
             loadWheelPrizes(),
             new Promise((_, reject) => setTimeout(() => reject(new Error('loadWheelPrizes timeout')), 8000))
         ]);
+        showLoadingWithMessage('✅ تم تحميل الجوائز!');
+        
         // تهيئة UI
+        showLoadingWithMessage('🎨 جاري إعداد الواجهة...');
         try {
             initUI();
-            // تم إعداد الواجهة
+            showToast('✅ تم إعداد الواجهة بنجاح', 'success');
         } catch (error) {
-            // خطأ في إعداد الواجهة
+            showToast('❌ خطأ في إعداد الواجهة: ' + error.message, 'error');
         }
         
         // تهيئة عجلة الحظ
-        showLoadingWithMessage('🎰 جاري الإعداد...');
+        showLoadingWithMessage('🎰 جاري إعداد عجلة الحظ...');
         // تأخير صغير لضمان أن DOM جاهز للعجلة
         await new Promise(resolve => setTimeout(resolve, 200));
-        
-        // التأكد مرة أخرى من جاهزية wheel class
-        try {
-            await waitForWheelClass();
-        } catch (error) {
-            throw new Error('فشل في تحميل WheelOfFortune class - تأكد من تحميل wheel.js صحيحاً');
-        }
         
         try {
             // التأكد من وجود الجوائز
             if (!CONFIG.WHEEL_PRIZES || CONFIG.WHEEL_PRIZES.length === 0) {
-                // استخدام الجوائز الافتراضية
+                showToast('⚠️ جوائز العجلة غير متوفرة، سيتم استخدام الجوائز الافتراضية', 'warning');
                 CONFIG.WHEEL_PRIZES = [
                     { name: '0.01 TON', amount: 0.01, probability: 25 },
                     { name: '0.05 TON', amount: 0.05, probability: 25 },
@@ -1296,18 +1241,13 @@ window.continueAppInitialization = async function() {
                 throw new Error('عنصر العجلة غير موجود في الصفحة');
             }
             
-            const WheelClass = WheelOfFortune || window.WheelOfFortune;
-            if (!WheelClass) {
-                throw new Error('WheelOfFortune class لم يتم تعريفه بشكل صحيح');
-            }
-            
-            wheel = new WheelClass('wheel-canvas', CONFIG.WHEEL_PRIZES);
+            wheel = new WheelOfFortune('wheel-canvas', CONFIG.WHEEL_PRIZES);
             
             if (!wheel || !wheel.canvas) {
-                throw new Error('فشل في إنشاء العجلة - قد تكون مشكلة في Canvas');
+                throw new Error('فشل في إنشاء العجلة');
             }
         } catch (error) {
-            // خطأ في تحميل عجلة الحظ
+            showToast('❌ خطأ في تحميل عجلة الحظ: ' + error.message, 'error');
             
             // عرض رسالة خطأ على العجلة
             const wheelContainer = document.querySelector('.wheel-container');
@@ -1324,29 +1264,16 @@ window.continueAppInitialization = async function() {
                     </div>
                 `;
             }
-            
-            // تحميل شيء بديل - عجلة بسيطة
-            if (wheelContainer && !wheel) {
-                setTimeout(() => {
-                    try {
-                        // محاولة أخيرة لإنشاء العجلة
-                        const WheelClass = WheelOfFortune || window.WheelOfFortune;
-                        if (WheelClass) {
-                            wheel = new WheelClass('wheel-canvas', CONFIG.WHEEL_PRIZES);
-                        }
-                    } catch (retryError) {
-                        // فشلت المحاولة الأخيرة
-                    }
-                }, 1000);
-            }
         }
         
         // تحميل البيانات الأولية
-        showLoadingWithMessage('⏳ جاري الانتهاء...');
+        showLoadingWithMessage('📈 جاري تحميل البيانات المتبقية...');
         await Promise.race([
             loadInitialData(),
             new Promise((_, reject) => setTimeout(() => reject(new Error('loadInitialData timeout')), 15000))
         ]);
+        showLoadingWithMessage('✅ انتهى التحميل... جاري فتح الموقع!');
+        
         // التحقق من معاملات URL للتنقل
         const urlParams = new URLSearchParams(window.location.search);
         const targetPage = urlParams.get('page');
@@ -1361,10 +1288,13 @@ window.continueAppInitialization = async function() {
             }
             showLoading(false);
             document.body.classList.remove('loading');
-        }, 500);
+            
+            // إظهار رسالة نجاح قصيرة
+            showToast('✅ مرحباً بك! تم فتح التطبيق بنجاح', 'success');
+        }, 1000);
         
     } catch (error) {
-        // خطأ في استكمال التحميل
+        showToast('❌ خطأ في استكمال التحميل: ' + error.message, 'error');
         if (window.globalTimeoutId) {
             clearTimeout(window.globalTimeoutId);
         }
