@@ -356,7 +356,9 @@
     <script src="js/tasks.js" onload="window.scriptsLoaded.tasks = true;"></script>
     <script src="js/channels-check.js" onload="window.scriptsLoaded.channelsCheck = true;"></script>
     <script src="js/channels.js" onload="window.scriptsLoaded.channels = true;"></script>
-    <script src="js/wheel.js" onload="window.scriptsLoaded.wheel = true;" defer></script>
+    <!-- تحميل wheel.js أولاً بدون defer -->
+    <script src="js/wheel.js" onload="window.scriptsLoaded.wheel = true;"></script>
+    <!-- تحميل app.js مع defer بعد wheel.js -->
     <script src="js/app.js" onload="window.scriptsLoaded.app = true;" defer></script>
 </body>
 </html>

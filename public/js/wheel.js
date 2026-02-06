@@ -7,8 +7,10 @@ if (typeof console !== 'undefined') {
     console.log('🎰 Wheel.js is loading...');
 }
 
-// Global variable declaration
-window.WheelOfFortune = null;
+// إعلان متغير عام مبدئي
+if (typeof window.WheelOfFortune === 'undefined') {
+    window.WheelOfFortune = null;
+}
 
 class WheelOfFortune {
     constructor(canvasId, prizes) {
@@ -663,10 +665,23 @@ window.WheelOfFortune = WheelOfFortune;
 window.closeWinModal = closeWinModal;
 window.loadSpinHistory = loadSpinHistory;
 
+// إشعار بجاهزية العجلة
+window.wheelClassReady = true;
+
+// انتظار DOM وتشغيل callback إذا كان متاح
+if (typeof window.onWheelClassReady === 'function') {
+    try {
+        window.onWheelClassReady();
+    } catch (e) {
+        // تجاهل أخطاء callback
+    }
+}
+
 // 🎰 Wheel of Fortune Loaded Successfully
 // إشعار لـ console بأن الملف تم التحميل
 if (typeof console !== 'undefined') {
-    console.log('✅ WheelOfFortune class loaded successfully!');
+    console.log('✅ WheelOfFortune class loaded and exported successfully!');
     console.log('🔍 WheelOfFortune available?', typeof WheelOfFortune !== 'undefined');
     console.log('🔍 window.WheelOfFortune available?', typeof window.WheelOfFortune !== 'undefined');
+    console.log('🔍 window.wheelClassReady:', window.wheelClassReady);
 }
