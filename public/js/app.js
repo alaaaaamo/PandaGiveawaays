@@ -1213,7 +1213,15 @@ window.continueAppInitialization = async function() {
         // تهيئة عجلة الحظ
         showLoadingWithMessage('🎰 جاري الإعداد...');
         // تأخير صغير لضمان أن DOM جاهز للعجلة
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // انتظار تحميل WheelOfFortune class إذا لم يكن متاح
+        let retries = 0;
+        const maxRetries = 10;
+        while ((typeof WheelOfFortune === 'undefined' && typeof window.WheelOfFortune === 'undefined') && retries < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            retries++;
+        }
         
         try {
             // التأكد من وجود الجوائز
@@ -1233,7 +1241,13 @@ window.continueAppInitialization = async function() {
                 throw new Error('عنصر العجلة غير موجود في الصفحة');
             }
             
-            wheel = new WheelOfFortune('wheel-canvas', CONFIG.WHEEL_PRIZES);
+            // التحقق من تحميل WheelOfFortune class
+            if (typeof WheelOfFortune === 'undefined' && typeof window.WheelOfFortune === 'undefined') {
+                throw new Error('WheelOfFortune class غير متاح');
+            }
+            
+            const WheelClass = WheelOfFortune || window.WheelOfFortune;
+            wheel = new WheelClass('wheel-canvas', CONFIG.WHEEL_PRIZES);
             
             if (!wheel || !wheel.canvas) {
                 throw new Error('فشل في إنشاء العجلة');
@@ -1255,6 +1269,21 @@ window.continueAppInitialization = async function() {
                             border: none; border-radius: 6px; cursor: pointer;">إعادة تحميل</button>
                     </div>
                 `;
+            }
+            
+            // تحميل شيء بديل - عجلة بسيطة
+            if (wheelContainer && !wheel) {
+                setTimeout(() => {
+                    try {
+                        // محاولة أخيرة لإنشاء العجلة
+                        const WheelClass = WheelOfFortune || window.WheelOfFortune;
+                        if (WheelClass) {
+                            wheel = new WheelClass('wheel-canvas', CONFIG.WHEEL_PRIZES);
+                        }
+                    } catch (retryError) {
+                        // فشلت المحاولة الأخيرة
+                    }
+                }, 1000);
             }
         }
         

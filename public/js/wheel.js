@@ -2,6 +2,9 @@
 // 🎰 WHEEL OF FORTUNE - عجلة الحظ
 // ═══════════════════════════════════════════════════════════════
 
+// Global variable declaration
+window.WheelOfFortune = null;
+
 class WheelOfFortune {
     constructor(canvasId, prizes) {
         this.canvas = document.getElementById(canvasId);
@@ -650,8 +653,13 @@ function addWinToHistory(prize) {
 // 🎯 EXPORTS
 // ═══════════════════════════════════════════════════════════════
 
+// تصدير فوري للclass
 window.WheelOfFortune = WheelOfFortune;
 window.closeWinModal = closeWinModal;
 window.loadSpinHistory = loadSpinHistory;
 
 // 🎰 Wheel of Fortune Loaded Successfully
+// إشعار لـ console بأن الملف تم التحميل
+if (typeof console !== 'undefined') {
+    // Wheel loaded
+}
