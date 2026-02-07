@@ -4,10 +4,10 @@
 
 // Enable/disable debug modes for production
 const DEBUG_CONFIG = {
-    SHOW_DEBUG_UI: false,         // ✅ إظهار UI الـ debug على الشاشة - مفعل للتشخيص
-    SHOW_SERVER_STATUS: false,    // ✅ إظهار مؤشر حالة السيرفر - مفعل للتشخيص
-    CONSOLE_LOGGING: false,       // ✅ الـ logging في الـ console (مفعل للتشخيص)
-    AUTO_SHOW_ERRORS: false       // ✅ إظهار تلقائي للأخطاء - مفعل للتشخيص
+    SHOW_DEBUG_UI: true,         // ✅ إظهار UI الـ debug على الشاشة - مفعل للتشخيص
+    SHOW_SERVER_STATUS: true,    // ✅ إظهار مؤشر حالة السيرفر - مفعل للتشخيص
+    CONSOLE_LOGGING: true,       // ✅ الـ logging في الـ console (مفعل للتشخيص)
+    AUTO_SHOW_ERRORS: true       // ✅ إظهار تلقائي للأخطاء - مفعل للتشخيص
 };
 
 class DebugError {
