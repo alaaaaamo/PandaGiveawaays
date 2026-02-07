@@ -101,10 +101,14 @@ const ChannelsCheck = {
                 ? `https://t.me/${channel.channel_id.substring(1)}`
                 : `https://t.me/${channel.channel_id}`;
             
+            // استخدام صورة القناة من Telegram
+            const channelInput = channelLink || channel.channel_url || channel.channel_id;
+            const channelIconHTML = createChannelPhotoHTML(channelInput, '📢', '36px');
+            
             channelsHTML += `
                 <div class="required-channel-item">
                     <div class="channel-info">
-                        <span class="channel-icon">📢</span>
+                        ${channelIconHTML}
                         <span class="channel-name">${channel.channel_name}</span>
                     </div>
                     <button class="subscribe-channel-btn" onclick="ChannelsCheck.openChannel('${channelLink}')">

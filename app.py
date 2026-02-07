@@ -13,7 +13,7 @@
 ✅ نفس القنوات الإجبارية
 ✅ نفس اللفات والرصيد
 """
-from flask import Flask, send_from_directory, request, jsonify
+from flask import Flask, send_from_directory, request, jsonify, session
 from flask_cors import CORS
 import os
 import sys
@@ -25,6 +25,8 @@ import random
 import hashlib
 import secrets
 import requests  # لجلب سعر TON
+import jwt  # For JWT tokens
+from functools import wraps
 
 # إضافة المسار الحالي لـ 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -58,20 +60,49 @@ def calculate_egp_amount(ton_amount):
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 ADMIN_IDS = [1797127532, 6603009212]
 
+# 🔐 ADMIN LOGIN CREDENTIALS (من متغيرات البيئة)
+ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'OmarShehata@123')
+ADMIN_PASSWORD_HASH = os.environ.get('Ommsaa#@123')
+# إذا لم يكن هناك password hash، استخدم كلمة سر افتراضية (للتطوير فقط)
+if not ADMIN_PASSWORD_HASH:
+    # Default password: Ommsaa#@123 (يجب تغييرها في الإنتاج!)
+    ADMIN_PASSWORD_HASH = hashlib.sha256('Ommsaa#@123'.encode()).hexdigest()
+    print("⚠️ WARNING: Using default admin password! Set ADMIN_PASSWORD_HASH environment variable.")
+
+# JWT Secret Key
+JWT_SECRET = os.environ.get('JWT_SECRET', secrets.token_urlsafe(32))
+ADMIN_SESSION_DURATION = timedelta(hours=24)  # صلاحية الجلسة 24 ساعة
+
 # ═══════════════════════════════════════════════════════════════
 # 🛡️ ADMIN PROTECTION DECORATOR
 # ═══════════════════════════════════════════════════════════════
 
-def require_admin(f):
+def verify_admin_token(token):
     """
-    🛡️ Decorator للتحقق من أن المستخدم أدمن
-    يجب استخدامه مع @require_telegram_auth
+    🔐 التحقق من صحة Admin JWT Token
     """
-    from functools import wraps
-    
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+        # التحقق من انتهاء الصلاحية
+        exp_timestamp = payload.get('exp')
+        if exp_timestamp and datetime.fromtimestamp(exp_timestamp) < datetime.now():
+            return None
+        return payload
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+
+def require_admin_auth(f):
+    """
+    🛡️ Decorator للتحقق من admin authentication
+    يتحقق من:
+    1. Telegram authentication (is_admin من ADMIN_IDS)
+    2. Admin login token (username/password)
+    """
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # التحقق من وجود is_admin flag (من require_telegram_auth)
+        # التحقق من Telegram admin (من require_telegram_auth)
         if not kwargs.get('is_admin', False):
             return jsonify({
                 'success': False,
@@ -79,9 +110,44 @@ def require_admin(f):
                 'message': 'صلاحيات الأدمن فقط - ممنوع الوصول'
             }), 403
         
+        # التحقق من Admin Login Token
+        admin_token = request.headers.get('X-Admin-Token')
+        if not admin_token:
+            admin_token = request.json.get('admin_token') if request.is_json else None
+        
+        if not admin_token:
+            return jsonify({
+                'success': False,
+                'error': 'Unauthorized',
+                'message': 'يجب تسجيل الدخول كمسؤول أولاً',
+                'require_login': True
+            }), 401
+        
+        # التحقق من صحة التوكن
+        token_payload = verify_admin_token(admin_token)
+        if not token_payload:
+            return jsonify({
+                'success': False,
+                'error': 'Unauthorized',
+                'message': 'جلسة المسؤول منتهية أو غير صحيحة',
+                'require_login': True
+            }), 401
+        
+        # إضافة بيانات Admin للـ kwargs
+        kwargs['admin_username'] = token_payload.get('username')
+        kwargs['admin_user_id'] = token_payload.get('user_id')
+        
         return f(*args, **kwargs)
     
     return decorated_function
+
+# Keep old decorator for backward compatibility (redirect to new one)
+def require_admin(f):
+    """
+    🛡️ Decorator للتحقق من أن المستخدم أدمن (Legacy)
+    استخدم require_admin_auth بدلاً منه
+    """
+    return require_admin_auth(f)
 
 # ═══════════════════════════════════════════════════════════════
 # 🔐 TELEGRAM AUTHENTICATION - Security Fix
@@ -815,6 +881,90 @@ def admin():
         f'https://panda-giveawaays.vercel.app/admin#{request.query_string.decode()}',
         code=302
     )
+
+@app.route('/api/admin/login', methods=['POST'])
+@require_telegram_auth
+def admin_login(authenticated_user_id=None, is_admin=False):
+    """
+    🔐 تسجيل دخول المسؤول بـ username/password
+    يتطلب:
+    1. Telegram authentication (من require_telegram_auth)
+    2. Username & Password صحيح
+    """
+    try:
+        # التحقق من أن المستخدم أدمن من ADMIN_IDS
+        if not is_admin:
+            return jsonify({
+                'success': False,
+                'error': 'غير مسموح! هذه الصفحة للمسؤولين فقط'
+            }), 403
+        
+        data = request.get_json()
+        username = data.get('username', '').strip()
+        password = data.get('password', '').strip()
+        
+        if not username or not password:
+            return jsonify({
+                'success': False,
+                'error': 'يرجى إدخال اسم المستخدم وكلمة السر'
+            }), 400
+        
+        # التحقق من username
+        if username != ADMIN_USERNAME:
+            return jsonify({
+                'success': False,
+                'error': 'اسم المستخدم أو كلمة السر غير صحيحة'
+            }), 401
+        
+        # التحقق من password
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        if password_hash != ADMIN_PASSWORD_HASH:
+            return jsonify({
+                'success': False,
+                'error': 'اسم المستخدم أو كلمة السر غير صحيحة'
+            }), 401
+        
+        # ✅ تسجيل دخول ناجح - إنشاء JWT token
+        expiry = datetime.now() + ADMIN_SESSION_DURATION
+        token_payload = {
+            'username': username,
+            'user_id': authenticated_user_id,
+            'exp': expiry.timestamp(),
+            'iat': datetime.now().timestamp()
+        }
+        
+        admin_token = jwt.encode(token_payload, JWT_SECRET, algorithm='HS256')
+        
+        return jsonify({
+            'success': True,
+            'message': 'تم تسجيل الدخول بنجاح',
+            'admin_token': admin_token,
+            'expires_at': expiry.isoformat(),
+            'username': username
+        })
+        
+    except Exception as e:
+        print(f"❌ Error in admin login: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': 'حدث خطأ أثناء تسجيل الدخول'
+        }), 500
+
+@app.route('/api/admin/verify-session', methods=['POST'])
+@require_telegram_auth
+@require_admin_auth
+def verify_admin_session(authenticated_user_id=None, is_admin=False, admin_username=None, admin_user_id=None):
+    """
+    ✅ التحقق من صحة جلسة المسؤول
+    """
+    return jsonify({
+        'success': True,
+        'valid': True,
+        'username': admin_username,
+        'user_id': admin_user_id
+    })
 
 @app.route('/fp.html')
 @app.route('/fp')
@@ -1950,7 +2100,7 @@ def submit_fingerprint():
             })
         
         # استكمال التحقق العادي إذا كان مفعلاً
-        # التحقق من صلاحية الـ token
+        # 🔐 التحقق من صلاحية الـ token والتأكد من أنه يخص نفس المستخدم
         cursor.execute("""
             SELECT * FROM verification_tokens 
             WHERE user_id = ? AND token = ? AND used = 0
@@ -1958,12 +2108,57 @@ def submit_fingerprint():
         """, (user_id, fp_token))
         
         token_row = cursor.fetchone()
+        
+        # ✅ Validation إضافي: التأكد من أن user_id الذي يستخدم التوكن هو نفسه الذي أُنشئ له
         if not token_row:
+            # محاولة اكتشاف تلاعب: هل التوكن موجود لمستخدم آخر؟
+            cursor.execute("""
+                SELECT user_id FROM verification_tokens 
+                WHERE token = ?
+            """, (fp_token,))
+            
+            other_token = cursor.fetchone()
+            if other_token and other_token['user_id'] != user_id:
+                # 🚨 محاولة استخدام token مسروق!
+                print(f"🚨 SECURITY ALERT: User {user_id} tried to use token belonging to user {other_token['user_id']}")
+                
+                # تسجيل المحاولة المشبوهة
+                cursor.execute("""
+                    INSERT INTO verification_attempts 
+                    (user_id, fingerprint, ip_address, attempt_time, status, reason)
+                    VALUES (?, ?, ?, datetime('now'), 'rejected', 'stolen_token_attempt')
+                """, (user_id, fingerprint, ip_address))
+                
+                # حظر المستخدم المُتلاعب
+                ban_reason = 'محاولة استخدام token مسروق - تلاعب مكتشف'
+                cursor.execute("""
+                    UPDATE users 
+                    SET is_banned = 1, ban_reason = ?
+                    WHERE user_id = ?
+                """, (ban_reason, user_id))
+                
+                conn.commit()
+                conn.close()
+                
+                return jsonify({
+                    'ok': False,
+                    'error': 'Token validation failed - Suspicious activity detected'
+                }), 403
+            
+            # توكن غير موجود أو منتهي الصلاحية
             conn.close()
             return jsonify({
                 'ok': False,
                 'error': 'Invalid or expired token'
             }), 403
+        
+        # ✅ التوكن صحيح ومملوك للمستخدم الصحيح
+        # تحديد التوكن كمستخدم لمنع إعادة الاستخدام
+        cursor.execute("""
+            UPDATE verification_tokens 
+            SET used = 1 
+            WHERE token = ?
+        """, (fp_token,))
         
         # الحصول على IP address
         if request.headers.get('X-Forwarded-For'):
@@ -2083,13 +2278,6 @@ def submit_fingerprint():
             WHERE user_id = ?
         """, (user_id,))
         
-        # تحديث حالة الـ token
-        cursor.execute("""
-            UPDATE verification_tokens 
-            SET used = 1 
-            WHERE user_id = ? AND token = ?
-        """, (user_id, fp_token))
-        
         # تسجيل المحاولة الناجحة
         cursor.execute("""
             INSERT INTO verification_attempts 
@@ -2142,6 +2330,12 @@ def create_verification_token():
         conn = get_db_connection()
         cursor = conn.cursor()
         
+        # حذف التوكنات القديمة غير المستخدمة لهذا المستخدم
+        cursor.execute("""
+            DELETE FROM verification_tokens 
+            WHERE user_id = ? AND used = 0
+        """, (user_id,))
+        
         # إنشاء token عشوائي
         token = secrets.token_urlsafe(32)
         now = datetime.now()
@@ -2167,6 +2361,77 @@ def create_verification_token():
         return jsonify({
             'success': False,
             'error': str(e)
+        }), 500
+
+@app.route('/api/verification/get-token', methods=['POST'])
+@require_telegram_auth
+def get_verification_token(authenticated_user_id=None, is_admin=False):
+    """
+    🔐 الحصول على token التحقق بشكل آمن
+    يستخدم Telegram authentication للتحقق من هوية المستخدم
+    ❌ لا يمكن نسخ التوكن لأنه لا يظهر في الرابط
+    """
+    try:
+        # استخدام user_id المُصادق عليه من Telegram فقط
+        user_id = authenticated_user_id
+        
+        if not user_id:
+            return jsonify({
+                'success': False,
+                'error': 'Unauthorized - Invalid Telegram authentication'
+            }), 401
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # البحث عن token صالح لهذا المستخدم
+        cursor.execute("""
+            SELECT token, expires_at, used 
+            FROM verification_tokens 
+            WHERE user_id = ? 
+            ORDER BY created_at DESC 
+            LIMIT 1
+        """, (user_id,))
+        
+        token_row = cursor.fetchone()
+        conn.close()
+        
+        if not token_row:
+            return jsonify({
+                'success': False,
+                'error': 'No token found - Please request verification from bot'
+            }), 404
+        
+        # التحقق من صلاحية التوكن
+        expires_at = datetime.fromisoformat(token_row['expires_at'])
+        now = datetime.now()
+        
+        if now > expires_at:
+            return jsonify({
+                'success': False,
+                'error': 'Token expired - Please request new verification'
+            }), 410
+        
+        if token_row['used'] == 1:
+            return jsonify({
+                'success': False,
+                'error': 'Token already used'
+            }), 410
+        
+        # ✅ إرجاع التوكن بشكل آمن
+        return jsonify({
+            'success': True,
+            'token': token_row['token'],
+            'expires_at': token_row['expires_at']
+        })
+        
+    except Exception as e:
+        print(f"Error in get_verification_token: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error'
         }), 500
 
 @app.route('/api/verification/status/<int:user_id>', methods=['GET'])
@@ -2217,8 +2482,8 @@ def get_verification_status(user_id):
 
 @app.route('/api/admin/channels', methods=['GET', 'POST', 'DELETE'])
 @require_telegram_auth
-@require_admin
-def manage_channels(authenticated_user_id, is_admin):
+@require_admin_auth
+def manage_channels(authenticated_user_id, is_admin, admin_username=None, admin_user_id=None):
     """إدارة القنوات الإجبارية"""
     try:
         if request.method == 'GET':
@@ -2308,8 +2573,8 @@ def manage_channels(authenticated_user_id, is_admin):
 
 @app.route('/api/admin/tasks', methods=['GET', 'POST', 'PUT', 'DELETE'])
 @require_telegram_auth
-@require_admin
-def manage_tasks(authenticated_user_id, is_admin):
+@require_admin_auth
+def manage_tasks(authenticated_user_id, is_admin, admin_username=None, admin_user_id=None):
     """إدارة المهام"""
     try:
         if request.method == 'GET':
@@ -2509,8 +2774,8 @@ def manage_tasks(authenticated_user_id, is_admin):
 
 @app.route('/api/admin/prizes', methods=['GET', 'POST', 'PUT', 'DELETE'])
 @require_telegram_auth
-@require_admin
-def manage_prizes(authenticated_user_id, is_admin):
+@require_admin_auth
+def manage_prizes(authenticated_user_id, is_admin, admin_username=None, admin_user_id=None):
     """إدارة جوائز العجلة"""
     try:
         if request.method == 'GET':
@@ -2610,8 +2875,8 @@ def manage_prizes(authenticated_user_id, is_admin):
 
 @app.route('/api/admin/reset-prizes', methods=['POST'])
 @require_telegram_auth
-@require_admin
-def reset_prizes_to_default(authenticated_user_id, is_admin):
+@require_admin_auth
+def reset_prizes_to_default(authenticated_user_id, is_admin, admin_username=None, admin_user_id=None):
     """إعادة تعيين الجوائز إلى القيم الافتراضية"""
     try:
         conn = get_db_connection()
@@ -2656,8 +2921,8 @@ def reset_prizes_to_default(authenticated_user_id, is_admin):
 
 @app.route('/api/admin/add-spins', methods=['POST'])
 @require_telegram_auth
-@require_admin
-def add_spins_to_user(authenticated_user_id, is_admin):
+@require_admin_auth
+def add_spins_to_user(authenticated_user_id, is_admin, admin_username=None, admin_user_id=None):
     """إضافة لفات لمستخدم معين"""
     try:
         data = request.get_json()
@@ -2710,8 +2975,8 @@ def add_spins_to_user(authenticated_user_id, is_admin):
 
 @app.route('/api/admin/users', methods=['GET'])
 @require_telegram_auth
-@require_admin
-def get_all_users(authenticated_user_id, is_admin):
+@require_admin_auth
+def get_all_users(authenticated_user_id, is_admin, admin_username=None, admin_user_id=None):
     """جلب جميع المستخدمين للأدمن"""
     try:
         conn = get_db_connection()
@@ -2768,8 +3033,8 @@ def get_all_users(authenticated_user_id, is_admin):
 
 @app.route('/api/admin/advanced-stats', methods=['GET'])
 @require_telegram_auth
-@require_admin
-def get_advanced_stats(authenticated_user_id, is_admin):
+@require_admin_auth
+def get_advanced_stats(authenticated_user_id, is_admin, admin_username=None, admin_user_id=None):
     """إحصائيات متقدمة للأدمن"""
     try:
         conn = get_db_connection()
@@ -2820,8 +3085,8 @@ def get_advanced_stats(authenticated_user_id, is_admin):
 
 @app.route('/api/admin/unban-user', methods=['POST'])
 @require_telegram_auth
-@require_admin
-def unban_user(authenticated_user_id, is_admin):
+@require_admin_auth
+def unban_user(authenticated_user_id, is_admin, admin_username=None, admin_user_id=None):
     """إلغاء حظر مستخدم والسماح له بالوصول بدون تحقق"""
     try:
         data = request.get_json()
@@ -2867,8 +3132,8 @@ def unban_user(authenticated_user_id, is_admin):
 
 @app.route('/api/admin/user-referrals', methods=['GET'])
 @require_telegram_auth
-@require_admin
-def get_admin_user_referrals(authenticated_user_id, is_admin):
+@require_admin_auth
+def get_admin_user_referrals(authenticated_user_id, is_admin, admin_username=None, admin_user_id=None):
     """جلب إحالات مستخدم معين للأدمن"""
     try:
         user_id = request.args.get('user_id')
@@ -2921,8 +3186,8 @@ def get_admin_user_referrals(authenticated_user_id, is_admin):
 
 @app.route('/api/admin/verification-settings', methods=['GET', 'POST'])
 @require_telegram_auth
-@require_admin
-def verification_settings(authenticated_user_id, is_admin):
+@require_admin_auth
+def verification_settings(authenticated_user_id, is_admin, admin_username=None, admin_user_id=None):
     """الحصول على/تحديث إعدادات التحقق من التعدد"""
     try:
         conn = get_db_connection()

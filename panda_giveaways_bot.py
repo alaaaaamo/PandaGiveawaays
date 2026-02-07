@@ -1800,16 +1800,17 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                     if not is_verified:
                         # المستخدم غير متحقق - إرسال رسالة التحقق
-                        # إنشاء token للتحقق
+                        # إنشاء token للتحقق (يُحفظ في السيرفر فقط)
                         token_url = f"{API_BASE_URL}/verification/create-token"
                         token_resp = req.post(token_url, json={'user_id': user_id}, timeout=5)
                         
                         if token_resp.ok:
                             token_data = token_resp.json()
-                            fp_token = token_data.get('token')
+                            # ✅ لا نرسل fp_token في الرابط بعد الآن (أمان)
+                            # التوكن سيُجلب من السيرفر باستخدام Telegram authentication
                             
-                            # إنشاء رابط التحقق
-                            verify_url = f"{MINI_APP_URL}/fp.html?user_id={user_id}&fp_token={fp_token}"
+                            # إنشاء رابط التحقق بدون token (آمن)
+                            verify_url = f"{MINI_APP_URL}/fp.html?user_id={user_id}"
                             
                             verification_text = f"""
 🔐 <b>التحقق من الجهاز</b>

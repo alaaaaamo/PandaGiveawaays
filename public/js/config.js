@@ -587,6 +587,74 @@ const RateLimiter = {
 };
 
 // ═══════════════════════════════════════════════════════════════
+// 📸 TELEGRAM CHANNEL PHOTOS
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * استخراج اسم المستخدم من رابط أو معرف Telegram
+ * @param {string} input - channel_id, channel_url, or task_link
+ * @returns {string|null} - username without @, or null if not found
+ */
+function extractTelegramUsername(input) {
+    if (!input) return null;
+    
+    // إزالة المسافات
+    input = input.trim();
+    
+    // إذا كان يبدأ بـ @، نزيله ونرجع الاسم
+    if (input.startsWith('@')) {
+        return input.substring(1);
+    }
+    
+    // محاولة استخراجه من رابط t.me
+    const tmeLinkMatch = input.match(/t\.me\/([a-zA-Z0-9_]+)/);
+    if (tmeLinkMatch) {
+        return tmeLinkMatch[1];
+    }
+    
+    // محاولة استخراجه من رابط telegram.me
+    const telegramMeMatch = input.match(/telegram\.me\/([a-zA-Z0-9_]+)/);
+    if (telegramMeMatch) {
+        return telegramMeMatch[1];
+    }
+    
+    // إذا كان اسم مستخدم بدون @ أو رابط
+    if (/^[a-zA-Z0-9_]+$/.test(input)) {
+        return input;
+    }
+    
+    return null;
+}
+
+/**
+ * إنشاء HTML لصورة قناة Telegram مع fallback
+ * @param {string} input - channel_id, channel_url, or task_link
+ * @param {string} fallbackEmoji - emoji to show if image fails (default: 📢)
+ * @param {string} size - CSS size (default: 40px)
+ * @returns {string} HTML string with img and fallback
+ */
+function createChannelPhotoHTML(input, fallbackEmoji = '📢', size = '40px') {
+    const username = extractTelegramUsername(input);
+    
+    if (!username) {
+        // لا يوجد username، نرجع الإيموجي مباشرة
+        return `<span class="channel-icon" style="font-size: ${size}">${fallbackEmoji}</span>`;
+    }
+    
+    const photoUrl = `https://t.me/i/userpic/320/${username}.jpg`;
+    
+    return `
+        <img class="channel-photo" 
+             src="${photoUrl}" 
+             alt="${username}"
+             style="width: ${size}; height: ${size}; border-radius: 50%; object-fit: cover; display: inline-block;"
+             onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
+        <span class="channel-icon-fallback" 
+              style="font-size: ${size}; display: none;">${fallbackEmoji}</span>
+    `;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // 🎯 EXPORTS
 // ═══════════════════════════════════════════════════════════════
 
@@ -604,6 +672,8 @@ window.isValidTonAddress = isValidTonAddress;
 window.isValidVodafoneNumber = isValidVodafoneNumber;
 window.sanitizeInput = sanitizeInput;
 window.hashData = hashData;
+window.extractTelegramUsername = extractTelegramUsername;
+window.createChannelPhotoHTML = createChannelPhotoHTML;
 
 console.log('✅ Panda Giveaways Config Loaded Successfully');
 console.log('📊 CONFIG:', {

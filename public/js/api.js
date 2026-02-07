@@ -76,7 +76,11 @@ const API = {
         try {
             if (window.Telegram?.WebApp?.initData) {
                 initData = window.Telegram.WebApp.initData;
-                console.log('✅ initData found:', initData ? initData.substring(0, 50) + '...' : 'EMPTY');
+                console.log('✅ initData found from Telegram WebApp:', initData ? initData.substring(0, 50) + '...' : 'EMPTY');
+            } else if (window._restored_init_data) {
+                // 🔄 Fallback: استخدام البيانات المحفوظة من sessionStorage
+                initData = window._restored_init_data;
+                console.log('✅ Using restored initData from sessionStorage');
             } else {
                 console.error('❌ Telegram.WebApp.initData is not available!');
             }
@@ -114,6 +118,12 @@ const API = {
             'X-User-ID': TelegramApp.getUserId()?.toString() || '',
             'X-Telegram-Init-Data': initData  // ✅ إرسال initData للتحقق
         };
+        
+        // 🔐 إضافة Admin Token للـ headers إذا كان موجود (للـ admin panel)
+        if (typeof adminToken !== 'undefined' && adminToken) {
+            headers['X-Admin-Token'] = adminToken;
+            console.log('🔐 Admin token added to request headers');
+        }
         
         const options = {
             method,
@@ -161,6 +171,25 @@ const API = {
                     
                     // 🚨 معالجة خاصة لأخطاء 401 Unauthorized
                     if (response.status === 401) {
+                        try {
+                            const errorData = JSON.parse(errorText);
+                            // إذا كان الخطأ بسبب admin login
+                            if (errorData.require_login) {
+                                console.error('❌ 401 - Admin login required');
+                                if (typeof clearAdminToken === 'function') {
+                                    clearAdminToken();
+                                }
+                                if (typeof showToast !== 'undefined') {
+                                    showToast('⚠️ انتهت صلاحية الجلسة - يرجى تسجيل الدخول مرة أخرى', 'error');
+                                }
+                                // إعادة تحميل الصفحة لإظهار Login screen
+                                setTimeout(() => location.reload(), 2000);
+                                throw new Error('Admin session expired - please login again');
+                            }
+                        } catch (parseError) {
+                            // إذا فشل parse، تعامل كأنه unauthorized عادي
+                        }
+                        
                         console.error('❌ 401 Unauthorized - initData غير صالح أو منتهي');
                         if (typeof showToast !== 'undefined') {
                             showToast('⚠️ انتهت صلاحية الجلسة - أعد فتح التطبيق من البوت', 'error');

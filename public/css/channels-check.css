@@ -128,3 +128,35 @@
     opacity: 0.6;
     cursor: not-allowed;
 }
+/* ═══════════════════════════════════════════════════════════════
+   📸 TELEGRAM CHANNEL PHOTOS
+   ═══════════════════════════════════════════════════════════════ */
+
+/* صور القنوات من تيليجرام */
+.channel-photo {
+    opacity: 0;
+    transition: opacity 0.4s ease-in-out;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.channel-photo[src]:not([src=""]) {
+    opacity: 1;
+}
+
+/* الأيقونة الاحتياطية */
+.channel-icon-fallback {
+    transition: opacity 0.3s ease-in-out;
+}
+
+/* تنسيق داخل بطاقات القنوات */
+.channel-info .channel-photo,
+.channel-info .channel-icon-fallback {
+    flex-shrink: 0;
+}
+
+/* تأثير hover على القنوات */
+.required-channel-item:hover .channel-photo {
+    border-color: rgba(139, 92, 246, 0.4);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}

@@ -89,7 +89,11 @@ const TasksModule = {
     },
     
     createTaskCard(task, isCompleted) {
-        const taskIcon = task.task_type === 'channel' ? '📢' : '🔗';
+        // استخدام صورة القناة من Telegram مع fallback للإيموجي
+        const taskInput = task.task_link || task.channel_url || task.channel_id || task.task_name;
+        const fallbackEmoji = task.task_type === 'channel' ? '📢' : '🔗';
+        const taskIconHTML = createChannelPhotoHTML(taskInput, fallbackEmoji, '40px');
+        
         const taskTypeText = task.task_type === 'channel' ? 'قناة' : 'رابط';
         const description = task.task_description || 'اشترك في القناة واحصل على المكافأة';
         
@@ -103,7 +107,7 @@ const TasksModule = {
                 <div class="task-header">
                     <div class="task-icon-wrapper">
                         ${task.is_pinned ? '<span class="pin-badge-inline">📌</span>' : ''}
-                        <div class="task-icon">${taskIcon}</div>
+                        <div class="task-icon">${taskIconHTML}</div>
                     </div>
                     <div class="task-info">
                         <div class="task-title">

@@ -1598,3 +1598,52 @@ window.continueAppInitialization = async function() {
         }, 5000);
     }
 };
+
+// ═══════════════════════════════════════════════════════════════
+// 🔄 SAFE NAVIGATION - للحفاظ على Telegram WebApp Context
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * الانتقال الآمن بين الصفحات مع الحفاظ على Telegram WebApp context
+ * @param {string} page - اسم الصفحة (مثل: 'referral-program.html', 'index.html')
+ * @param {object} params - معاملات إضافية
+ */
+function safeNavigate(page, params = {}) {
+    try {
+        // حفظ Telegram init data قبل الانتقال
+        if (window.Telegram?.WebApp?.initData) {
+            sessionStorage.setItem('tg_init_data', window.Telegram.WebApp.initData);
+            sessionStorage.setItem('tg_init_data_timestamp', Date.now().toString());
+        }
+        
+        // بناء URL مع المعاملات
+        let url = page;
+        const queryParams = new URLSearchParams(params);
+        if (queryParams.toString()) {
+            url += '?' + queryParams.toString();
+        }
+        
+        console.log('🔄 Safe navigation to:', url);
+        
+        // الانتقال
+        window.location.href = url;
+    } catch (error) {
+        console.error('❌ Navigation error:', error);
+        // Fallback: انتقال عادي
+        window.location.href = page;
+    }
+}
+
+/**
+ * الانتقال لصفحة الإحالات
+ */
+function navigateToReferrals() {
+    safeNavigate('referral-program.html');
+}
+
+/**
+ * الانتقال لصفحة index مع page معين
+ */
+function navigateToIndex(pageName = 'wheel') {
+    safeNavigate('index.html', { page: pageName });
+}

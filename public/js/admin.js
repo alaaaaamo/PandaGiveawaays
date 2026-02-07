@@ -5,6 +5,10 @@
 
 console.log('📄 admin.js loaded successfully');
 
+// 🔐 Admin Token Management
+let adminToken = localStorage.getItem('admin_token');
+let adminTokenExpiry = localStorage.getItem('admin_token_expiry');
+
 // Test: إضافة click listener للـ body للتأكد من الأحداث بتشتغل
 document.addEventListener('click', (e) => {
     console.log('🖱️ Global click detected:', e.target.tagName, e.target.className);
@@ -23,14 +27,127 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     try {
-        initAdminPanel();
-        loadDashboardData();
-        setupEventListeners();
-        console.log('✅ Admin Panel initialization complete');
+        // التحقق من admin token قبل تحميل أي شيء
+        checkAdminAuth();
     } catch (error) {
         console.error('❌ Failed to initialize admin panel:', error);
     }
 });
+
+// ═══════════════════════════════════════════════════════════════
+// 🔐 ADMIN AUTHENTICATION
+// ═══════════════════════════════════════════════════════════════
+
+function checkAdminAuth() {
+    console.log('🔐 Checking admin authentication...');
+    
+    // التحقق من وجود token وصلاحيته
+    if (adminToken && adminTokenExpiry) {
+        const expiryDate = new Date(adminTokenExpiry);
+        const now = new Date();
+        
+        if (expiryDate > now) {
+            console.log('✅ Valid admin token found');
+            // إخفاء شاشة Login
+            document.getElementById('admin-login-screen').classList.add('hidden');
+            // تحميل Dashboard
+            initAdminPanel();
+            loadDashboardData();
+            setupEventListeners();
+            return;
+        } else {
+            console.log('⚠️ Admin token expired');
+            // حذف token منتهي الصلاحية
+            clearAdminToken();
+        }
+    }
+    
+    // عرض شاشة Login
+    console.log('🔓 Showing login screen');
+    document.getElementById('admin-login-screen').classList.remove('hidden');
+}
+
+async function handleAdminLogin(event) {
+    event.preventDefault();
+    
+    const username = document.getElementById('admin-username').value.trim();
+    const password = document.getElementById('admin-password').value.trim();
+    const errorMsg = document.getElementById('login-error-msg');
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    const btnText = document.getElementById('login-btn-text');
+    const btnLoading = document.getElementById('login-btn-loading');
+    
+    // إخفاء رسالة الخطأ
+    errorMsg.style.display = 'none';
+    
+    // Disable button
+    submitBtn.disabled = true;
+    btnText.style.display = 'none';
+    btnLoading.style.display = 'inline';
+    
+    try {
+        // Get Telegram init data
+        const initData = window.Telegram?.WebApp?.initData;
+        if (!initData) {
+            throw new Error('Telegram init data not found');
+        }
+        
+        // إرسال طلب login
+        const response = await fetch(`${window.CONFIG.API_URL}/api/admin/login`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Telegram-Init-Data': initData
+            },
+            body: JSON.stringify({ username, password })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            // حفظ token
+            adminToken = data.admin_token;
+            adminTokenExpiry = data.expires_at;
+            localStorage.setItem('admin_token', adminToken);
+            localStorage.setItem('admin_token_expiry', adminTokenExpiry);
+            
+            console.log('✅ Admin login successful');
+            
+            // إخفاء شاشة Login
+            document.getElementById('admin-login-screen').classList.add('hidden');
+            
+            // تحميل Dashboard
+            initAdminPanel();
+            loadDashboardData();
+            setupEventListeners();
+            
+        } else {
+            throw new Error(data.error || 'فشل تسجيل الدخول');
+        }
+        
+    } catch (error) {
+        console.error('❌ Login error:', error);
+        errorMsg.textContent = error.message || 'حدث خطأ أثناء تسجيل الدخول';
+        errorMsg.style.display = 'block';
+        
+        // Enable button
+        submitBtn.disabled = false;
+        btnText.style.display = 'inline';
+        btnLoading.style.display = 'none';
+    }
+}
+
+function clearAdminToken() {
+    adminToken = null;
+    adminTokenExpiry = null;
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_token_expiry');
+}
+
+function logout() {
+    clearAdminToken();
+    location.reload();
+}
 
 // ═══════════════════════════════════════════════════════════════
 // 📊 DATA MANAGEMENT
@@ -56,44 +173,14 @@ async function initAdminPanel() {
         window.Telegram.WebApp.expand();
     }
     
-    // Check if user is admin
+    // Check if user is admin (التحقق من Telegram user فقط للعرض)
     const telegramUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
     console.log('Telegram User:', telegramUser);
     
-    // إذا مفيش user من Telegram - ارفض الدخول تماماً
-    if (!telegramUser) {
-        document.body.innerHTML = `
-            <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #0d1117; color: #fff; text-align: center; padding: 20px; font-family: Arial;">
-                <div>
-                    <h1 style="font-size: 48px; margin-bottom: 20px;">🚫</h1>
-                    <h2 style="color: #ff4444; margin-bottom: 10px;">غير مسموح بالدخول!</h2>
-                    <p style="color: #888; font-size: 18px;">هذه الصفحة تعمل فقط من خلال Telegram Mini App</p>
-                    <p style="color: #666; font-size: 14px; margin-top: 20px;">Access Denied: This page only works through Telegram Bot</p>
-                </div>
-            </div>
-        `;
-        throw new Error('Not authorized - Not from Telegram');
+    if (telegramUser) {
+        console.log('✅ Admin authorized:', telegramUser.id);
+        showToast('✅ مرحباً في لوحة التحكم!', 'success');
     }
-    
-    // التحقق من أن المستخدم أدمن
-    const adminIds = window.CONFIG?.ADMIN_IDS || [1797127532, 6603009212];
-    if (!adminIds.includes(telegramUser.id)) {
-        document.body.innerHTML = `
-            <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #0d1117; color: #fff; text-align: center; padding: 20px; font-family: Arial;">
-                <div>
-                    <h1 style="font-size: 48px; margin-bottom: 20px;">⛔</h1>
-                    <h2 style="color: #ff4444; margin-bottom: 10px;">غير مصرح لك!</h2>
-                    <p style="color: #888; font-size: 18px;">هذه الصفحة للمسؤولين فقط</p>
-                    <p style="color: #666; font-size: 14px; margin-top: 20px;">Your ID: ${telegramUser.id}</p>
-                    <p style="color: #666; font-size: 14px;">Access Denied: Admin only</p>
-                </div>
-            </div>
-        `;
-        throw new Error('Not authorized - Not admin');
-    }
-
-    console.log('✅ Admin authorized:', telegramUser.id);
-    showToast('✅ مرحباً في لوحة التحكم!', 'success');
 }
 
 async function loadDashboardData() {

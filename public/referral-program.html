@@ -166,7 +166,7 @@
 
     <!-- 📱 BOTTOM NAVIGATION -->
     <nav class="bottom-nav">
-        <button class="nav-item" onclick="window.location.href='index.html?page=withdraw'">
+        <button class="nav-item" onclick="navigateToIndex('withdraw')">
             <span class="nav-icon">
                 <lottie-player src="./img/withdraw.json" background="transparent" speed="1" 
                     style="width: 32px; height: 32px;" loop autoplay>
@@ -174,7 +174,7 @@
             </span>
             <span class="nav-label">السحب</span>
         </button>
-        <button class="nav-item" onclick="window.location.href='index.html?page=tasks'">
+        <button class="nav-item" onclick="navigateToIndex('tasks')">
             <span class="nav-icon">
                 <lottie-player src="./img/task.json" background="transparent" speed="1" 
                     style="width: 32px; height: 32px;" loop autoplay>
@@ -190,7 +190,7 @@
             </span>
             <span class="nav-label">الإحالات</span>
         </button>
-        <button class="nav-item" onclick="window.location.href='index.html'">
+        <button class="nav-item" onclick="navigateToIndex('wheel')">
             <span class="nav-icon">
                 <lottie-player src="./img/roll.json" background="transparent" speed="1" 
                     style="width: 32px; height: 32px;" loop autoplay>
@@ -201,6 +201,49 @@
     </nav>
 
     <script>
+        // 🔄 Safe Navigation Functions
+        function safeNavigate(page, params = {}) {
+            try {
+                if (window.Telegram?.WebApp?.initData) {
+                    sessionStorage.setItem('tg_init_data', window.Telegram.WebApp.initData);
+                    sessionStorage.setItem('tg_init_data_timestamp', Date.now().toString());
+                }
+                let url = page;
+                const queryParams = new URLSearchParams(params);
+                if (queryParams.toString()) {
+                    url += '?' + queryParams.toString();
+                }
+                window.location.href = url;
+            } catch (error) {
+                console.error('❌ Navigation error:', error);
+                window.location.href = page;
+            }
+        }
+        
+        function navigateToIndex(pageName = 'wheel') {
+            safeNavigate('index.html', { page: pageName });
+        }
+        
+        // 🔐 Restore Telegram WebApp Context من sessionStorage
+        (function restoreTelegramContext() {
+            const savedInitData = sessionStorage.getItem('tg_init_data');
+            const savedTimestamp = sessionStorage.getItem('tg_init_data_timestamp');
+            
+            if (savedInitData && savedTimestamp) {
+                const age = Date.now() - parseInt(savedTimestamp);
+                // إذا البيانات أحدث من 5 دقائق
+                if (age < 5 * 60 * 1000) {
+                    console.log('✅ Restored Telegram init_data from sessionStorage (age: ' + Math.round(age/1000) + 's)');
+                    // حفظه للاستخدام مع API
+                    window._restored_init_data = savedInitData;
+                } else {
+                    console.warn('⚠️ Saved init_data too old, clearing it');
+                    sessionStorage.removeItem('tg_init_data');
+                    sessionStorage.removeItem('tg_init_data_timestamp');
+                }
+            }
+        })();
+        
         // Initialize Telegram Web App
         const tg = window.Telegram.WebApp;
         tg.ready();

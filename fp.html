@@ -151,7 +151,48 @@ function getReferrerIdFromUrl(){
     
     async function doSend(){
       const uid = getUserIdFromUrl();
-      const fpToken = new URLSearchParams(location.search).get('fp_token');
+      // 🔐 جلب fp_token من السيرفر بشكل آمن (بدلاً من URL)
+      let fpToken = null;
+      
+      try {
+        status.textContent='🔐 جارٍ التحقق من الهوية...';
+        
+        // الحصول على Telegram init data
+        const initData = window.Telegram?.WebApp?.initData;
+        if (!initData) {
+          throw new Error('يجب فتح الصفحة من Telegram');
+        }
+        
+        // طلب التوكن من السيرفر بشكل آمن
+        const tokenApiUrl = `${API_CONFIG.getApiUrl()}/api/verification/get-token`;
+        const tokenResp = await fetch(tokenApiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Telegram-Init-Data': initData
+          }
+        });
+        
+        if (!tokenResp.ok) {
+          const errorData = await tokenResp.json();
+          throw new Error(errorData.error || 'فشل الحصول على توكن التحقق');
+        }
+        
+        const tokenData = await tokenResp.json();
+        fpToken = tokenData.token;
+        console.log('✅ Token fetched securely from server');
+        
+      } catch (error) {
+        console.error('❌ Error fetching token:', error);
+        animationPlayer.load('/img/notallowed.json');
+        animationPlayer.play();
+        statusIcon.src = '/img/payment-failure.svg';
+        statusIcon.classList.add('show');
+        status.textContent = `❌ ${error.message}`;
+        status.className = 'status err';
+        return;
+      }
+      
       const referrerId = getReferrerIdFromUrl();
       
       // إنشاء fallback link
@@ -181,9 +222,9 @@ function getReferrerIdFromUrl(){
           // بناء الـ URL الكامل للـ API
           const apiUrl = `${API_CONFIG.getApiUrl()}/api/fingerprint`;
           console.log('🔗 Sending request to:', apiUrl);
-          console.log('📦 Payload:', {
+          console.log('📦 Payload (without sensitive data):', {
             user_id: uid,
-            fp_token: fpToken?.substring(0, 10) + '...',
+            has_token: !!fpToken,
             fingerprint: final?.substring(0, 16) + '...'
           });
           

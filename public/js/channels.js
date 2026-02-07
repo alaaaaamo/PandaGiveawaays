@@ -88,9 +88,14 @@ async function showChannelsModalAndWait(allChannels, missingChannels) {
         missingChannels.forEach(channel => {
             const channelEl = document.createElement('div');
             channelEl.className = 'channel-item';
+            
+            // استخدام صورة القناة من Telegram
+            const channelInput = channel.url || channel.channel_url || channel.id || channel.channel_id;
+            const channelIconHTML = createChannelPhotoHTML(channelInput, '📺', '36px');
+            
             channelEl.innerHTML = `
                 <div class="channel-info">
-                    <span class="channel-icon">📺</span>
+                    ${channelIconHTML}
                     <span class="channel-name">${channel.name || channel.channel_name || channel.id}</span>
                 </div>
                 <a href="${channel.url || `https://t.me/${channel.id.replace('@', '')}}`}" 

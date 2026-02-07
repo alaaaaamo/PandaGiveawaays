@@ -88,7 +88,63 @@
 </head>
 <body class="admin-body">
     
-    <!-- 🔝 ADMIN HEADER -->
+    <!-- � ADMIN LOGIN SCREEN (Hidden by default after login) -->
+    <div id="admin-login-screen" class="admin-login-overlay">
+        <div class="admin-login-container">
+            <div class="login-header">
+                <div class="login-logo">
+                    <span class="logo-icon" style="font-size: 64px;">🔐</span>
+                    <h1>Admin Panel</h1>
+                    <p>تسجيل دخول المسؤول</p>
+                </div>
+            </div>
+            
+            <form id="admin-login-form" class="login-form" onsubmit="handleAdminLogin(event)">
+                <div class="form-group">
+                    <label for="admin-username">
+                        <span>👤</span> اسم المستخدم
+                    </label>
+                    <input 
+                        type="text" 
+                        id="admin-username" 
+                        name="username" 
+                        placeholder="أدخل اسم المستخدم"
+                        required 
+                        autocomplete="username"
+                    />
+                </div>
+                
+                <div class="form-group">
+                    <label for="admin-password">
+                        <span>🔑</span> كلمة السر
+                    </label>
+                    <input 
+                        type="password" 
+                        id="admin-password" 
+                        name="password" 
+                        placeholder="أدخل كلمة السر"
+                        required
+                        autocomplete="current-password"
+                    />
+                </div>
+                
+                <button type="submit" class="login-submit-btn">
+                    <span id="login-btn-text">🔓 تسجيل الدخول</span>
+                    <span id="login-btn-loading" style="display: none;">⏳ جاري التحقق...</span>
+                </button>
+                
+                <div id="login-error-msg" class="login-error" style="display: none;"></div>
+            </form>
+            
+            <div class="login-footer">
+                <p style="font-size: 12px; color: #888; margin-top: 20px;">
+                    🔒 صفحة آمنة - للمسؤولين فقط
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- �🔝 ADMIN HEADER -->
     <header class="admin-header">
         <div class="admin-logo">
             <span class="logo-icon">🐼</span>

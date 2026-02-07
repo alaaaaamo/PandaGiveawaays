@@ -19,3 +19,4 @@ gunicorn==21.2.0
 
 # Security
 cryptography==41.0.7
+PyJWT==2.8.0
