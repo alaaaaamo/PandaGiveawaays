@@ -355,7 +355,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             channelsVerified = true;
         }
         
-        // Channels verification completed
+        // Chapter verification completed
         
         if (!channelsVerified) {
             // Hide loading - channels modal will be shown
@@ -363,6 +363,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             clearTimeout(window.globalTimeoutId);
             showLoading(false);
             return;
+        }
+        
+        // ✅ تفعيل مراقبة القنوات عند عودة المستخدم للتطبيق
+        if (typeof ChannelsCheck !== 'undefined' && typeof ChannelsCheck.setupVisibilityCheck === 'function') {
+            ChannelsCheck.setupVisibilityCheck();
+            console.log('✅ Channels visibility check enabled');
         }
         
         // إذا تم التحقق من القنوات، ننتقل لعملية الإعداد الأساسية

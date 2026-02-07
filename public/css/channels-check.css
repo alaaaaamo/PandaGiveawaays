@@ -75,6 +75,30 @@
 
 .channel-icon {
     font-size: 24px;
+    flex-shrink: 0;
+}
+
+/* 📸 تنسيق صور القنوات من Telegram */
+.channel-info .channel-photo {
+    opacity: 0;
+    transition: opacity 0.4s ease-in-out;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    flex-shrink: 0;
+}
+
+.channel-info .channel-photo[src]:not([src=""]) {
+    opacity: 1;
+}
+
+/* الأيقونة الاحتياطية (emoji) */
+.channel-info .channel-icon-fallback {
+    transition: opacity 0.3s ease-in-out;
+    flex-shrink: 0;
+}
+
+/* تأثير تحميل الصورة بشكل سلس */
+.channel-info .channel-photo {
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .channel-name {
@@ -156,7 +180,8 @@
 }
 
 /* تأثير hover على القنوات */
-.required-channel-item:hover .channel-photo {
-    border-color: rgba(139, 92, 246, 0.4);
-    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+.required-channel-item:hover .channel-info .channel-photo {
+    border-color: rgba(139, 92, 246, 0.5);
+    box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
+    transform: scale(1.05);
 }

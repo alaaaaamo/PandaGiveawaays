@@ -26,13 +26,18 @@ const ChannelsCheck = {
     },
     
     async verifySubscription() {
+        console.log('🔍 Starting channels verification...');
+        
         if (this.channels.length === 0) {
             console.log('✅ No required channels');
             return true;
         }
         
+        console.log(`📢 Verifying ${this.channels.length} channels:`, this.channels);
+        
         try {
             const userId = TelegramApp.getUserId();
+            console.log(`👤 User ID: ${userId}`);
             
             // محاولتين مع timeout أطول
             let response;
@@ -68,12 +73,15 @@ const ChannelsCheck = {
             }
             
             const data = await response.json();
+            console.log('📊 Verification response:', data);
             
             if (!data.all_subscribed) {
+                console.log('❌ User not subscribed to all channels. Missing:', data.not_subscribed);
                 this.showSubscriptionModal(data.not_subscribed);
                 return false;
             }
             
+            console.log('✅ User subscribed to all channels!');
             return true;
             
         } catch (error) {
@@ -93,6 +101,13 @@ const ChannelsCheck = {
     },
     
     showSubscriptionModal(notSubscribed) {
+        console.log('🔔 Showing channels subscription modal for', notSubscribed.length, 'channels');
+        
+        // 🔥 إخفاء الـ loading overlay أولاً قبل عرض الـ modal
+        if (typeof showLoading !== 'undefined') {
+            showLoading(false);
+        }
+        
         // إنشاء modal للقنوات غير المشترك فيها
         let channelsHTML = '';
         
@@ -226,18 +241,5 @@ const ChannelsCheck = {
     }
 };
 
-// تشغيل الفحص عند تحميل الصفحة
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        // انتظار تهيئة Telegram App أولاً
-        setTimeout(() => {
-            ChannelsCheck.init();
-            ChannelsCheck.setupVisibilityCheck();
-        }, 500);
-    });
-} else {
-    setTimeout(() => {
-        ChannelsCheck.init();
-        ChannelsCheck.setupVisibilityCheck();
-    }, 500);
-}
+// ⚠️ لا تقم بالتشغيل التلقائي - سيتم الاستدعاء من app.js
+// التشغيل التلقائي يسبب تضارب مع app.js initialization
