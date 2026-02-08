@@ -1696,15 +1696,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(user_id) and not db.is_bot_enabled():
         # إرسال رسالة بأن البوت معطل
         bot_disabled_text = f"""
-🔴 <b>البوت مغلق حالياً</b>
+<tg-emoji emoji-id='5360054260508063850'>🔴</tg-emoji> <b>البوت مغلق حالياً</b>
 
 عزيزي <b>{full_name}</b>،
 
 البوت غير متاح في الوقت الحالي للصيانة.
 
-⏰ سيتم تفعيل البوت قريباً، يرجى المحاولة لاحقاً.
+<tg-emoji emoji-id='6010227837879983163'>⏰</tg-emoji> سيتم تفعيل البوت قريباً، يرجى المحاولة لاحقاً.
 
-📢 تابعنا للحصول على آخر التحديثات!
+<tg-emoji emoji-id='5370599459661045441'>🤍</tg-emoji> تابعنا للحصول على آخر التحديثات!
 """
         
         await update.message.reply_text(
@@ -1751,14 +1751,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ban_reason = db_user.ban_reason if db_user.ban_reason else 'تم حظرك من البوت'
         
         ban_message = f"""
-⛔ <b>تم حظرك من البوت</b>
+<tg-emoji emoji-id='5463358164705489689'>⛔</tg-emoji> <b>تم حظرك من البوت</b>
 
 عزيزي <b>{full_name}</b>،
 
 حسابك محظور من استخدام البوت.
 
 <b>السبب:</b> {ban_reason}
-<b>🔒 حالة الحساب:</b> محظور
+<b><tg-emoji emoji-id='5350619413533958825'>🔐</tg-emoji> حالة الحساب:</b> محظور
 
 إذا كنت تعتقد أن هذا خطأ، تواصل مع الدعم.
 """
@@ -1876,7 +1876,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             first_channel = not_subscribed[0]
             
             subscription_text = f"""
-📢 <b>اشتراك إجباري</b>
+<tg-emoji emoji-id='5370599459661045441'>🤍</tg-emoji> <b>اشتراك إجباري</b>
 
 عزيزي <b>{full_name}</b>، للاستمرار في استخدام البوت، يجب الاشتراك في القناة التالية:
 
@@ -1887,7 +1887,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             keyboard = [
                 [InlineKeyboardButton(
-                    f"📢 {first_channel['channel_name']}",
+                    f"<tg-emoji emoji-id='5370599459661045441'>🤍</tg-emoji> {first_channel['channel_name']}",
                     url=first_channel['channel_url']
                 )],
                 [InlineKeyboardButton(
@@ -1993,12 +1993,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                             text=f"""
 <tg-emoji emoji-id='5260463209562776385'>✅</tg-emoji> <b>إحالة جديدة ناجحة!</b>
 
-👤 المستخدم <b>{full_name}</b> انضم عبر رابطك!
+<tg-emoji emoji-id='5453957997418004470'>👥</tg-emoji> المستخدم <b>{full_name}</b> انضم عبر رابطك!
 
 <tg-emoji emoji-id='5453957997418004470'>👥</tg-emoji> <b>إجمالي إحالاتك الصحيحة:</b> {valid_refs}
 <tg-emoji emoji-id='5217697679030637222'>⏳</tg-emoji> <b>متبقي للفة القادمة:</b> {remaining_for_next} إحالات
 
-<b>استمر في الدعوة! 💪</b>
+<b>استمر في الدعوة! <tg-emoji emoji-id='5368724289679630642'>💪</tg-emoji></b>
 """,
                                             parse_mode=ParseMode.HTML
                                         )
@@ -2136,8 +2136,8 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     stats_text = f"""
 <tg-emoji emoji-id='5422360266618707867'>📊</tg-emoji> <b>إحصائياتك الشخصية</b>
 
-👤 <b>الاسم:</b> {user.full_name}
-🆔 <b>المعرف:</b> @{user.username}
+<tg-emoji emoji-id='5453957997418004470'>👥</tg-emoji> <b>الاسم:</b> {user.full_name}
+<tg-emoji emoji-id='5812093549042210992'>🆔</tg-emoji> <b>المعرف:</b> @{user.username}
 
 <tg-emoji emoji-id='5278467510604160626'>💰</tg-emoji> <b>الرصيد:</b> {user.balance:.4f} TON
 <tg-emoji emoji-id='5778315894706937436'>🎰</tg-emoji> <b>لفات متاحة:</b> {user.available_spins}
@@ -2492,22 +2492,22 @@ async def admin_detailed_stats_callback(update: Update, context: ContextTypes.DE
         return
     stats = db.get_bot_statistics()
     detailed_text = f"""
-📊 <b>إحصائيات تفصيلية</b>
+<tg-emoji emoji-id='5422360266618707867'>📊</tg-emoji> <b>إحصائيات تفصيلية</b>
 
-👥 <b>المستخدمون:</b>
+<tg-emoji emoji-id='5453957997418004470'>👥</tg-emoji> <b>المستخدمون:</b>
 • الإجمالي: {stats['total_users']}
 • النشطون (7 أيام): {stats['active_users']}
 • معدل النشاط: {(stats['active_users']/stats['total_users']*100) if stats['total_users'] > 0 else 0:.1f}%
 
-🔗 <b>الإحالات:</b>
+<tg-emoji emoji-id='5271604874419647061'>🔗</tg-emoji> <b>الإحالات:</b>
 • الإجمالي: {stats['total_referrals']}
 • متوسط الإحالات/مستخدم: {(stats['total_referrals']/stats['total_users']) if stats['total_users'] > 0 else 0:.2f}
 
-🎰 <b>اللفات:</b>
+<tg-emoji emoji-id='5778315894706937436'>🎰</tg-emoji> <b>اللفات:</b>
 • الإجمالي: {stats['total_spins']}
 • متوسط اللفات/مستخدم: {(stats['total_spins']/stats['total_users']) if stats['total_users'] > 0 else 0:.2f}
 
-💰 <b>المالية:</b>
+<tg-emoji emoji-id='5278467510604160626'>💰</tg-emoji> <b>المالية:</b>
 • الأرباح الموزعة: {stats['total_distributed']:.2f} TON
 • السحوبات المكتملة: {stats['total_withdrawn']:.2f} TON
 • طلبات السحب المعلقة: {stats['pending_withdrawals']}
@@ -2535,8 +2535,8 @@ async def create_backup_callback(update: Update, context: ContextTypes.DEFAULT_T
     
     try:
         await query.edit_message_text(
-            "⏳ <b>جاري إنشاء النسخة الاحتياطية...</b>\n\n"
-            "📦 يتم نسخ قاعدة البيانات الآن، الرجاء الانتظار...",
+            "<tg-emoji emoji-id='5217697679030637222'>⏳</tg-emoji> <b>جاري إنشاء النسخة الاحتياطية...</b>\n\n"
+            "<tg-emoji emoji-id='5197269100878907942'>📋</tg-emoji> يتم نسخ قاعدة البيانات الآن، الرجاء الانتظار...",
             parse_mode=ParseMode.HTML
         )
         
@@ -2559,19 +2559,19 @@ async def create_backup_callback(update: Update, context: ContextTypes.DEFAULT_T
                 document=backup_file,
                 filename=backup_filename,
                 caption=f"""
-✅ <b>تم إنشاء النسخة الاحتياطية بنجاح!</b>
+<tg-emoji emoji-id='5260463209562776385'>✅</tg-emoji> <b>تم إنشاء النسخة الاحتياطية بنجاح!</b>
 
-📦 <b>معلومات النسخة:</b>
-📅 التاريخ: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-📊 حجم الملف: {file_size_mb:.2f} MB
-💾 اسم الملف: <code>{backup_filename}</code>
+<tg-emoji emoji-id='5197269100878907942'>📋</tg-emoji> <b>معلومات النسخة:</b>
+<tg-emoji emoji-id='5373236586760651455'>📅</tg-emoji> التاريخ: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+<tg-emoji emoji-id='5422360266618707867'>📊</tg-emoji> حجم الملف: {file_size_mb:.2f} MB
+<tg-emoji emoji-id='5197269100878907942'>📋</tg-emoji> اسم الملف: <code>{backup_filename}</code>
 
-⚠️ <b>تعليمات مهمة:</b>
+<tg-emoji emoji-id='5273914604752216432'>❌</tg-emoji> <b>تعليمات مهمة:</b>
 • احفظ هذا الملف في مكان آمن
 • يمكنك استعادة البيانات من هذا الملف في أي وقت
 • لا تشارك هذا الملف مع أحد (يحتوي على بيانات حساسة)
 
-💡 لاستعادة النسخة: استخدم زر "استعادة نسخة احتياطية"
+<tg-emoji emoji-id='5897920748101571572'>🌟</tg-emoji> لاستعادة النسخة: استخدم زر "استعادة نسخة احتياطية"
 """,
                 parse_mode=ParseMode.HTML
             )
@@ -2584,7 +2584,7 @@ async def create_backup_callback(update: Update, context: ContextTypes.DEFAULT_T
         
         # العودة للوحة التحكم
         await query.edit_message_text(
-            "✅ <b>تم إرسال النسخة الاحتياطية بنجاح!</b>\n\n"
+            "<tg-emoji emoji-id='5260463209562776385'>✅</tg-emoji> <b>تم إرسال النسخة الاحتياطية بنجاح!</b>\n\n"
             "تم إرسال الملف في رسالة منفصلة، تحقق من الرسائل أعلاه.",
             parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup([[
@@ -2597,7 +2597,7 @@ async def create_backup_callback(update: Update, context: ContextTypes.DEFAULT_T
     except Exception as e:
         logger.error(f"❌ Error creating backup: {e}")
         await query.edit_message_text(
-            f"❌ <b>فشل إنشاء النسخة الاحتياطية</b>\n\n"
+            f"<tg-emoji emoji-id='5273914604752216432'>❌</tg-emoji> <b>فشل إنشاء النسخة الاحتياطية</b>\n\n"
             f"الخطأ: {str(e)}",
             parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup([[
@@ -2618,19 +2618,19 @@ async def restore_backup_start(update: Update, context: ContextTypes.DEFAULT_TYP
     
     await query.edit_message_text(
         """
-⚠️ <b>استعادة نسخة احتياطية</b>
+<tg-emoji emoji-id='5273914604752216432'>❌</tg-emoji> <b>استعادة نسخة احتياطية</b>
 
-📋 <b>تعليمات مهمة:</b>
+<tg-emoji emoji-id='5197269100878907942'>📋</tg-emoji> <b>تعليمات مهمة:</b>
 1️⃣ أرسل ملف النسخة الاحتياطية (.db)
 2️⃣ سيتم استبدال قاعدة البيانات الحالية بالكامل
 3️⃣ تأكد من أن الملف من نفس النظام
 
-⚠️ <b>تحذير:</b>
+<tg-emoji emoji-id='5273914604752216432'>❌</tg-emoji> <b>تحذير:</b>
 • سيتم حذف جميع البيانات الحالية
 • تأكد من عمل نسخة احتياطية قبل الاستعادة
 • هذه العملية لا يمكن التراجع عنها
 
-📤 <b>أرسل الملف الآن أو اضغط إلغاء</b>
+<tg-emoji emoji-id='5197269100878907942'>📋</tg-emoji> <b>أرسل الملف الآن أو اضغط إلغاء</b>
 """,
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup([[
@@ -2650,7 +2650,7 @@ async def restore_backup_handler(update: Update, context: ContextTypes.DEFAULT_T
     
     if not update.message.document:
         await update.message.reply_text(
-            "❌ <b>خطأ: لم يتم إرسال ملف</b>\n\n"
+            "<tg-emoji emoji-id='5273914604752216432'>❌</tg-emoji> <b>خطأ: لم يتم إرسال ملف</b>\n\n"
             "الرجاء إرسال ملف قاعدة البيانات (.db)",
             parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup([[
@@ -2664,7 +2664,7 @@ async def restore_backup_handler(update: Update, context: ContextTypes.DEFAULT_T
     # التحقق من امتداد الملف
     if not document.file_name.endswith('.db'):
         await update.message.reply_text(
-            "❌ <b>خطأ: نوع ملف غير صحيح</b>\n\n"
+            "<tg-emoji emoji-id='5273914604752216432'>❌</tg-emoji> <b>خطأ: نوع ملف غير صحيح</b>\n\n"
             "الرجاء إرسال ملف قاعدة بيانات بامتداد .db",
             parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup([[
@@ -2676,8 +2676,8 @@ async def restore_backup_handler(update: Update, context: ContextTypes.DEFAULT_T
     try:
         # إرسال رسالة الانتظار
         wait_msg = await update.message.reply_text(
-            "⏳ <b>جاري استعادة النسخة الاحتياطية...</b>\n\n"
-            "📦 يتم معالجة الملف، الرجاء الانتظار...",
+            "<tg-emoji emoji-id='5217697679030637222'>⏳</tg-emoji> <b>جاري استعادة النسخة الاحتياطية...</b>\n\n"
+            "<tg-emoji emoji-id='5197269100878907942'>📋</tg-emoji> يتم معالجة الملف، الرجاء الانتظار...",
             parse_mode=ParseMode.HTML
         )
         
@@ -2724,23 +2724,23 @@ async def restore_backup_handler(update: Update, context: ContextTypes.DEFAULT_T
         
         await wait_msg.edit_text(
             f"""
-✅ <b>تم استعادة النسخة الاحتياطية بنجاح!</b>
+<tg-emoji emoji-id='5260463209562776385'>✅</tg-emoji> <b>تم استعادة النسخة الاحتياطية بنجاح!</b>
 
-📦 <b>معلومات العملية:</b>
-📅 التاريخ: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-👤 بواسطة: {update.effective_user.full_name}
-💾 اسم الملف: {document.file_name}
+<tg-emoji emoji-id='5197269100878907942'>📋</tg-emoji> <b>معلومات العملية:</b>
+<tg-emoji emoji-id='5373236586760651455'>📅</tg-emoji> التاريخ: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+<tg-emoji emoji-id='5453957997418004470'>👥</tg-emoji> بواسطة: {update.effective_user.full_name}
+<tg-emoji emoji-id='5197269100878907942'>📋</tg-emoji> اسم الملف: {document.file_name}
 
-✅ <b>تم بنجاح:</b>
+<tg-emoji emoji-id='5260463209562776385'>✅</tg-emoji> <b>تم بنجاح:</b>
 • استعادة قاعدة البيانات
 • حفظ نسخة من البيانات القديمة
 • تحديث النظام
 
-⚠️ <b>ملاحظة:</b>
+<tg-emoji emoji-id='5273914604752216432'>❌</tg-emoji> <b>ملاحظة:</b>
 تم حفظ نسخة من البيانات القديمة في:
 <code>{os.path.basename(current_backup)}</code>
 
-🔄 يُنصح بإعادة تشغيل البوت لتطبيق التغييرات بشكل كامل.
+<tg-emoji emoji-id='5271604874419647061'>🔗</tg-emoji> يُنصح بإعادة تشغيل البوت لتطبيق التغييرات بشكل كامل.
 """,
             parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup([[
@@ -2763,7 +2763,7 @@ async def restore_backup_handler(update: Update, context: ContextTypes.DEFAULT_T
             pass
         
         await update.message.reply_text(
-            f"❌ <b>فشلت استعادة النسخة الاحتياطية</b>\n\n"
+            f"<tg-emoji emoji-id='5273914604752216432'>❌</tg-emoji> <b>فشلت استعادة النسخة الاحتياطية</b>\n\n"
             f"الخطأ: {str(e)}",
             parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup([[
@@ -2869,7 +2869,7 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
             await query.answer("⚠️ يجب الاشتراك في القناة أولاً!", show_alert=True)
             
             subscription_text = f"""
-📢 <b>اشتراك إجباري</b>
+<tg-emoji emoji-id='5370599459661045441'>🤍</tg-emoji> <b>اشتراك إجباري</b>
 
 عزيزي <b>{full_name}</b>، يجب الاشتراك في القناة التالية:
 
@@ -2880,7 +2880,7 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
             
             keyboard = [
                 [InlineKeyboardButton(
-                    f"📢 {first_channel['channel_name']}",
+                    f"<tg-emoji emoji-id='5370599459661045441'>🤍</tg-emoji> {first_channel['channel_name']}",
                     url=first_channel['channel_url']
                 )],
                 [InlineKeyboardButton(
@@ -2974,17 +2974,17 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
                                     await context.bot.send_message(
                                         chat_id=referrer_id,
                                         text=f"""
-🎉 <b>تهانينا! إحالة جديدة ناجحة!</b>
+<tg-emoji emoji-id='5388674524583572460'>🎉</tg-emoji> <b>تهانينا! إحالة جديدة ناجحة!</b>
 
-✅ المستخدم <b>{full_name}</b> انضم عبر رابطك وأكمل جميع الخطوات!
+<tg-emoji emoji-id='5260463209562776385'>✅</tg-emoji> المستخدم <b>{full_name}</b> انضم عبر رابطك وأكمل جميع الخطوات!
 
-🎁 <b>حصلت على لفة مجانية!</b>
-🎰 <b>لفاتك المتاحة:</b> {current_spins + 1}
+<tg-emoji emoji-id='5472096095280569232'>🎁</tg-emoji> <b>حصلت على لفة مجانية!</b>
+<tg-emoji emoji-id='5778315894706937436'>🎰</tg-emoji> <b>لفاتك المتاحة:</b> {current_spins + 1}
 
-👥 <b>إجمالي إحالاتك الصحيحة:</b> {valid_refs}
-⏳ <b>متبقي للفة القادمة:</b> {remaining_for_next} إحالات
+<tg-emoji emoji-id='5453957997418004470'>👥</tg-emoji> <b>إجمالي إحالاتك الصحيحة:</b> {valid_refs}
+<tg-emoji emoji-id='5217697679030637222'>⏳</tg-emoji> <b>متبقي للفة القادمة:</b> {remaining_for_next} إحالات
 
-<b>استمر في الدعوة واربح المزيد! 🚀</b>
+<b>استمر في الدعوة واربح المزيد! <tg-emoji emoji-id='5188481279963715781'>🚀</tg-emoji></b>
 """,
                                         parse_mode=ParseMode.HTML
                                     )
@@ -3107,6 +3107,7 @@ async def admin_withdrawals_callback(update: Update, context: ContextTypes.DEFAU
     if not pending:
         await query.edit_message_text(
             "<tg-emoji emoji-id='5260463209562776385'>✅</tg-emoji> لا توجد طلبات سحب معلقة حالياً!",
+            parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup([[
                 InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")
             ]])
@@ -3184,7 +3185,7 @@ async def send_payment_proof_to_channel(context: ContextTypes.DEFAULT_TYPE,
         proof_message = f"""
 <tg-emoji emoji-id='5388674524583572460'>🎉</tg-emoji> <b>تم تنفيذ سحب جديد!</b>
 
-👤 <b>المستخدم:</b> {user_link}
+<tg-emoji emoji-id='5453957997418004470'>👤</tg-emoji> <b>المستخدم:</b> {user_link}
 <tg-emoji emoji-id='5278467510604160626'>💰</tg-emoji> <b>المبلغ:</b> {amount:.4f} TON
 <tg-emoji emoji-id='6005943221455165890'>💳</tg-emoji> <b>المحفظة:</b> <code>{wallet_short}</code>
 <tg-emoji emoji-id='5197269100878907942'>📋</tg-emoji> <b>رقم الطلب:</b> #{withdrawal_id}
@@ -3250,7 +3251,10 @@ async def approve_withdrawal_callback(update: Update, context: ContextTypes.DEFA
     tx_hash = None
     
     if withdrawal['withdrawal_type'] == 'ton' and ton_wallet and withdrawal['wallet_address']:
-        await query.edit_message_text("<tg-emoji emoji-id='5217697679030637222'>⏳</tg-emoji> جاري معالجة السحب الأوتوماتيكي...")
+        await query.edit_message_text(
+            "<tg-emoji emoji-id='5217697679030637222'>⏳</tg-emoji> جاري معالجة السحب الأوتوماتيكي...",
+            parse_mode=ParseMode.HTML
+        )
         
         try:
             tx_hash = await ton_wallet.send_ton(
@@ -3365,7 +3369,8 @@ async def add_tx_hash_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             "الاستخدام الصحيح:\n"
             "/add_tx_hash <withdrawal_id> <tx_hash>\n\n"
             "مثال:\n"
-            "/add_tx_hash 123 64-utInJYG0mrpAy77spv_QyRqAIlqOb..."
+            "/add_tx_hash 123 64-utInJYG0mrpAy77spv_QyRqAIlqOb...",
+            parse_mode=ParseMode.HTML
         )
         return
     
@@ -3417,13 +3422,17 @@ async def add_tx_hash_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         await update.message.reply_text(
             f"<tg-emoji emoji-id='5260463209562776385'>✅</tg-emoji> تم تحديث TX Hash للسحب #{withdrawal_id}\n"
-            f"<tg-emoji emoji-id='5251854092815183527'>📢</tg-emoji> تم نشر الإثبات في قناة الإثباتات"
+            f"<tg-emoji emoji-id='5370599459661045441'>🤍</tg-emoji> تم نشر الإثبات في قناة الإثباتات",
+            parse_mode=ParseMode.HTML
         )
         
         logger.info(f"✅ TX Hash added for withdrawal #{withdrawal_id} by admin {user_id}")
         
     except ValueError:
-        await update.message.reply_text("<tg-emoji emoji-id='5273914604752216432'>❌</tg-emoji> رقم السحب يجب أن يكون رقماً صحيحاً!")
+        await update.message.reply_text(
+            "<tg-emoji emoji-id='5273914604752216432'>❌</tg-emoji> رقم السحب يجب أن يكون رقماً صحيحاً!",
+            parse_mode=ParseMode.HTML
+        )
     except Exception as e:
         logger.error(f"Error adding tx_hash: {e}")
         await update.message.reply_text(f"<tg-emoji emoji-id='5273914604752216432'>❌</tg-emoji> حدث خطأ: {str(e)}")
@@ -4561,7 +4570,7 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
         if not fingerprint:
             logger.error("❌ No fingerprint in data")
             await update.message.reply_text(
-                "❌ حدث خطأ في استقبال البيانات. حاول مرة أخرى.",
+                "<tg-emoji emoji-id='5273914604752216432'>❌</tg-emoji> حدث خطأ في استقبال البيانات. حاول مرة أخرى.",
                 parse_mode=ParseMode.HTML
             )
             return
@@ -4654,7 +4663,7 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
                             first_channel = not_subscribed[0]
                             
                             subscription_text = f"""
-📢 <b>خطوة أخيرة!</b>
+<tg-emoji emoji-id='5370599459661045441'>🤍</tg-emoji> <b>خطوة أخيرة!</b>
 
 عزيزي <b>{full_name}</b>، تم التحقق من جهازك بنجاح! ✅
 
@@ -4667,7 +4676,7 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
                             
                             keyboard = [
                                 [InlineKeyboardButton(
-                                    f"📢 {first_channel['channel_name']}",
+                                    f"<tg-emoji emoji-id='5370599459661045441'>🤍</tg-emoji> {first_channel['channel_name']}",
                                     url=first_channel['channel_url']
                                 )],
                                 [InlineKeyboardButton(
@@ -4833,7 +4842,7 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
             else:
                 # فشل الاتصال بـ API
                 await update.message.reply_text(
-                    "❌ حدث خطأ في الاتصال بالخادم. حاول مرة أخرى لاحقاً.",
+                    "<tg-emoji emoji-id='5273914604752216432'>❌</tg-emoji> حدث خطأ في الاتصال بالخادم. حاول مرة أخرى لاحقاً.",
                     parse_mode=ParseMode.HTML
                 )
                 logger.error(f"❌ API request failed: {api_resp.status_code}")
@@ -4841,7 +4850,7 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
         except Exception as api_error:
             logger.error(f"❌ Error sending data to API: {api_error}")
             await update.message.reply_text(
-                "❌ حدث خطأ في معالجة البيانات. حاول مرة أخرى.",
+                "<tg-emoji emoji-id='5273914604752216432'>❌</tg-emoji> حدث خطأ في معالجة البيانات. حاول مرة أخرى.",
                 parse_mode=ParseMode.HTML
             )
     
@@ -4851,7 +4860,7 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
         traceback.print_exc()
         
         await update.message.reply_text(
-            "❌ حدث خطأ غير متوقع. حاول مرة أخرى لاحقاً.",
+            "<tg-emoji emoji-id='5273914604752216432'>❌</tg-emoji> حدث خطأ غير متوقع. حاول مرة أخرى لاحقاً.",
             parse_mode=ParseMode.HTML
         )
 
