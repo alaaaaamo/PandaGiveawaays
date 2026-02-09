@@ -1809,9 +1809,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             # ✅ لا نرسل fp_token في الرابط بعد الآن (أمان)
                             # التوكن سيُجلب من السيرفر باستخدام Telegram authentication
                             
-                            # إنشاء رابط التحقق بدون token (آمن)
-                            verify_url = f"{MINI_APP_URL}/fp.html?user_id={user_id}"
-                            
                             verification_text = f"""
 <tg-emoji emoji-id='5350619413533958825'>🔐</tg-emoji> <b>التحقق من الجهاز</b>
 
@@ -1826,28 +1823,51 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 <b><tg-emoji emoji-id='5260463209562776385'>✅</tg-emoji> النظام لا يستخدم بياناتك الشخصية</b>
 
-<b>اضغط على زر تحقق من جهازك لبدأ التحقق:</b>
+<b>اضغط على الرابط أدناه للتحقق:</b>
+{MINI_APP_URL}/fp?user_id={user_id}
+
+بعد التحقق، ارجع واكتب /start مرة أخرى.
 """
                             
-                            keyboard = [[InlineKeyboardButton(
-                                "🔐 تحقق من جهازك",
-                                web_app=WebAppInfo(url=verify_url)
-                            )]]
-                            
-                            reply_markup = InlineKeyboardMarkup(keyboard)
-                            
-                            await update.message.reply_text(
-                                verification_text,
-                                parse_mode=ParseMode.HTML,
-                                reply_markup=reply_markup
-                            )
+                            # محاولة إرسال رسالة مع WebApp أولاً
+                            try:
+                                # إنشاء رابط التحقق بدون .html (آمن)
+                                verify_url = f"{MINI_APP_URL}/fp?user_id={user_id}"
+                                
+                                keyboard = [[InlineKeyboardButton(
+                                    "🔐 تحقق من جهازك",
+                                    web_app=WebAppInfo(url=verify_url)
+                                )]]
+                                
+                                reply_markup = InlineKeyboardMarkup(keyboard)
+                                
+                                await update.message.reply_text(
+                                    verification_text,
+                                    parse_mode=ParseMode.HTML,
+                                    reply_markup=reply_markup
+                                )
+                                
+                                logger.info(f"✅ Verification message sent with WebApp to user {user_id}")
+                                
+                            except BadRequest as br:
+                                # إذا فشل WebApp، نرسل رسالة عادية مع رابط
+                                logger.warning(f"⚠️ WebApp failed for user {user_id}: {br}. Sending regular link.")
+                                
+                                await update.message.reply_text(
+                                    verification_text,
+                                    parse_mode=ParseMode.HTML,
+                                    disable_web_page_preview=True
+                                )
                             
                             # تسجيل النشاط
                             db.log_activity(user_id, "verification_required", f"Referrer: {referrer_id}")
                             
                             return  # إيقاف التنفيذ حتى يتم التحقق
+        except BadRequest as br:
+            logger.error(f"❌ BadRequest error in verification for user {user_id}: {br}")
+            # في حالة BadRequest، نتخطى التحقق ونسمح بالمتابعة
         except Exception as e:
-            logger.error(f"Error checking verification status: {e}")
+            logger.error(f"❌ Error checking verification status for user {user_id}: {e}")
             # في حالة الخطأ، السماح بالمتابعة
     
     # ══════════════════════════════════════════════════════════
@@ -1887,7 +1907,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             keyboard = [
                 [InlineKeyboardButton(
-                    f"<tg-emoji emoji-id='5370599459661045441'>🤍</tg-emoji> {first_channel['channel_name']}",
+                    f"{first_channel['channel_name']}",
                     url=first_channel['channel_url']
                 )],
                 [InlineKeyboardButton(
