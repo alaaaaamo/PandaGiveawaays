@@ -3415,8 +3415,109 @@ async def check_pending_withdrawals_transactions(context: ContextTypes.DEFAULT_T
         logger.error(f"❌ Failed to send payment proof to channel: {e}")
         return False
 
+# ═══════════════════════════════════════════════════════════════
+# 🔍 VERIFY WITHDRAWAL TRANSACTION - التحقق من معاملة محددة
+# ═══════════════════════════════════════════════════════════════
+
+async def verify_withdrawal_transaction(withdrawal_id: int, wallet_address: str, amount: float, context: ContextTypes.DEFAULT_TYPE) -> dict:
+    """
+    التحقق من وصول معاملة السحب إلى محفظة المستخدم
+    يفحص المعاملات الصادرة من محفظة الأدمن إلى محفظة المستخدم
+    """
+    try:
+        if not TON_API_KEY or not TON_WALLET_ADDRESS:
+            logger.warning("⚠️ TON_API_KEY or TON_WALLET_ADDRESS not configured")
+            return {'success': False, 'error': 'Configuration missing'}
+        
+        logger.info(f"🔍 Verifying withdrawal #{withdrawal_id} to {wallet_address[:10]}...")
+        
+        # استخدام TON Center API
+        api_endpoint = "https://toncenter.com/api/v2/"
+        headers = {"X-API-Key": TON_API_KEY} if TON_API_KEY else {}
+        
+        # فحص المعاملات الصادرة من محفظة الأدمن
+        url = f"{api_endpoint}getTransactions"
+        params = {
+            'address': TON_WALLET_ADDRESS,  # محفظة الأدمن (المُرسل)
+            'limit': 50  # آخر 50 معاملة
+        }
+        
+        response = requests.get(url, params=params, headers=headers, timeout=15)
+        
+        if response.status_code != 200:
+            return {'success': False, 'error': f'API returned {response.status_code}'}
+        
+        data = response.json()
+        
+        if not data.get('ok') or 'result' not in data:
+            return {'success': False, 'error': 'Invalid API response'}
+        
+        transactions = data['result']
+        logger.info(f"📊 Checking {len(transactions)} transactions from admin wallet...")
+        
+        # البحث عن المعاملة المطابقة
+        for tx in transactions:
+            try:
+                # فحص المعاملات الصادرة (out_msgs)
+                out_msgs = tx.get('out_msgs', [])
+                
+                for out_msg in out_msgs:
+                    # الحصول على عنوان المستلم
+                    destination = out_msg.get('destination', '')
+                    
+                    # مقارنة العنوان (تطبيع EQ/UQ)
+                    dest_normalized = destination.replace('EQ', 'UQ') if destination.startswith('EQ') else destination
+                    wallet_normalized = wallet_address.replace('EQ', 'UQ') if wallet_address.startswith('EQ') else wallet_address
+                    
+                    if dest_normalized == wallet_normalized:
+                        # وجدنا معاملة للعنوان الصحيح، تحقق من المبلغ
+                        value = int(out_msg.get('value', '0'))
+                        value_ton = value / 1_000_000_000
+                        
+                        logger.info(f"   Found transaction: {value_ton} TON to {destination[:10]}...")
+                        
+                        # تسامح صغير في المبلغ (±0.1 TON) لمراعاة رسوم الشبكة
+                        if abs(value_ton - amount) < 0.1:
+                            # وجدنا المعاملة الصحيحة!
+                            tx_hash = tx.get('transaction_id', {}).get('hash', '')
+                            
+                            if not tx_hash:
+                                # fallback: استخدام lt
+                                tx_lt = tx.get('transaction_id', {}).get('lt', '')
+                                tx_hash = f"lt:{tx_lt}"
+                            
+                            logger.info(f"✅ Found matching transaction!")
+                            logger.info(f"   Amount: {value_ton} TON (expected: {amount} TON)")
+                            logger.info(f"   TX Hash: {tx_hash}")
+                            
+                            return {
+                                'success': True,
+                                'found': True,
+                                'tx_hash': tx_hash,
+                                'amount': value_ton,
+                                'destination': destination
+                            }
+            
+            except Exception as tx_error:
+                logger.debug(f"Error processing transaction: {tx_error}")
+                continue
+        
+        # لم نجد المعاملة
+        logger.warning(f"⚠️ No matching transaction found for withdrawal #{withdrawal_id}")
+        return {
+            'success': True,
+            'found': False,
+            'error': 'No matching transaction found'
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error in verify_withdrawal_transaction: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'success': False, 'error': str(e)}
+
 async def approve_withdrawal_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """الموافقة على طلب سحب"""
+    """الموافقة على طلب سحب - مع التحقق التلقائي"""
     query = update.callback_query
     await query.answer()
     
@@ -3436,32 +3537,43 @@ async def approve_withdrawal_callback(update: Update, context: ContextTypes.DEFA
         await query.answer("<tg-emoji emoji-id='5273914604752216432'>❌</tg-emoji> الطلب غير موجود!", show_alert=True)
         return
     
-    # محاولة السحب الأوتوماتيكي
-    tx_hash = None
-    
-    if withdrawal['withdrawal_type'] == 'ton' and ton_wallet and withdrawal['wallet_address']:
+    # 🔍 التحقق التلقائي من المعاملة
+    if withdrawal['withdrawal_type'] == 'ton' and withdrawal['wallet_address']:
         await query.edit_message_text(
-            "<tg-emoji emoji-id='5217697679030637222'>⏳</tg-emoji> جاري معالجة السحب الأوتوماتيكي...",
+            "<tg-emoji emoji-id='5821176016614001863'>🔍</tg-emoji> <b>جاري التحقق من المعاملة...</b>\n\n"
+            "يرجى الانتظار...",
             parse_mode=ParseMode.HTML
         )
         
         try:
-            tx_hash = await ton_wallet.send_ton(
-                withdrawal['wallet_address'],
-                withdrawal['amount'],
-                f"Panda Giveaways Withdrawal #{withdrawal_id}"
+            # فحص المعاملة على الشبكة
+            verification = await verify_withdrawal_transaction(
+                withdrawal_id=withdrawal_id,
+                wallet_address=withdrawal['wallet_address'],
+                amount=withdrawal['amount'],
+                context=context
             )
             
-            if tx_hash:
+            if verification['success'] and verification['found']:
+                # ✅ وجدنا المعاملة!
+                tx_hash = verification['tx_hash']
+                
+                # الموافقة على السحب
                 db.approve_withdrawal(withdrawal_id, user_id, tx_hash)
+                
+                logger.info(f"✅ Withdrawal #{withdrawal_id} auto-verified and approved")
+                
                 success_msg = f"""
-<tg-emoji emoji-id='5260463209562776385'>✅</tg-emoji> <b>تم السحب بنجاح!</b>
+<tg-emoji emoji-id='5388674524583572460'>🎉</tg-emoji> <b>تم التحقق والموافقة بنجاح!</b>
 
 <tg-emoji emoji-id='5260270009048906733'>💸</tg-emoji> المبلغ: {withdrawal['amount']:.4f} TON
 <tg-emoji emoji-id='5453957997418004470'>👤</tg-emoji> المستخدم: {withdrawal['full_name']}
-<tg-emoji emoji-id='5350619413533958825'>🔐</tg-emoji> TX Hash: <code>{tx_hash}</code>
+<tg-emoji emoji-id='6005943221455165890'>💳</tg-emoji> المحفظة: <code>{withdrawal['wallet_address'][:10]}...</code>
+<tg-emoji emoji-id='5350619413533958825'>🔐</tg-emoji> TX Hash: <code>{tx_hash[:20]}...</code>
 
-تم إرسال الإشعار للمستخدم <tg-emoji emoji-id='5260463209562776385'>✅</tg-emoji>
+<tg-emoji emoji-id='5260463209562776385'>✅</tg-emoji> تم التحقق من وصول المبلغ تلقائياً
+<tg-emoji emoji-id='5260463209562776385'>✅</tg-emoji> تم إرسال الإشعار للمستخدم
+<tg-emoji emoji-id='5260463209562776385'>✅</tg-emoji> تم نشر إثبات الدفع في القناة
 """
                 
                 # إرسال إشعار للمستخدم
@@ -3471,15 +3583,18 @@ async def approve_withdrawal_callback(update: Update, context: ContextTypes.DEFA
                         text=f"""
 <tg-emoji emoji-id='5388674524583572460'>🎉</tg-emoji> <b>تم تأكيد السحب!</b>
 
-<tg-emoji emoji-id='5278467510604160626'>💰</tg-emoji> تم تحويل {withdrawal['amount']:.4f} TON إلى محفظتك
-<tg-emoji emoji-id='5350619413533958825'>🔐</tg-emoji> TX Hash: <code>{tx_hash}</code>
+<tg-emoji emoji-id='5278467510604160626'>💰</tg-emoji> تم استلام {withdrawal['amount']:.4f} TON في محفظتك بنجاح!
+<tg-emoji emoji-id='5350619413533958825'>🔐</tg-emoji> TX Hash: <code>{tx_hash[:16]}...</code>
+
+<tg-emoji emoji-id='5271604874419647061'>🔗</tg-emoji> <a href="https://tonscan.org/tx/{tx_hash}">عرض على TON Explorer</a>
 
 شكراً لاستخدامك Panda Giveaways! <tg-emoji emoji-id='6008183145684277336'>🐼</tg-emoji>
 """,
-                        parse_mode=ParseMode.HTML
+                        parse_mode=ParseMode.HTML,
+                        disable_web_page_preview=False
                     )
-                except:
-                    pass
+                except Exception as notify_error:
+                    logger.warning(f"Failed to notify user: {notify_error}")
                 
                 # نشر إثبات الدفع في القناة
                 await send_payment_proof_to_channel(
@@ -3495,11 +3610,72 @@ async def approve_withdrawal_callback(update: Update, context: ContextTypes.DEFA
                 
                 await query.edit_message_text(success_msg, parse_mode=ParseMode.HTML)
                 return
+            
+            elif verification['success'] and not verification['found']:
+                # لم نجد المعاملة بعد
+                await query.edit_message_text(
+                    f"""
+<tg-emoji emoji-id='5206617715358217098'>⚠️</tg-emoji> <b>لم يتم العثور على المعاملة</b>
+
+<tg-emoji emoji-id='5278467510604160626'>💰</tg-emoji> المبلغ المطلوب: {withdrawal['amount']:.4f} TON
+<tg-emoji emoji-id='6005943221455165890'>💳</tg-emoji> المحفظة: <code>{withdrawal['wallet_address']}</code>
+
+<tg-emoji emoji-id='5210943116096681636'>💡</tg-emoji> <b>الأسباب المحتملة:</b>
+• لم يتم إرسال المبلغ بعد
+• المعاملة لم تصل للشبكة بعد (انتظر 1-2 دقيقة)
+• المبلغ المرسل غير مطابق ({withdrawal['amount']:.4f} TON)
+
+<tg-emoji emoji-id='5217697679030637222'>⏳</tg-emoji> يمكنك المحاولة مرة أخرى بعد إرسال المبلغ
+""",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🔄 إعادة التحقق", callback_data=f"approve_withdrawal_{withdrawal_id}")],
+                        [InlineKeyboardButton("✅ موافقة يدوية", callback_data=f"manual_approve_{withdrawal_id}")],
+                        [InlineKeyboardButton("🔙 رجوع", callback_data="admin_withdrawals")]
+                    ])
+                )
+                return
+            
+            else:
+                # خطأ في التحقق
+                await query.edit_message_text(
+                    f"""
+<tg-emoji emoji-id='5273914604752216432'>❌</tg-emoji> <b>خطأ في التحقق</b>
+
+الخطأ: {verification.get('error', 'Unknown')}
+
+<tg-emoji emoji-id='5210943116096681636'>💡</tg-emoji> يمكنك المحاولة مرة أخرى أو الموافقة يدوياً
+""",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🔄 إعادة المحاولة", callback_data=f"approve_withdrawal_{withdrawal_id}")],
+                        [InlineKeyboardButton("✅ موافقة يدوية", callback_data=f"manual_approve_{withdrawal_id}")],
+                        [InlineKeyboardButton("🔙 رجوع", callback_data="admin_withdrawals")]
+                    ])
+                )
+                return
+                
         except Exception as e:
-            logger.error(f"Automatic withdrawal failed: {e}")
+            logger.error(f"Error in auto-verification: {e}")
+            await query.edit_message_text(
+                f"""
+<tg-emoji emoji-id='5273914604752216432'>❌</tg-emoji> <b>خطأ في التحقق</b>
+
+حدث خطأ أثناء التحقق من المعاملة.
+
+<tg-emoji emoji-id='5210943116096681636'>💡</tg-emoji> يمكنك المحاولة مرة أخرى أو الموافقة يدوياً
+""",
+                parse_mode=ParseMode.HTML,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔄 إعادة المحاولة", callback_data=f"approve_withdrawal_{withdrawal_id}")],
+                    [InlineKeyboardButton("✅ موافقة يدوية", callback_data=f"manual_approve_{withdrawal_id}")],
+                    [InlineKeyboardButton("🔙 رجوع", callback_data="admin_withdrawals")]
+                ])
+            )
+            return
     
-    # إذا فشل الأوتوماتيكي أو كان vodafone cash
-    db.approve_withdrawal(withdrawal_id, user_id, tx_hash)
+    # Vodafone cash أو fallback للموافقة اليدوية
+    db.approve_withdrawal(withdrawal_id, user_id, None)
     
     approval_msg = f"""
 <tg-emoji emoji-id='5260463209562776385'>✅</tg-emoji> <b>تم الموافقة على الطلب #{withdrawal_id}</b>
@@ -3525,6 +3701,67 @@ async def approve_withdrawal_callback(update: Update, context: ContextTypes.DEFA
 <tg-emoji emoji-id='5373236586760651455'>📅</tg-emoji> سيتم التحويل خلال 24 ساعة
 
 شكراً لصبرك! <tg-emoji emoji-id='6008183145684277336'>🐼</tg-emoji>
+""",
+            parse_mode=ParseMode.HTML
+        )
+    except:
+        pass
+    
+    await query.edit_message_text(
+        approval_msg,
+        parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 رجوع لطلبات السحب", callback_data="admin_withdrawals")
+        ]])
+    )
+
+async def manual_approve_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """الموافقة اليدوية على طلب سحب بدون تحقق تلقائي"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    
+    if not is_admin(user_id):
+        await query.answer("❌ غير مصرح لك!", show_alert=True)
+        return
+    
+    withdrawal_id = int(query.data.split('_')[2])
+    
+    # الحصول على معلومات الطلب
+    pending = db.get_pending_withdrawals()
+    withdrawal = next((w for w in pending if w['id'] == withdrawal_id), None)
+    
+    if not withdrawal:
+        await query.answer("❌ الطلب غير موجود!", show_alert=True)
+        return
+    
+    # الموافقة يدوياً بدون tx_hash
+    db.approve_withdrawal(withdrawal_id, user_id, None)
+    
+    approval_msg = f"""
+✅ <b>تمت الموافقة اليدوية على الطلب #{withdrawal_id}</b>
+
+💰 المبلغ: {withdrawal['amount']:.4f} TON
+👤 المستخدم: {withdrawal['full_name']}
+"""
+    
+    if withdrawal['withdrawal_type'] == 'vodafone':
+        approval_msg += f"\n📞 <b>الرقم:</b> <code>{withdrawal['phone_number']}</code>\n\n⚠️ يرجى إرسال المبلغ يدوياً"
+    else:
+        approval_msg += f"\n🔐 <b>المحفظة:</b> <code>{withdrawal['wallet_address']}</code>\n\n⚠️ بعد الإرسال، استخدم /add_tx_hash {withdrawal_id} <tx_hash>"
+    
+    # إرسال إشعار للمستخدم
+    try:
+        await context.bot.send_message(
+            chat_id=withdrawal['user_id'],
+            text=f"""
+✅ <b>تمت الموافقة على طلب السحب!</b>
+
+💰 المبلغ: {withdrawal['amount']:.4f} TON
+📅 سيتم التحويل خلال 24 ساعة
+
+شكراً لصبرك! 🐼
 """,
             parse_mode=ParseMode.HTML
         )
@@ -5169,6 +5406,7 @@ def main():
     application.add_handler(restore_backup_conv_handler)
     application.add_handler(CallbackQueryHandler(check_subscription_callback, pattern="^check_subscription$"))
     application.add_handler(CallbackQueryHandler(approve_withdrawal_callback, pattern="^approve_withdrawal_"))
+    application.add_handler(CallbackQueryHandler(manual_approve_callback, pattern="^manual_approve_"))  # ✅ موافقة يدوية
     application.add_handler(CallbackQueryHandler(reject_withdrawal_callback, pattern="^reject_withdrawal_"))
     
     # ConversationHandler لإضافة القنوات
