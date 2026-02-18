@@ -3360,28 +3360,19 @@ async def check_pending_withdrawals_transactions(context: ContextTypes.DEFAULT_T
                             
                             # يجب أن يتطابق العنوان
                             if dest_normalized == wallet_normalized:
-                                # استخراج الكومنت من message
-                                msg_body = out_msg.get('message', '')
+                                # استخراج الكومنت من message (نفس طريقة waseet.py)
+                                msg_data = out_msg.get('message', '')
                                 
-                                # محاولة فك تشفير الكومنت
-                                comment = ''
-                                try:
-                                    if msg_body:
-                                        import base64
-                                        # المحاولة الأولى: base64
-                                        try:
-                                            decoded = base64.b64decode(msg_body).decode('utf-8', errors='ignore')
-                                            comment = decoded
-                                        except:
-                                            # المحاولة الثانية: hex
-                                            try:
-                                                decoded = bytes.fromhex(msg_body).decode('utf-8', errors='ignore')
-                                                comment = decoded
-                                            except:
-                                                # المحاولة الثالثة: string مباشر
-                                                comment = str(msg_body)
-                                except Exception as decode_err:
-                                    pass
+                                # تحويل dict إلى string إذا لزم الأمر
+                                if isinstance(msg_data, dict):
+                                    msg_data = str(msg_data)
+                                
+                                # الكومنت قد يكون في msg_data مباشرة كـ string
+                                comment = str(msg_data) if msg_data else ''
+                                
+                                # طباعة للتشخيص
+                                if comment:
+                                    logger.info(f"      Found message in transaction: {comment[:100]}")
                                 
                                 # التحقق من الكومنت فقط (بدون المبلغ)
                                 if expected_comment in comment:
@@ -3389,10 +3380,19 @@ async def check_pending_withdrawals_transactions(context: ContextTypes.DEFAULT_T
                                     value = int(out_msg.get('value', '0'))
                                     value_ton = value / 1_000_000_000
                                     
-                                    tx_hash = tx.get('transaction_id', {}).get('hash', '')
+                                    # استخراج tx_hash بشكل صحيح
+                                    tx_hash = ''
+                                    tx_id = tx.get('transaction_id', {})
+                                    if isinstance(tx_id, dict):
+                                        tx_hash = tx_id.get('hash', '')
+                                        if not tx_hash:
+                                            tx_lt = tx_id.get('lt', '')
+                                            if tx_lt:
+                                                tx_hash = f"lt:{tx_lt}"
+                                    
+                                    # fallback: استخدام hash مباشر
                                     if not tx_hash:
-                                        tx_lt = tx.get('transaction_id', {}).get('lt', '')
-                                        tx_hash = f"lt:{tx_lt}"
+                                        tx_hash = tx.get('hash', 'unknown')
                                     
                                     logger.info(f"✅ Found matching transaction for withdrawal #{withdrawal_id}")
                                     logger.info(f"   Comment: {comment}")
@@ -3517,43 +3517,47 @@ async def verify_withdrawal_transaction(withdrawal_id: int, wallet_address: str,
         logger.info(f"📊 Checking {len(transactions)} transactions from admin wallet...")
         
         # البحث عن المعاملة المطابقة عبر الكومنت فقط
-        for tx in transactions:
+        for idx, tx in enumerate(transactions):
             try:
                 # فحص المعاملات الصادرة (out_msgs)
                 out_msgs = tx.get('out_msgs', [])
+                
+                if not out_msgs:
+                    continue
+                
+                logger.debug(f"   TX #{idx}: has {len(out_msgs)} outgoing messages")
                 
                 for out_msg in out_msgs:
                     # الحصول على عنوان المستلم
                     destination = out_msg.get('destination', '')
                     
+                    if not destination:
+                        continue
+                    
                     # مقارنة العنوان (تطبيع EQ/UQ)
                     dest_normalized = destination.replace('EQ', 'UQ') if destination.startswith('EQ') else destination
                     wallet_normalized = wallet_address.replace('EQ', 'UQ') if wallet_address.startswith('EQ') else wallet_address
                     
+                    # طباعة معلومات المعاملة للتشخيص
+                    logger.debug(f"      Destination: {destination[:15]}... vs {wallet_address[:15]}...")
+                    
                     # يجب أن يتطابق العنوان
                     if dest_normalized == wallet_normalized:
-                        # استخراج الكومنت من message
-                        msg_body = out_msg.get('message', '')
+                        logger.info(f"      ✓ Address matched! Checking message...")
                         
-                        # محاولة فك تشفير الكومنت
-                        comment = ''
-                        try:
-                            if msg_body:
-                                import base64
-                                # المحاولة الأولى: base64
-                                try:
-                                    decoded = base64.b64decode(msg_body).decode('utf-8', errors='ignore')
-                                    comment = decoded
-                                except:
-                                    # المحاولة الثانية: hex
-                                    try:
-                                        decoded = bytes.fromhex(msg_body).decode('utf-8', errors='ignore')
-                                        comment = decoded
-                                    except:
-                                        # المحاولة الثالثة: string مباشر
-                                        comment = str(msg_body)
-                        except Exception as decode_err:
-                            logger.debug(f"Failed to decode message: {decode_err}")
+                        # استخراج الكومنت من message (نفس طريقة waseet.py)
+                        msg_data = out_msg.get('message', '')
+                        
+                        # تحويل dict إلى string إذا لزم الأمر
+                        if isinstance(msg_data, dict):
+                            msg_data = str(msg_data)
+                        
+                        # الكومنت قد يكون في msg_data مباشرة كـ string
+                        comment = str(msg_data) if msg_data else ''
+                        
+                        # طباعة للتشخيص
+                        logger.info(f"      Message found: '{comment[:200]}'")
+                        logger.info(f"      Looking for: '{expected_comment}'")
                         
                         # التحقق من الكومنت
                         if expected_comment in comment:
@@ -3561,12 +3565,19 @@ async def verify_withdrawal_transaction(withdrawal_id: int, wallet_address: str,
                             value = int(out_msg.get('value', '0'))
                             value_ton = value / 1_000_000_000
                             
-                            tx_hash = tx.get('transaction_id', {}).get('hash', '')
+                            # استخراج tx_hash بشكل صحيح
+                            tx_hash = ''
+                            tx_id = tx.get('transaction_id', {})
+                            if isinstance(tx_id, dict):
+                                tx_hash = tx_id.get('hash', '')
+                                if not tx_hash:
+                                    tx_lt = tx_id.get('lt', '')
+                                    if tx_lt:
+                                        tx_hash = f"lt:{tx_lt}"
                             
+                            # fallback: استخدام hash مباشر
                             if not tx_hash:
-                                # fallback: استخدام lt
-                                tx_lt = tx.get('transaction_id', {}).get('lt', '')
-                                tx_hash = f"lt:{tx_lt}"
+                                tx_hash = tx.get('hash', 'unknown')
                             
                             logger.info(f"✅ Found matching transaction via comment!")
                             logger.info(f"   Comment: {comment}")
@@ -3626,11 +3637,16 @@ async def approve_withdrawal_callback(update: Update, context: ContextTypes.DEFA
     
     # 🔍 التحقق التلقائي من المعاملة
     if withdrawal['withdrawal_type'] == 'ton' and withdrawal['wallet_address']:
-        await query.edit_message_text(
-            "<tg-emoji emoji-id='5821176016614001863'>🔍</tg-emoji> <b>جاري التحقق من المعاملة...</b>\n\n"
-            "يرجى الانتظار...",
-            parse_mode=ParseMode.HTML
-        )
+        try:
+            await query.edit_message_text(
+                "🔍 <b>جاري التحقق من المعاملة...</b>\n\n"
+                "يرجى الانتظار...",
+                parse_mode=ParseMode.HTML
+            )
+        except Exception as edit_error:
+            # إذا فشل التحديث، نرسل رسالة جديدة
+            logger.warning(f"Could not edit message: {edit_error}")
+            await query.answer("🔍 جاري التحقق من المعاملة...")
         
         try:
             # فحص المعاملة على الشبكة
