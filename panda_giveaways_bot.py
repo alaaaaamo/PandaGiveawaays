@@ -3275,8 +3275,8 @@ async def send_payment_proof_to_channel(context: ContextTypes.DEFAULT_TYPE,
 
 async def check_pending_withdrawals_transactions(context: ContextTypes.DEFAULT_TYPE) -> dict:
     """
-    فحص المعاملات للسحوبات المعلقة
-    يبحث عن معاملات TON مع Comment محدد
+    فحص المعاملات للسحوبات المعلقة عبر محفظة الأدمن المرسلة
+    يبحث في المعاملات الصادرة من محفظة الأدمن عن Comment محدد
     Comment format: W{withdrawal_id}-{user_id}
     """
     try:
@@ -3292,14 +3292,43 @@ async def check_pending_withdrawals_transactions(context: ContextTypes.DEFAULT_T
             return {'success': True, 'checked': 0, 'found': 0}
         
         logger.info(f"🔍 Checking {len(pending_withdrawals)} pending withdrawals...")
+        logger.info(f"   Admin wallet: {TON_WALLET_ADDRESS}")
         
-        # استخدام TON API للحصول على المعاملات الأخيرة
+        # استخدام TON API للحصول على المعاملات الصادرة من محفظة الأدمن
         api_endpoint = "https://toncenter.com/api/v2/"
         headers = {"X-API-Key": TON_API_KEY} if TON_API_KEY else {}
+        
+        try:
+            # جلب معاملات محفظة الأدمن مرة واحدة
+            url = f"{api_endpoint}getTransactions"
+            params = {
+                'address': TON_WALLET_ADDRESS,  # محفظة الأدمن المرسلة
+                'limit': 100  # آخر 100 معاملة
+            }
+            
+            response = requests.get(url, params=params, headers=headers, timeout=15)
+            
+            if response.status_code != 200:
+                logger.error(f"❌ API returned status {response.status_code}")
+                return {'success': False, 'error': f'API status {response.status_code}'}
+            
+            data = response.json()
+            
+            if not data.get('ok') or 'result' not in data:
+                logger.error(f"❌ Invalid API response")
+                return {'success': False, 'error': 'Invalid API response'}
+            
+            admin_transactions = data['result']
+            logger.info(f"📊 Found {len(admin_transactions)} transactions from admin wallet")
+            
+        except Exception as api_error:
+            logger.error(f"❌ Failed to fetch admin transactions: {api_error}")
+            return {'success': False, 'error': str(api_error)}
         
         checked_count = 0
         found_count = 0
         
+        # فحص كل سحب معلق
         for withdrawal in pending_withdrawals:
             if withdrawal['withdrawal_type'].upper() != 'TON':
                 continue  # فقط TON withdrawals
@@ -3313,83 +3342,107 @@ async def check_pending_withdrawals_transactions(context: ContextTypes.DEFAULT_T
             expected_comment = f"W{withdrawal_id}-{user_id}"
             
             try:
-                # البحث عن معاملات للمحفظة
-                url = f"{api_endpoint}getTransactions"
-                params = {
-                    'address': wallet_address,
-                    'limit': 20  # آخر 20 معاملة
-                }
+                logger.info(f"   Checking withdrawal #{withdrawal_id}: {expected_comment}")
                 
-                response = requests.get(url, params=params, headers=headers, timeout=10)
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    
-                    if data.get('ok') and 'result' in data:
-                        transactions = data['result']
+                # البحث في معاملات الأدمن الصادرة
+                for tx in admin_transactions:
+                    try:
+                        # فحص المعاملات الصادرة (out_msgs)
+                        out_msgs = tx.get('out_msgs', [])
                         
-                        # البحث عن المعاملة المطابقة
-                        for tx in transactions:
-                            # جلب comment من المعاملة
-                            in_msg = tx.get('in_msg', {})
-                            msg_data = in_msg.get('message', '')
+                        for out_msg in out_msgs:
+                            # الحصول على عنوان المستلم
+                            destination = out_msg.get('destination', '')
                             
-                            # تحويل message من hex إلى text
-                            try:
-                                if msg_data:
-                                    # Message قد تكون hex أو base64
-                                    import base64
-                                    try:
-                                        decoded = base64.b64decode(msg_data).decode('utf-8', errors='ignore')
-                                    except:
-                                        decoded = bytes.fromhex(msg_data).decode('utf-8', errors='ignore')
+                            # مقارنة العنوان (تطبيع EQ/UQ)
+                            dest_normalized = destination.replace('EQ', 'UQ') if destination.startswith('EQ') else destination
+                            wallet_normalized = wallet_address.replace('EQ', 'UQ') if wallet_address.startswith('EQ') else wallet_address
+                            
+                            # يجب أن يتطابق العنوان
+                            if dest_normalized == wallet_normalized:
+                                # استخراج الكومنت من message
+                                msg_body = out_msg.get('message', '')
+                                
+                                # محاولة فك تشفير الكومنت
+                                comment = ''
+                                try:
+                                    if msg_body:
+                                        import base64
+                                        # المحاولة الأولى: base64
+                                        try:
+                                            decoded = base64.b64decode(msg_body).decode('utf-8', errors='ignore')
+                                            comment = decoded
+                                        except:
+                                            # المحاولة الثانية: hex
+                                            try:
+                                                decoded = bytes.fromhex(msg_body).decode('utf-8', errors='ignore')
+                                                comment = decoded
+                                            except:
+                                                # المحاولة الثالثة: string مباشر
+                                                comment = str(msg_body)
+                                except Exception as decode_err:
+                                    pass
+                                
+                                # التحقق من الكومنت فقط (بدون المبلغ)
+                                if expected_comment in comment:
+                                    # وجدنا المعاملة عبر الكومنت!
+                                    value = int(out_msg.get('value', '0'))
+                                    value_ton = value / 1_000_000_000
                                     
-                                    # التحقق من Comment
-                                    if expected_comment in decoded:
-                                        # التحقق من المبلغ
-                                        value = int(tx.get('in_msg', {}).get('value', '0'))
-                                        value_ton = value / 1_000_000_000
-                                        
-                                        if abs(value_ton - amount) < 0.01:  # تسامح صغير
-                                            # وجدنا المعاملة! استخراج TX hash
-                                            tx_hash = tx.get('transaction_id', {}).get('hash', '')
-                                            
-                                            logger.info(f"✅ Found matching transaction for withdrawal #{withdrawal_id}")
-                                            logger.info(f"   Amount: {value_ton} TON, Comment: {decoded}")
-                                            
-                                            # الموافقة تلقائياً
-                                            db.approve_withdrawal(withdrawal_id, 0, tx_hash)  # 0 = auto
-                                            
-                                            # إرسال إشعار للمستخدم
-                                            await context.bot.send_message(
-                                                chat_id=user_id,
-                                                text=f"""
+                                    tx_hash = tx.get('transaction_id', {}).get('hash', '')
+                                    if not tx_hash:
+                                        tx_lt = tx.get('transaction_id', {}).get('lt', '')
+                                        tx_hash = f"lt:{tx_lt}"
+                                    
+                                    logger.info(f"✅ Found matching transaction for withdrawal #{withdrawal_id}")
+                                    logger.info(f"   Comment: {comment}")
+                                    logger.info(f"   Amount: {value_ton} TON")
+                                    logger.info(f"   TX Hash: {tx_hash}")
+                                    
+                                    # الموافقة تلقائياً
+                                    db.approve_withdrawal(withdrawal_id, 0, tx_hash)  # 0 = auto
+                                    
+                                    # إرسال إشعار للمستخدم
+                                    try:
+                                        await context.bot.send_message(
+                                            chat_id=user_id,
+                                            text=f"""
 <tg-emoji emoji-id='5388674524583572460'>🎉</tg-emoji> <b>تم تأكيد السحب!</b>
 
-<tg-emoji emoji-id='5278467510604160626'>💰</tg-emoji> تم استلام {amount:.4f} TON في محفظتك
+<tg-emoji emoji-id='5278467510604160626'>💰</tg-emoji> المبلغ: {value_ton:.4f} TON
 <tg-emoji emoji-id='5350619413533958825'>🔐</tg-emoji> TX Hash: <code>{tx_hash[:16]}...</code>
 
 شكراً لاستخدامك Panda Giveaways! <tg-emoji emoji-id='6008183145684277336'>🐼</tg-emoji>
 """,
-                                                parse_mode=ParseMode.HTML
-                                            )
-                                            
-                                            # نشر إثبات الدفع
-                                            await send_payment_proof_to_channel(
-                                                context=context,
-                                                username=withdrawal.get('username', ''),
-                                                full_name=withdrawal['full_name'],
-                                                user_id=user_id,
-                                                amount=amount,
-                                                wallet_address=wallet_address,
-                                                tx_hash=tx_hash,
-                                                withdrawal_id=withdrawal_id
-                                            )
-                                            
-                                            found_count += 1
-                                            break
-                            except Exception as decode_error:
-                                pass  # تجاهل أخطاء فك التشفير
+                                            parse_mode=ParseMode.HTML
+                                        )
+                                    except Exception as notify_error:
+                                        logger.error(f"Failed to notify user: {notify_error}")
+                                    
+                                    # نشر إثبات الدفع
+                                    try:
+                                        await send_payment_proof_to_channel(
+                                            context=context,
+                                            username=withdrawal.get('username', ''),
+                                            full_name=withdrawal['full_name'],
+                                            user_id=user_id,
+                                            amount=value_ton,  # المبلغ الفعلي المرسل
+                                            wallet_address=wallet_address,
+                                            tx_hash=tx_hash,
+                                            withdrawal_id=withdrawal_id
+                                        )
+                                    except Exception as proof_error:
+                                        logger.error(f"Failed to post proof: {proof_error}")
+                                    
+                                    found_count += 1
+                                    break  # وجدنا المعاملة، انتقل للسحب التالي
+                        
+                        if found_count > 0:
+                            break  # وجدنا المعاملة، انتقل للسحب التالي
+                    
+                    except Exception as tx_error:
+                        logger.debug(f"Error processing transaction: {tx_error}")
+                        continue
                 
                 checked_count += 1
                 
@@ -3419,17 +3472,23 @@ async def check_pending_withdrawals_transactions(context: ContextTypes.DEFAULT_T
 # 🔍 VERIFY WITHDRAWAL TRANSACTION - التحقق من معاملة محددة
 # ═══════════════════════════════════════════════════════════════
 
-async def verify_withdrawal_transaction(withdrawal_id: int, wallet_address: str, amount: float, context: ContextTypes.DEFAULT_TYPE) -> dict:
+async def verify_withdrawal_transaction(withdrawal_id: int, wallet_address: str, amount: float, context: ContextTypes.DEFAULT_TYPE, user_id: int = None) -> dict:
     """
     التحقق من وصول معاملة السحب إلى محفظة المستخدم
-    يفحص المعاملات الصادرة من محفظة الأدمن إلى محفظة المستخدم
+    يفحص المعاملات الصادرة من محفظة الأدمن عبر الكومنت فقط
+    Comment format: W{withdrawal_id}-{user_id}
     """
     try:
         if not TON_API_KEY or not TON_WALLET_ADDRESS:
             logger.warning("⚠️ TON_API_KEY or TON_WALLET_ADDRESS not configured")
             return {'success': False, 'error': 'Configuration missing'}
         
-        logger.info(f"🔍 Verifying withdrawal #{withdrawal_id} to {wallet_address[:10]}...")
+        # الكومنت المتوقع
+        expected_comment = f"W{withdrawal_id}-{user_id}" if user_id else f"W{withdrawal_id}"
+        
+        logger.info(f"🔍 Verifying withdrawal #{withdrawal_id} with comment: {expected_comment}")
+        logger.info(f"   Admin wallet: {TON_WALLET_ADDRESS}")
+        logger.info(f"   User wallet: {wallet_address[:10]}...")
         
         # استخدام TON Center API
         api_endpoint = "https://toncenter.com/api/v2/"
@@ -3439,23 +3498,25 @@ async def verify_withdrawal_transaction(withdrawal_id: int, wallet_address: str,
         url = f"{api_endpoint}getTransactions"
         params = {
             'address': TON_WALLET_ADDRESS,  # محفظة الأدمن (المُرسل)
-            'limit': 50  # آخر 50 معاملة
+            'limit': 100  # آخر 100 معاملة
         }
         
         response = requests.get(url, params=params, headers=headers, timeout=15)
         
         if response.status_code != 200:
+            logger.error(f"❌ API returned status {response.status_code}")
             return {'success': False, 'error': f'API returned {response.status_code}'}
         
         data = response.json()
         
         if not data.get('ok') or 'result' not in data:
+            logger.error(f"❌ Invalid API response: {data}")
             return {'success': False, 'error': 'Invalid API response'}
         
         transactions = data['result']
         logger.info(f"📊 Checking {len(transactions)} transactions from admin wallet...")
         
-        # البحث عن المعاملة المطابقة
+        # البحث عن المعاملة المطابقة عبر الكومنت فقط
         for tx in transactions:
             try:
                 # فحص المعاملات الصادرة (out_msgs)
@@ -3469,16 +3530,37 @@ async def verify_withdrawal_transaction(withdrawal_id: int, wallet_address: str,
                     dest_normalized = destination.replace('EQ', 'UQ') if destination.startswith('EQ') else destination
                     wallet_normalized = wallet_address.replace('EQ', 'UQ') if wallet_address.startswith('EQ') else wallet_address
                     
+                    # يجب أن يتطابق العنوان
                     if dest_normalized == wallet_normalized:
-                        # وجدنا معاملة للعنوان الصحيح، تحقق من المبلغ
-                        value = int(out_msg.get('value', '0'))
-                        value_ton = value / 1_000_000_000
+                        # استخراج الكومنت من message
+                        msg_body = out_msg.get('message', '')
                         
-                        logger.info(f"   Found transaction: {value_ton} TON to {destination[:10]}...")
+                        # محاولة فك تشفير الكومنت
+                        comment = ''
+                        try:
+                            if msg_body:
+                                import base64
+                                # المحاولة الأولى: base64
+                                try:
+                                    decoded = base64.b64decode(msg_body).decode('utf-8', errors='ignore')
+                                    comment = decoded
+                                except:
+                                    # المحاولة الثانية: hex
+                                    try:
+                                        decoded = bytes.fromhex(msg_body).decode('utf-8', errors='ignore')
+                                        comment = decoded
+                                    except:
+                                        # المحاولة الثالثة: string مباشر
+                                        comment = str(msg_body)
+                        except Exception as decode_err:
+                            logger.debug(f"Failed to decode message: {decode_err}")
                         
-                        # تسامح صغير في المبلغ (±0.1 TON) لمراعاة رسوم الشبكة
-                        if abs(value_ton - amount) < 0.1:
-                            # وجدنا المعاملة الصحيحة!
+                        # التحقق من الكومنت
+                        if expected_comment in comment:
+                            # وجدنا المعاملة الصحيحة عبر الكومنت!
+                            value = int(out_msg.get('value', '0'))
+                            value_ton = value / 1_000_000_000
+                            
                             tx_hash = tx.get('transaction_id', {}).get('hash', '')
                             
                             if not tx_hash:
@@ -3486,8 +3568,10 @@ async def verify_withdrawal_transaction(withdrawal_id: int, wallet_address: str,
                                 tx_lt = tx.get('transaction_id', {}).get('lt', '')
                                 tx_hash = f"lt:{tx_lt}"
                             
-                            logger.info(f"✅ Found matching transaction!")
-                            logger.info(f"   Amount: {value_ton} TON (expected: {amount} TON)")
+                            logger.info(f"✅ Found matching transaction via comment!")
+                            logger.info(f"   Comment: {comment}")
+                            logger.info(f"   Amount: {value_ton} TON")
+                            logger.info(f"   Destination: {destination[:10]}...")
                             logger.info(f"   TX Hash: {tx_hash}")
                             
                             return {
@@ -3495,7 +3579,8 @@ async def verify_withdrawal_transaction(withdrawal_id: int, wallet_address: str,
                                 'found': True,
                                 'tx_hash': tx_hash,
                                 'amount': value_ton,
-                                'destination': destination
+                                'destination': destination,
+                                'comment': comment
                             }
             
             except Exception as tx_error:
@@ -3504,6 +3589,8 @@ async def verify_withdrawal_transaction(withdrawal_id: int, wallet_address: str,
         
         # لم نجد المعاملة
         logger.warning(f"⚠️ No matching transaction found for withdrawal #{withdrawal_id}")
+        logger.warning(f"   Expected comment: {expected_comment}")
+        logger.warning(f"   Checked {len(transactions)} transactions")
         return {
             'success': True,
             'found': False,
@@ -3551,7 +3638,8 @@ async def approve_withdrawal_callback(update: Update, context: ContextTypes.DEFA
                 withdrawal_id=withdrawal_id,
                 wallet_address=withdrawal['wallet_address'],
                 amount=withdrawal['amount'],
-                context=context
+                context=context,
+                user_id=withdrawal['user_id']  # ✅ إضافة user_id للفحص عبر الكومنت
             )
             
             if verification['success'] and verification['found']:
