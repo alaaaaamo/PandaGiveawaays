@@ -1086,10 +1086,11 @@ class DatabaseManager:
     # ═══════════════════════════════════════════════════════════
     
     def get_all_users(self) -> List[Dict]:
-        """الحصول على جميع المستخدمين للبرودكاست"""
+        """الحصول على جميع المستخدمين للبرودكاست - بدون أي فلتر"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT user_id as telegram_id FROM users WHERE is_banned = 0")
+        # إرسال لجميع المستخدمين بدون فلتر (حتى المحظورين)
+        cursor.execute("SELECT user_id as telegram_id FROM users")
         users = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return users
