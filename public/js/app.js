@@ -84,7 +84,7 @@ function addServerStatusIndicator() {
     `;
     
     indicator.innerHTML = `
-        <div id="server-status-dot" style="width: 8px; height: 8px; background: #ffa500; border-radius: 50%; animation: pulse 1.5s infinite;"></div>
+        <div id="server-status-dot" style="width: 8px; height: 8px; background: #b5a642; border-radius: 50%; animation: pulse 1.5s infinite;"></div>
         <span id="server-status-text">جاري الاتصال...</span>
     `;
     
@@ -120,7 +120,7 @@ function updateServerStatus(status, message) {
     
     switch (status) {
         case 'connecting':
-            dot.style.background = '#ffa500';
+            dot.style.background = '#b5a642';
             dot.style.animation = 'pulse 1.5s infinite';
             text.textContent = message || 'جاري الاتصال...';
             break;
@@ -130,7 +130,7 @@ function updateServerStatus(status, message) {
             text.textContent = message || 'متصل';
             break;
         case 'offline':
-            dot.style.background = '#ff4444';
+            dot.style.background = '#c44536';
             dot.style.animation = 'pulse 1.5s infinite';
             text.textContent = message || 'غير متصل';
             break;
@@ -157,11 +157,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         showLoading(false);
         document.body.innerHTML = `
             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; 
-                min-height: 100vh; background: #0d1117; padding: 20px; text-align: center;">
-                <h2 style="color: #ff4444; margin: 20px 0;">⏰ انتهت مهلة التحميل</h2>
-                <p style="color: #8b95a1; font-size: 16px;">قد تكون المشكلة في الاتصال بالسيرفر</p>
+                min-height: 100vh; background: #1a1f16; padding: 20px; text-align: center;">
+                <h2 style="color: #c44536; margin: 20px 0;">⏰ انتهت مهلة التحميل</h2>
+                <p style="color: #a0997e; font-size: 16px;">قد تكون المشكلة في الاتصال بالسيرفر</p>
                 <button onclick="window.location.reload()" 
-                    style="padding: 12px 24px; background: #ffa500; color: #000; border: none; 
+                    style="padding: 12px 24px; background: #b5a642; color: #000; border: none; 
                     border-radius: 8px; font-size: 16px; font-weight: bold; margin-top: 20px; cursor: pointer;">
                     إعادة المحاولة
                 </button>
@@ -199,25 +199,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.log('❌ [APP] Invalid Telegram - showing block page');
             document.body.innerHTML = `
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; 
-                    min-height: 100vh; background: #0d1117; padding: 20px; text-align: center;">
-                    <lottie-player src="/img/notallowed.json" 
-                        background="transparent" speed="1" 
-                        style="width: 200px; height: 200px;" 
-                        loop autoplay>
-                    </lottie-player>
-                    <img src="/img/payment-failure.svg" alt="X" 
-                        style="width: 60px; height: 60px; margin: 20px 0;">
-                    <h2 style="color: #ff4444; margin: 20px 0; font-size: 24px; font-weight: bold;">
+                    min-height: 100vh; background: #1a1f16; padding: 20px; text-align: center;">
+                    <svg width="120" height="120" viewBox="0 0 24 24" fill="none" style="margin-bottom: 10px;">
+                        <circle cx="12" cy="12" r="10" stroke="#c44536" stroke-width="2" fill="none"/>
+                        <line x1="6" y1="6" x2="18" y2="18" stroke="#c44536" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    <h2 style="color: #c44536; margin: 20px 0; font-size: 24px; font-weight: bold;">
                         🚫 يجب فتح الصفحة من تليجرام
                     </h2>
-                    <p style="color: #8b95a1; font-size: 16px; line-height: 1.6; max-width: 400px; margin-bottom: 30px;">
+                    <p style="color: #a0997e; font-size: 16px; line-height: 1.6; max-width: 400px; margin-bottom: 30px;">
                         هذا التطبيق يعمل داخل تليجرام فقط. يرجى فتحه من خلال البوت.
                     </p>
                     <a href="https://t.me/${window.CONFIG?.BOT_USERNAME || 'PandaGiveawaysBot'}" 
                         style="display: inline-flex; align-items: center; gap: 10px; margin-top: 20px; padding: 16px 40px; 
-                        background: linear-gradient(135deg, #ffa500, #ff8c00); color: #000; 
+                        background: linear-gradient(135deg, #b5a642, #9e8f36); color: #000; 
                         text-decoration: none; border-radius: 12px; font-weight: bold; 
-                        font-size: 18px; box-shadow: 0 4px 15px rgba(255, 165, 0, 0.3); 
+                        font-size: 18px; box-shadow: 0 4px 15px rgba(181, 166, 66, 0.3); 
                         transition: transform 0.2s;" 
                         onmouseover="this.style.transform='scale(1.05)'" 
                         onmouseout="this.style.transform='scale(1)'">
@@ -256,18 +253,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                     
                     document.body.innerHTML = `
                         <div id="bot-disabled-screen" style="display: flex; flex-direction: column; align-items: center; justify-content: center; 
-                            min-height: 100vh; background: #0d1117; padding: 20px; text-align: center;">
-                            <lottie-player src="/img/notallowed.json" 
-                                background="transparent" speed="1" 
-                                style="width: 250px; height: 250px; margin-bottom: 20px;" 
-                                loop autoplay>
-                            </lottie-player>
-                            <img src="/img/payment-failure.svg" alt="X" 
-                                style="width: 80px; height: 80px; margin: 20px 0; opacity: 0.9;">
-                            <h2 style="color: #ff4444; margin: 20px 0; font-size: 28px; font-weight: bold;">
+                            min-height: 100vh; background: #1a1f16; padding: 20px; text-align: center;">
+                            <svg width="140" height="140" viewBox="0 0 24 24" fill="none" style="margin-bottom: 10px;">
+                                <circle cx="12" cy="12" r="10" stroke="#c44536" stroke-width="2" fill="none"/>
+                                <line x1="8" y1="8" x2="16" y2="16" stroke="#c44536" stroke-width="2" stroke-linecap="round"/>
+                                <line x1="16" y1="8" x2="8" y2="16" stroke="#c44536" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                            <h2 style="color: #c44536; margin: 20px 0; font-size: 28px; font-weight: bold;">
                                 🔴 البوت مغلق حالياً
                             </h2>
-                            <p style="color: #8b95a1; font-size: 18px; line-height: 1.8; max-width: 450px; margin-bottom: 20px;">
+                            <p style="color: #a0997e; font-size: 18px; line-height: 1.8; max-width: 450px; margin-bottom: 20px;">
                                 البوت غير متاح في الوقت الحالي للصيانة.
                             </p>
                             <p style="color: #666; font-size: 16px; margin-top: 10px;">
@@ -329,25 +324,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // عرض رسالة مع زر فقط (بدون توجيه تلقائي)
                     document.body.innerHTML = `
                         <div id="redirect-screen" style="display: flex; flex-direction: column; align-items: center; justify-content: center; 
-                            min-height: 100vh; background: #0d1117; padding: 20px; text-align: center;">
-                            <lottie-player src="/img/notallowed.json" 
-                                background="transparent" speed="1" 
-                                style="width: 200px; height: 200px;" 
-                                loop autoplay>
-                            </lottie-player>
-                            <img src="/img/payment-failure.svg" alt="X" 
-                                style="width: 60px; height: 60px; margin: 20px 0;">
-                            <h2 style="color: #ff4444; margin: 20px 0;">
+                            min-height: 100vh; background: #1a1f16; padding: 20px; text-align: center;">
+                            <svg width="120" height="120" viewBox="0 0 24 24" fill="none" style="margin-bottom: 10px;">
+                                <circle cx="12" cy="12" r="10" stroke="#b5a642" stroke-width="2" fill="none"/>
+                                <rect x="11" y="6" width="2" height="8" rx="1" fill="#b5a642"/>
+                                <circle cx="12" cy="17" r="1.2" fill="#b5a642"/>
+                            </svg>
+                            <h2 style="color: #c44536; margin: 20px 0;">
                                 🚫 يجب التحقق من حسابك أولاً
                             </h2>
-                            <p style="color: #8b95a1; font-size: 16px; line-height: 1.6; max-width: 400px; margin-bottom: 30px;">
+                            <p style="color: #a0997e; font-size: 16px; line-height: 1.6; max-width: 400px; margin-bottom: 30px;">
                                 للمتابعة في استخدام المينى آب، يجب التحقق من جهازك أولاً عبر البوت.
                             </p>
                             <a href="${botUrl}" 
                                 style="display: inline-flex; align-items: center; gap: 10px; margin-top: 20px; padding: 16px 40px; 
-                                background: linear-gradient(135deg, #ffa500, #ff8c00); color: #000; 
+                                background: linear-gradient(135deg, #b5a642, #9e8f36); color: #000; 
                                 text-decoration: none; border-radius: 12px; font-weight: bold; 
-                                font-size: 18px; box-shadow: 0 4px 15px rgba(255, 165, 0, 0.3); 
+                                font-size: 18px; box-shadow: 0 4px 15px rgba(181, 166, 66, 0.3); 
                                 transition: transform 0.2s;" 
                                 onmouseover="this.style.transform='scale(1.05)'" 
                                 onmouseout="this.style.transform='scale(1)'">
@@ -1641,10 +1634,10 @@ window.continueAppInitialization = async function() {
                     <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; 
                         height: 300px; background: #1a1a1a; border-radius: 20px; padding: 20px; text-align: center;">
                         <div style="font-size: 60px; margin-bottom: 20px;">🔧</div>
-                        <h3 style="color: #ff4444; margin-bottom: 10px;">خطأ في عجلة الحظ</h3>
+                        <h3 style="color: #c44536; margin-bottom: 10px;">خطأ في عجلة الحظ</h3>
                         <p style="color: #999; font-size: 14px;">${error.message}</p>
                         <button onclick="window.location.reload()" 
-                            style="margin-top: 15px; padding: 8px 16px; background: #ffa500; color: #000; 
+                            style="margin-top: 15px; padding: 8px 16px; background: #b5a642; color: #000; 
                             border: none; border-radius: 6px; cursor: pointer;">إعادة تحميل</button>
                     </div>
                 `;
@@ -1688,7 +1681,7 @@ window.continueAppInitialization = async function() {
         const errorDiv = document.createElement('div');
         errorDiv.style.cssText = `
             position: fixed; top: 20px; left: 50%; transform: translateX(-50%); 
-            background: #ff4444; color: white; padding: 15px 20px; border-radius: 8px; 
+            background: #c44536; color: white; padding: 15px 20px; border-radius: 8px; 
             z-index: 9999; max-width: 90%; text-align: center; font-weight: bold;
         `;
         errorDiv.innerHTML = `🚫 خطأ في التحميل: ${error.message}`;

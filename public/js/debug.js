@@ -1,374 +1,30 @@
-// ======================================================================
-// 📊 PERSISTENT LOGS CAPTURE - يحفظ كل logs حتى بعد Reload
-// ======================================================================
-
-// استرجاع الـ logs القديمة من localStorage
-window.appStartupLogs = [];
-try {
-    const savedLogs = localStorage.getItem('pandaStartupLogs');
-    if (savedLogs) {
-        window.appStartupLogs = JSON.parse(savedLogs);
-    }
-} catch (e) {
-    console.error('Failed to load saved logs:', e);
-}
-
-window.originalConsoleLog = console.log;
-window.originalConsoleError = console.error;
-window.originalConsoleWarn = console.warn;
-
-// دالة حفظ الـ logs في localStorage
-function saveLogs() {
-    try {
-        // حفظ آخر 500 log فقط لتجنب امتلاء الذاكرة
-        const logsToSave = window.appStartupLogs.slice(-500);
-        localStorage.setItem('pandaStartupLogs', JSON.stringify(logsToSave));
-    } catch (e) {
-        // localStorage ممتلئ - نحذف النصف الأول
-        try {
-            window.appStartupLogs = window.appStartupLogs.slice(250);
-            localStorage.setItem('pandaStartupLogs', JSON.stringify(window.appStartupLogs));
-        } catch (e2) {
-            console.error('Failed to save logs:', e2);
-        }
-    }
-}
-
-// اعتراض console.log لحفظ كل الرسائل
-console.log = function(...args) {
-    const timestamp = new Date().toLocaleTimeString('ar-EG', {
-        hour: '2-digit',
-        minute: '2-digit', 
-        second: '2-digit',
-        fractionalSecondDigits: 3
-    });
-    
-    const message = args.map(arg => 
-        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-    ).join(' ');
-    
-    window.appStartupLogs.push({
-        time: timestamp,
-        type: 'log',
-        message: message,
-        args: args
-    });
-    
-    saveLogs(); // حفظ في localStorage
-    window.originalConsoleLog.apply(console, args);
-};
-
-console.error = function(...args) {
-    const timestamp = new Date().toLocaleTimeString('ar-EG', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        fractionalSecondDigits: 3
-    });
-    
-    const message = args.map(arg => 
-        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-    ).join(' ');
-    
-    window.appStartupLogs.push({
-        time: timestamp,
-        type: 'error',
-        message: message,
-        args: args
-    });
-    
-    saveLogs(); // حفظ في localStorage
-    window.originalConsoleError.apply(console, args);
-};
-
-console.warn = function(...args) {
-    const timestamp = new Date().toLocaleTimeString('ar-EG', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        fractionalSecondDigits: 3
-    });
-    
-    const message = args.map(arg => 
-        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-    ).join(' ');
-    
-    window.appStartupLogs.push({
-        time: timestamp,
-        type: 'warn',
-        message: message,
-        args: args
-    });
-    
-    saveLogs(); // حفظ في localStorage
-    window.originalConsoleWarn.apply(console, args);
-};
-
-// دالة لعرض جميع الـ logs
-window.showAllLogs = function() {
-    console.clear();
-    window.originalConsoleLog('%c═══════════════════════════════════════════════════════', 'color: #00ff88; font-size: 14px; font-weight: bold');
-    window.originalConsoleLog('%c📊 ALL STARTUP LOGS (محفوظة في localStorage)', 'color: #00ff88; font-size: 16px; font-weight: bold');
-    window.originalConsoleLog('%c═══════════════════════════════════════════════════════', 'color: #00ff88; font-size: 14px; font-weight: bold');
-    window.originalConsoleLog('');
-    window.originalConsoleLog(`Total logs: ${window.appStartupLogs.length}`);
-    window.originalConsoleLog('');
-    
-    window.appStartupLogs.forEach((log, index) => {
-        const color = log.type === 'error' ? '#ff4444' : log.type === 'warn' ? '#ffaa00' : '#00aaff';
-        window.originalConsoleLog(
-            `%c[${index + 1}] [${log.time}] %c${log.type.toUpperCase()}`,
-            'color: #888',
-            `color: ${color}; font-weight: bold`
-        );
-        window.originalConsoleLog(log.message);
-        window.originalConsoleLog('');
-    });
-    
-    window.originalConsoleLog('%c═══════════════════════════════════════════════════════', 'color: #00ff88; font-size: 14px; font-weight: bold');
-};
-
-// دالة لنسخ جميع الـ logs
-window.copyAllLogs = function() {
-    const text = window.appStartupLogs.map((log, index) => 
-        `[${index + 1}] [${log.time}] [${log.type.toUpperCase()}]\n${log.message}\n`
-    ).join('\n');
-    
-    navigator.clipboard.writeText(text).then(() => {
-        window.originalConsoleLog('%c✅ تم نسخ جميع الـ logs إلى الحافظة!', 'color: #00ff88; font-size: 14px; font-weight: bold');
-        alert('✅ تم نسخ ' + window.appStartupLogs.length + ' log إلى الحافظة!\n\nالصقها في أي مكان الآن.');
-    }).catch(err => {
-        window.originalConsoleError('❌ فشل النسخ:', err);
-    });
-};
-
-// دالة للبحث في الـ logs
-window.searchLogs = function(keyword) {
-    console.clear();
-    const results = window.appStartupLogs.filter(log => 
-        log.message.toLowerCase().includes(keyword.toLowerCase())
-    );
-    
-    window.originalConsoleLog(`%c🔍 نتائج البحث عن: "${keyword}"`, 'color: #ffaa00; font-size: 14px; font-weight: bold');
-    window.originalConsoleLog(`Found ${results.length} matches:`);
-    window.originalConsoleLog('');
-    
-    results.forEach((log, index) => {
-        const color = log.type === 'error' ? '#ff4444' : log.type === 'warn' ? '#ffaa00' : '#00aaff';
-        window.originalConsoleLog(
-            `%c[${log.time}] %c${log.type.toUpperCase()}`,
-            'color: #888',
-            `color: ${color}; font-weight: bold`
-        );
-        window.originalConsoleLog(log.message);
-        window.originalConsoleLog('');
-    });
-};
-
-// دالة لمسح جميع الـ logs
-window.clearAllLogs = function() {
-    window.appStartupLogs = [];
-    localStorage.removeItem('pandaStartupLogs');
-    console.clear();
-    window.originalConsoleLog('%c✅ تم مسح جميع الـ logs!', 'color: #00ff88; font-size: 14px; font-weight: bold');
-};
-
-window.originalConsoleLog('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #ff00ff; font-weight: bold');
-window.originalConsoleLog('%c📊 Debug System v2.7 Ready', 'color: #ff00ff; font-size: 14px; font-weight: bold');
-window.originalConsoleLog('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #ff00ff; font-weight: bold');
-window.originalConsoleLog('');
-
-// ═══════════════════════════════════════════════════════════════
-// 🐛 DEBUG & ERROR DISPLAY SYSTEM - DISABLED FOR PRODUCTION
-// ═══════════════════════════════════════════════════════════════
-
-// Enable/disable debug modes for production
 const DEBUG_CONFIG = {
-    SHOW_DEBUG_UI: false,         // ✅ إظهار UI الـ debug على الشاشة - مفعل للتشخيص
-    SHOW_SERVER_STATUS: false,    // ✅ إظهار مؤشر حالة السيرفر - مفعل للتشخيص
-    CONSOLE_LOGGING: false,       // ✅ الـ logging في الـ console (مفعل للتشخيص)
-    AUTO_SHOW_ERRORS: false       // ✅ إظهار تلقائي للأخطاء - مفعل للتشخيص
+    SHOW_DEBUG_UI: false,
+    SHOW_SERVER_STATUS: false,
+    CONSOLE_LOGGING: false,
+    AUTO_SHOW_ERRORS: false
 };
 
 class DebugError {
-    static container = null;
-    static isVisible = false;
     static errors = [];
-    static initLogs = []; // لحفظ logs التهيئة
-    static channelsCheckLogs = []; // لحفظ logs التحقق من القنوات
-    
-    static init() {
-        // تعطيل الـ debug UI في الإنتاج
-        if (!DEBUG_CONFIG.SHOW_DEBUG_UI) {
-            return;
-        }
-        
-        // إنشاء container للأخطاء (معطل في الإنتاج)
-        if (!this.container) {
-            this.container = document.createElement('div');
-            this.container.id = 'debug-error-container';
-            this.container.style.cssText = `
-                position: fixed;
-                top: 10px;
-                right: 10px;
-                max-width: 350px;
-                max-height: 400px;
-                overflow-y: auto;
-                background: rgba(40, 40, 40, 0.95);
-                border: 2px solid #ff4444;
-                border-radius: 10px;
-                padding: 15px;
-                z-index: 10000;
-                color: #fff;
-                font-family: 'Courier New', monospace;
-                font-size: 12px;
-                display: none;
-            `;
-            
-            // إضافة header
-            this.container.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #555; padding-bottom: 10px;">
-                    <strong style="color: #ff4444;">🐛 Debug Console</strong>
-                    <button onclick="DebugError.toggle()" style="background: #666; color: #fff; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Hide</button>
-                </div>
-                <div id="debug-error-list"></div>
-                <div style="margin-top: 10px; text-align: center;">
-                    <button onclick="DebugError.clear()" style="background: #ff4444; color: #fff; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Clear</button>
-                </div>
-            `;
-            
-            document.body.appendChild(this.container);
-            
-            // إضافة زر toggle في الزاوية
-            const toggleBtn = document.createElement('div');
-            toggleBtn.id = 'debug-toggle-btn';
-            toggleBtn.style.cssText = `
-                position: fixed;
-                top: 10px;
-                left: 10px;
-                background: #ff4444;
-                color: #fff;
-                width: 40px;
-                height: 40px;
-                border-radius: 50%;
-                display: flex; /* ظاهر الآن */
-                align-items: center;
-                justify-content: center;
-                cursor: pointer;
-                z-index: 10001;
-                font-weight: bold;
-                box-shadow: 0 2px 10px rgba(255, 68, 68, 0.3);
-            `;
-            toggleBtn.innerHTML = '🐛';
-            toggleBtn.onclick = () => this.toggle();
-            document.body.appendChild(toggleBtn);
-        }
-    }
-    
+
+    static init() {}
+
     static add(message, type = 'error', data = null) {
         const timestamp = new Date().toLocaleTimeString('ar-EG');
-        const error = {
-            timestamp,
-            message,
-            type,
-            data: data ? JSON.stringify(data, null, 2) : null
-        };
-        
-        this.errors.unshift(error); // إضافة في البداية
-        if (this.errors.length > 50) {
-            this.errors.pop(); // حذف القديم
-        }
-        
-        // Console logging فقط إذا مفعل
-        if (DEBUG_CONFIG.CONSOLE_LOGGING) {
-            console.error(`[${timestamp}] ${message}`, data);
-        }
-        
-        // تحديث UI فقط إذا مفعل
-        if (DEBUG_CONFIG.SHOW_DEBUG_UI) {
-            this.render();
-            
-            // إظهار تلقائياً عند الخطأ إذا مفعل
-            if (DEBUG_CONFIG.AUTO_SHOW_ERRORS && type === 'error' && !this.isVisible) {
-                this.show();
-            }
-        }
+        this.errors.unshift({ timestamp, message, type, data: data ? JSON.stringify(data, null, 2) : null });
+        if (this.errors.length > 50) this.errors.pop();
     }
-    
-    static render() {
-        if (!this.container) return;
-        
-        const list = this.container.querySelector('#debug-error-list');
-        list.innerHTML = this.errors.map(error => `
-            <div style="margin-bottom: 10px; padding: 8px; background: rgba(255, 255, 255, 0.05); border-radius: 5px; border-left: 3px solid ${error.type === 'error' ? '#ff4444' : error.type === 'warn' ? '#ffa500' : '#4444ff'};">
-                <div style="color: #ccc; font-size: 10px;">${error.timestamp}</div>
-                <div style="color: ${error.type === 'error' ? '#ff6666' : error.type === 'warn' ? '#ffbb66' : '#66aaff'}; margin: 5px 0;">${error.message}</div>
-                ${error.data ? `<pre style="color: #999; font-size: 10px; white-space: pre-wrap; max-height: 100px; overflow-y: auto;">${error.data}</pre>` : ''}
-            </div>
-        `).join('');
-    }
-    
-    static show() {
-        // لا تظهر UI إذا كان معطل في الإنتاج
-        if (!DEBUG_CONFIG.SHOW_DEBUG_UI) {
-            return;
-        }
-        
-        if (!this.container) this.init();
-        this.container.style.display = 'block';
-        this.isVisible = true;
-    }
-    
-    static hide() {
-        if (this.container) {
-            this.container.style.display = 'none';
-            this.isVisible = false;
-        }
-    }
-    
-    static toggle() {
-        if (this.isVisible) {
-            this.hide();
-        } else {
-            this.show();
-        }
-    }
-    
-    static clear() {
-        this.errors = [];
-        this.render();
-    }
+
+    static show() {}
+    static hide() {}
+    static toggle() {}
+    static clear() { this.errors = []; }
+    static render() {}
 }
 
-// تهيئة النظام (فقط إذا مفعل)
-if (DEBUG_CONFIG.SHOW_DEBUG_UI) {
-    DebugError.init();
-}
+window.DebugError = DebugError;
 
-// إضافة معالج للأخطاء العامة (فقط إذا مفعل الـ logging)
-if (DEBUG_CONFIG.CONSOLE_LOGGING) {
-    window.addEventListener('error', (event) => {
-        DebugError.add(`JavaScript Error: ${event.message}`, 'error', {
-            filename: event.filename,
-            lineno: event.lineno,
-            colno: event.colno,
-            stack: event.error?.stack
-        });
-    });
-}
-
-// إضافة معالج للـ Promise rejections (فقط إذا مفعل الـ logging)
-if (DEBUG_CONFIG.CONSOLE_LOGGING) {
-    window.addEventListener('unhandledrejection', (event) => {
-        DebugError.add(`Promise Rejection: ${event.reason}`, 'error', event.reason);
-    });
-}
-
-// ======================================================================
-// 🔍 ENHANCED USER DATA FETCHING
-// ======================================================================
-
-// تحسين جلب بيانات المستخدم
 function getEnhancedUserData() {
     const data = {
         id: null,
@@ -378,67 +34,46 @@ function getEnhancedUserData() {
         photo_url: '/img/user-placeholder.svg',
         language_code: 'ar'
     };
-    
+
     try {
-        // 1. من Telegram WebApp
         if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
             const user = window.Telegram.WebApp.initDataUnsafe.user;
-            DebugError.add(`User data from Telegram WebApp: ${JSON.stringify(user)}`, 'info');
-            
             data.id = user.id;
             data.first_name = user.first_name || 'مستخدم';
             data.last_name = user.last_name || '';
             data.username = user.username || '';
             data.language_code = user.language_code || 'ar';
-            
-            // جلب صورة المستخدم
-            if (user.photo_url) {
-                data.photo_url = user.photo_url;
-            }
-            
+            if (user.photo_url) data.photo_url = user.photo_url;
             return data;
         }
-        
-        // 2. من URL parameters
+
         const urlParams = new URLSearchParams(window.location.search);
         const urlUserId = urlParams.get('user_id');
         if (urlUserId) {
             data.id = parseInt(urlUserId);
             data.first_name = `مستخدم ${urlUserId}`;
-            DebugError.add(`User ID from URL: ${urlUserId}`, 'info');
             return data;
         }
-        
-        // 3. من localStorage
+
         const cachedUserData = localStorage.getItem('telegram_user_data');
         if (cachedUserData) {
-            const cachedUser = JSON.parse(cachedUserData);
-            DebugError.add(`User data from cache: ${JSON.stringify(cachedUser)}`, 'info');
-            return { ...data, ...cachedUser };
+            return { ...data, ...JSON.parse(cachedUserData) };
         }
-        
-        DebugError.add('No user data found from any source!', 'error');
-        
     } catch (error) {
         DebugError.add(`Error getting user data: ${error.message}`, 'error', error);
     }
-    
+
     return data;
 }
 
-// تحديث الواجهة ببيانات المستخدم 
 function updateUserDisplay(userData) {
     try {
-        // تحديث الصورة
         const userAvatar = document.querySelector('.user-avatar img, #user-avatar img, .profile-photo img');
         if (userAvatar && userData.photo_url) {
             userAvatar.src = userData.photo_url;
-            userAvatar.onerror = function() {
-                this.src = '/img/user-placeholder.png';
-            };
+            userAvatar.onerror = function() { this.src = '/img/user-placeholder.png'; };
         }
-        
-        // تحديث الاسم
+
         const userNameElements = document.querySelectorAll('.user-name, #user-name, .username-display');
         userNameElements.forEach(element => {
             if (userData.username) {
@@ -447,26 +82,19 @@ function updateUserDisplay(userData) {
                 element.textContent = `${userData.first_name} ${userData.last_name}`.trim();
             }
         });
-        
-        // تحديث ID (للأدمن)
+
         const userIdElements = document.querySelectorAll('.user-id, #user-id');
         userIdElements.forEach(element => {
-            if (userData.id) {
-                element.textContent = userData.id;
-            }
+            if (userData.id) element.textContent = userData.id;
         });
-        
-        DebugError.add(`Updated user display with: ${JSON.stringify(userData)}`, 'info');
-        
     } catch (error) {
         DebugError.add(`Error updating user display: ${error.message}`, 'error', error);
     }
 }
 
-// إضافة معالج للـ API errors
 function handleApiError(error, endpoint = '') {
     let message = 'خطأ في الاتصال بالسيرفر';
-    
+
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
         message = 'فشل الاتصال بالسيرفر - تحقق من الإنترنت';
     } else if (error.status === 404) {
@@ -476,110 +104,28 @@ function handleApiError(error, endpoint = '') {
     } else if (error.message) {
         message = error.message;
     }
-    
+
     DebugError.add(`API Error [${endpoint}]: ${message}`, 'error', {
         status: error.status,
         statusText: error.statusText,
         stack: error.stack
     });
-    
-    // إظهار toast للمستخدم
+
     if (typeof showToast === 'function') {
         showToast(message, 'error');
     }
 }
 
-// تصدير للاستخدام العام
-window.DebugError = DebugError;
 window.getEnhancedUserData = getEnhancedUserData;
 window.updateUserDisplay = updateUserDisplay;
 window.handleApiError = handleApiError;
 
-// ======================================================================
-// 📊 CHANNELS CHECK LOGGER - لتسجيل logs التحقق من القنوات
-// ======================================================================
-
 class ChannelsLogger {
     static logs = [];
-    static maxLogs = 100;
-    
-    static log(message, data = null) {
-        const timestamp = new Date().toLocaleTimeString('ar-EG', { 
-            hour: '2-digit', 
-            minute: '2-digit', 
-            second: '2-digit',
-            fractionalSecondDigits: 3 
-        });
-        
-        const logEntry = {
-            time: timestamp,
-            message: message,
-            data: data
-        };
-        
-        this.logs.push(logEntry);
-        
-        if (this.logs.length > this.maxLogs) {
-            this.logs.shift();
-        }
-        
-        // طباعة في console مع تنسيق مميز
-        console.log(`%c[📢 CHANNELS] ${timestamp}%c ${message}`, 
-            'color: #ff6b35; font-weight: bold;',
-            'color: inherit;',
-            data || '');
-    }
-    
-    static getSummary() {
-        const summary = {
-            totalLogs: this.logs.length,
-            logs: this.logs,
-            lastCheck: this.logs.length > 0 ? this.logs[this.logs.length - 1] : null
-        };
-        
-        console.log('%c═══════════════════════════════════════════', 'color: #ff6b35');
-        console.log('%c    📢 CHANNELS CHECK LOGS SUMMARY', 'color: #ff6b35; font-size: 14px; font-weight: bold');
-        console.log('%c═══════════════════════════════════════════', 'color: #ff6b35');
-        console.table(this.logs);
-        console.log('%c═══════════════════════════════════════════', 'color: #ff6b35');
-        
-        return summary;
-    }
-    
-    static copyToClipboard() {
-        const text = this.logs.map(log => `[${log.time}] ${log.message}${log.data ? '\n  Data: ' + JSON.stringify(log.data) : ''}`).join('\n\n');
-        
-        navigator.clipboard.writeText(text).then(() => {
-            console.log('✅ Logs copied to clipboard!');
-            if (typeof showToast === 'function') {
-                showToast('✅ تم نسخ logs القنوات', 'success');
-            }
-        }).catch(err => {
-            console.error('❌ Failed to copy:', err);
-        });
-    }
-    
-    static clear() {
-        this.logs = [];
-        console.log('%c📢 Channels logs cleared', 'color: #ff6b35; font-weight: bold;');
-    }
+    static log(message, data = null) {}
+    static getSummary() { return { totalLogs: 0, logs: [] }; }
+    static copyToClipboard() {}
+    static clear() { this.logs = []; }
 }
 
-// تصدير
 window.ChannelsLogger = ChannelsLogger;
-
-// دوال مساعدة سريعة في console
-window.showChannelsLogs = () => ChannelsLogger.getSummary();
-window.copyChannelsLogs = () => ChannelsLogger.copyToClipboard();
-window.clearChannelsLogs = () => ChannelsLogger.clear();
-
-console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff88');
-console.log('%c✅ Channels Logger Initialized', 'color: #00ff88; font-weight: bold; font-size: 14px');
-console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff88');
-console.log('%c💡 استخدم هذه الأوامر في Console للتشخيص:', 'color: #ffcc00; font-size: 13px; font-weight: bold');
-console.log('');
-console.log('%c  📊 showChannelsLogs()   %c- عرض كل logs التحقق من القنوات مع الوقت', 'color: #00ff88; font-weight: bold', 'color: #aaa');
-console.log('%c  📋 copyChannelsLogs()   %c- نسخ logs القنوات إلى الحافظة', 'color: #00ff88; font-weight: bold', 'color: #aaa');
-console.log('%c  🗑️  clearChannelsLogs()  %c- مسح logs القنوات', 'color: #00ff88; font-weight: bold', 'color: #aaa');
-console.log('');
-console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff88');

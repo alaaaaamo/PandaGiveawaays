@@ -104,7 +104,7 @@
 }
 
 .referral-link-wrapper {
-    background-color: #0d1117;
+    background-color: #1a1f16;
     border-radius: 0.5em;
     padding: 15px;
     color: #fff;
@@ -118,7 +118,7 @@
     display: flex;
     color: #fff;
     font-weight: 900;
-    background-color: #0d1117;
+    background-color: #1a1f16;
     border-radius: 0.5em;
     padding: 10px;
 }
@@ -238,7 +238,7 @@
 .withdraw-btn {
     background-color: #f0c419;
     border: none;
-    color: #0d1117;
+    color: #1a1f16;
     font-weight: bold;
     padding: 8px;
     border-radius: 8px;

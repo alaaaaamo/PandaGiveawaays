@@ -299,7 +299,7 @@ class WheelOfFortune {
             
             const innerGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 50);
             innerGradient.addColorStop(0, '#1a1f2e');
-            innerGradient.addColorStop(1, '#0d1117');
+            innerGradient.addColorStop(1, '#1a1f16');
             
             ctx.beginPath();
             ctx.arc(centerX, centerY, 50, 0, 2 * Math.PI);

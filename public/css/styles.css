@@ -4,17 +4,16 @@
 */
 
 :root {
-    /* Colors from base_v2026.css */
-    --bg-primary: #0d1117;
-    --bg-secondary: #161b22;
-    --bg-card: #21262d;
-    --text-primary: #ffffff;
-    --text-secondary: #8b949e;
-    --accent-color: #ffa500;
-    --accent-hover: #ff8c00;
-    --success-color: #3fb950;
-    --error-color: #f85149;
-    --border-color: #30363d;
+    --bg-primary: #1a1f16;
+    --bg-secondary: #232b1e;
+    --bg-card: #2d3627;
+    --text-primary: #f0ece4;
+    --text-secondary: #a0997e;
+    --accent-color: #b5a642;
+    --accent-hover: #9e8f36;
+    --success-color: #6b8e23;
+    --error-color: #c44536;
+    --border-color: #3d4a33;
     
     /* Spacing */
     --spacing-xs: 4px;
@@ -168,7 +167,7 @@ body {
 .page-header h2 {
     font-size: 28px;
     margin-bottom: var(--spacing-sm);
-    background: linear-gradient(135deg, var(--accent-color), #ff6347);
+    background: linear-gradient(135deg, var(--accent-color), #8a9a5b);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -234,11 +233,9 @@ body {
     height: 0;
     border-left: 15px solid transparent;
     border-right: 15px solid transparent;
-    /* 🌟 مؤشر ذهبي فاخر */
-    border-top: 30px solid #E5C76A;
+    border-top: 30px solid #b5a642;
     z-index: 10;
-    /* ✨ ظل ذهبي ناعم */
-    filter: drop-shadow(0 2px 8px rgba(201, 162, 77, 0.6)) 
+    filter: drop-shadow(0 2px 8px rgba(181, 166, 66, 0.6)) 
             drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
 }
 
@@ -248,9 +245,8 @@ body {
     width: 350px;
     height: 350px;
     border-radius: var(--radius-full);
-    /* 🎨 ظل محسن للعجلة */
     box-shadow: 
-        0 0 40px rgba(201, 162, 77, 0.3),
+        0 0 40px rgba(181, 166, 66, 0.3),
         0 8px 32px rgba(0, 0, 0, 0.4),
         0 4px 16px rgba(0, 0, 0, 0.3);
     /* تحسين جودة الرسم */
@@ -629,7 +625,7 @@ body {
 }
 
 .balance-card {
-    background: linear-gradient(135deg, var(--accent-color), #ff6347);
+    background: linear-gradient(135deg, var(--accent-color), #6b8e23);
     padding: var(--spacing-xl);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
@@ -1009,7 +1005,7 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.98);
+    background: #1a1f16;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -1214,7 +1210,7 @@ body {
     font-size: 15px;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 4px 15px rgba(255, 165, 0, 0.3);
+    box-shadow: 0 4px 15px rgba(181, 166, 66, 0.3);
     overflow: hidden;
 }
 
@@ -1235,12 +1231,12 @@ body {
 
 .modern-btn:hover {
     transform: translateY(-3px);
-    box-shadow: 0 6px 25px rgba(255, 165, 0, 0.5);
+    box-shadow: 0 6px 25px rgba(181, 166, 66, 0.5);
 }
 
 .modern-btn:active {
     transform: translateY(-1px);
-    box-shadow: 0 3px 15px rgba(255, 165, 0, 0.4);
+    box-shadow: 0 3px 15px rgba(181, 166, 66, 0.4);
 }
 
 .modern-btn .btn-icon {
@@ -1727,10 +1723,9 @@ body {
     width: 100px;
     height: 100px;
     border-radius: 50%;
-    /* 🎨 Gradient ذهبي فاخر */
-    background: linear-gradient(135deg, #E5C76A 0%, #C9A24D 50%, #9E7C2F 100%);
-    border: 3px solid rgba(255, 255, 255, 0.8);
-    color: #1C1F24;
+    background: linear-gradient(135deg, #b5a642 0%, #9e8f36 50%, #7a6e2a 100%);
+    border: 3px solid rgba(240, 236, 228, 0.8);
+    color: #1a1f16;
     font-size: 16px;
     font-weight: 700;
     cursor: pointer;

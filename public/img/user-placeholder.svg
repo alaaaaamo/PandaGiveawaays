@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
-  <rect width="100" height="100" fill="#0d1117"/>
-  <circle cx="50" cy="35" r="15" fill="#ffa500"/>
-  <path d="M20 80 Q20 60 50 60 Q80 60 80 80 Z" fill="#ffa500"/>
-  <text x="50" y="95" text-anchor="middle" fill="#ffa500" font-size="8" font-family="Arial">User</text>
+  <rect width="100" height="100" fill="#2d3627"/>
+  <circle cx="50" cy="35" r="15" fill="#b5a642"/>
+  <path d="M20 80 Q20 60 50 60 Q80 60 80 80 Z" fill="#b5a642"/>
+  <text x="50" y="95" text-anchor="middle" fill="#b5a642" font-size="8" font-family="Arial">User</text>
 </svg>

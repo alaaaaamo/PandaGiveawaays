@@ -4,8 +4,8 @@
 
 const CONFIG = {
     // API Endpoints
-    API_BASE_URL: 'https://pandagiveawaays.onrender.com/api',
-    FRONTEND_URL: 'https://panda-giveawaays.vercel.app/api',
+    API_BASE_URL: '/api',
+    FRONTEND_URL: '',
     BOT_USERNAME: 'PandaGiveawaysBot',
     
     // Admin IDs (استثناء من التحقق)
@@ -292,8 +292,8 @@ const TelegramApp = {
             this.webApp.expand();
             
             // تخصيص الألوان
-            this.webApp.setHeaderColor('#0d1117');
-            this.webApp.setBackgroundColor('#0d1117');
+            this.webApp.setHeaderColor('#1a1f16');
+            this.webApp.setBackgroundColor('#1a1f16');
             
             // الحصول على بيانات المستخدم
             console.log('🔍 Checking initDataUnsafe:', this.webApp.initDataUnsafe);

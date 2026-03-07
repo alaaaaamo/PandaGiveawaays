@@ -73,7 +73,7 @@
 .required-channel-item:hover {
     border-color: var(--accent-color);
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(255, 212, 54, 0.2);
+    box-shadow: 0 4px 12px rgba(181, 166, 66, 0.2);
 }
 
 .channel-info {
@@ -119,7 +119,7 @@
 
 .subscribe-channel-btn {
     padding: 10px 20px;
-    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    background: linear-gradient(135deg, #6b8e23, #556b2f);
     color: #fff;
     border: none;
     border-radius: 12px;
@@ -131,7 +131,7 @@
 
 .subscribe-channel-btn:hover {
     transform: scale(1.05);
-    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+    box-shadow: 0 4px 12px rgba(107, 142, 35, 0.4);
 }
 
 .channels-modal-footer {
@@ -155,7 +155,7 @@
 
 .btn-verify-channels:hover:not(:disabled) {
     transform: scale(1.02);
-    box-shadow: 0 8px 24px rgba(255, 212, 54, 0.4);
+    box-shadow: 0 8px 24px rgba(181, 166, 66, 0.4);
 }
 
 .btn-verify-channels:disabled {
@@ -191,7 +191,7 @@
 
 /* تأثير hover على القنوات */
 .required-channel-item:hover .channel-info .channel-photo {
-    border-color: rgba(139, 92, 246, 0.5);
-    box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
+    border-color: rgba(107, 142, 35, 0.5);
+    box-shadow: 0 4px 16px rgba(107, 142, 35, 0.4);
     transform: scale(1.05);
 }

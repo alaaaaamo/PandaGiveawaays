@@ -408,17 +408,11 @@ def send_withdrawal_notification_to_admin(user_id, username, full_name, amount, 
         import traceback
         traceback.print_exc()
 
-app = Flask(__name__)  # إزالة static_folder لأن الملفات ستكون في Vercel
-# إعداد CORS للسماح بالوصول من Vercel
+app = Flask(__name__, static_folder='public', static_url_path='')
 CORS(app, 
     resources={
         r"/api/*": {
-            "origins": [
-                'https://panda-giveawaays.vercel.app',
-                'http://localhost:3000',
-                'http://127.0.0.1:5000',
-                'http://localhost:5000'
-            ],
+            "origins": "*",
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": [
                 "Content-Type", 
@@ -427,12 +421,12 @@ CORS(app,
                 "X-Telegram-Init-Data",
                 "X-User-Id",
                 "X-Session-Id",
-                "X-Admin-Token"  # ✅ إضافة Admin Token header
+                "X-Admin-Token"
             ],
             "supports_credentials": False
         }
     }
-)  # السماح بـ CORS من المواقع المحددة
+)
 
 # ═══════════════════════════════════════════════════════════════
 # 🤖 BOT STARTUP IN BACKGROUND
@@ -864,54 +858,20 @@ def get_bot_stats():
 
 @app.route('/')
 def index():
-    """إعادة توجيه للموقع في Vercel"""
-    from flask import redirect
-    return redirect('https://panda-giveawaays.vercel.app', code=302)
+    return send_from_directory('public', 'index.html')
 
 @app.route('/admin')
 def admin():
-    """
-    🔐 صفحة الأدمن - محمية بالكامل
-    ✅ يتطلب Telegram initData صحيح
-    ✅ يتطلب أن يكون user_id في قائمة ADMIN_IDS
-    ❌ لا يقبل user_id من URL
-    """
-    from flask import redirect
-    
-    # 🔐 التحقق الإجباري من المصادقة عبر init_data
-    init_data = request.args.get('init_data')
-    
-    if not init_data:
-        return jsonify({
-            'error': 'غير مسموح! هذه الصفحة تعمل فقط من خلال Telegram Bot',
-            'message': 'Access Denied: This page only works through Telegram Mini App',
-            'hint': 'لا يمكن فتح هذه الصفحة من المتصفح مباشرة'
-        }), 403
-    
-    # التحقق من صحة البيانات والتوقيع
-    user_data = validate_telegram_init_data(init_data)
-    
-    if not user_data:
-        return jsonify({
-            'error': 'بيانات مصادقة غير صحيحة',
-            'message': 'Invalid or expired authentication data',
-            'hint': 'حاول فتح الصفحة من البوت مرة أخرى'
-        }), 401
-    
-    # التحقق من أن المستخدم أدمن
-    if user_data['user_id'] not in ADMIN_IDS:
-        return jsonify({
-            'error': 'غير مسموح! هذه الصفحة للمسؤولين فقط',
-            'message': 'Access Denied: Admin only',
-            'your_id': user_data['user_id']
-        }), 403
-    
-    # ✅ المستخدم أدمن مصادق عليه
-    # إرسال init_data للفرونت إند للاستخدام في API requests
-    return redirect(
-        f'https://panda-giveawaays.vercel.app/admin#{request.query_string.decode()}',
-        code=302
-    )
+    return send_from_directory('public', 'admin.html')
+
+@app.route('/referral-program')
+def referral_program():
+    return send_from_directory('public', 'referral-program.html')
+
+@app.route('/fp')
+@app.route('/fp.html')
+def fp_page():
+    return send_from_directory('public', 'fp.html')
 
 @app.route('/api/admin/login', methods=['POST'])
 @require_telegram_auth
@@ -997,12 +957,6 @@ def verify_admin_session(authenticated_user_id=None, is_admin=False, admin_usern
         'user_id': admin_user_id
     })
 
-@app.route('/fp.html')
-@app.route('/fp')
-def fingerprint_page():
-    """إعادة توجيه لصفحة التحقق من الجهاز"""
-    from flask import redirect
-    return redirect('https://panda-giveawaays.vercel.app/fp.html', code=302)
 
 # ═══════════════════════════════════════════════════════════════
 # 🔌 API ENDPOINTS

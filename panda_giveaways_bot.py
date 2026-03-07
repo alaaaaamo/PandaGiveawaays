@@ -93,7 +93,7 @@ load_dotenv()
 # 🤖 معلومات البوت
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "PandaGiveawaysBot")
-MINI_APP_URL = os.getenv("MINI_APP_URL", "https://panda-giveawaays.vercel.app")
+MINI_APP_URL = os.getenv("MINI_APP_URL", "https://" + os.getenv("REPLIT_DEV_DOMAIN", "localhost:5000"))
 
 # 👥 الأدمن (يتم قراءتهم من .env)
 ADMIN_IDS_STR = os.getenv("ADMIN_IDS", "")
@@ -148,8 +148,8 @@ else:
 print(f"📂 Bot using database at: {DATABASE_PATH}")
 
 # 🌐 API Configuration
-API_BASE_URL = os.getenv("API_BASE_URL", "https://pandagiveawaays.onrender.com/api")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "https://panda-giveawaays.vercel.app")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:5000/api")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://" + os.getenv("REPLIT_DEV_DOMAIN", "localhost:5000"))
 
 # � إعدادات البرودكاست
 BROADCAST_CONCURRENCY = 25  # عدد الرسائل المتزامنة
